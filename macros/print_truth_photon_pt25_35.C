@@ -51,7 +51,7 @@ void print_truth_photon_pt25_35(string trigger = "Photon20", string sim = "pythi
 
     if (fabs(tu.vz) > ana::vzcut) continue;
 
-    vector<bool> keepMC = tu.check_keep_MC(tu.truth_cluster_pt, tu.cluster_pt, tu.truth_jet_pt, tu.jet_pt_smear, trigger);
+    vector<bool> keepMC = tu.check_keep_MC(tu.truth_cluster_pt, tu.cluster_pt, tu.truth_jet_pt, tu.jet_pt_smear_reco, trigger);
     if (!keepMC.at(keepMC.size() - 1)) continue;
     if (!keepMC[ir]) continue;
 

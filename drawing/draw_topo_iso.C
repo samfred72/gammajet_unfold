@@ -2,6 +2,7 @@
 #include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
 #include "/home/samson72/sphnx/gammajet_unfold/src/treeuser.h"
 #include "/home/samson72/sphnx/gammajet_unfold/src/pho_object.h"
+#include "/home/samson72/sphnx/gammajet_unfold/src/reweight_utility.h"
 // The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
 // into /home/samson72/root/lib/libgammajet.so, sitting on the same library search path
 // as this project's libgammajet_unfold.so. Without forcing which one loads first, ROOT's
@@ -24,12 +25,16 @@ void draw_topo_iso() {
   const char * pdfPath = "/home/samson72/sphnx/gammajet_unfold/pdfs/topo_iso_tight_Photon10.pdf";
 
   treeuser tu("Photon10", "pythia");
+  // MC-only vz/cluster-pT reweighting (reweight/make_vz_pt_reweight.C) - this is a
+  // pythia MC sample, so every Fill below carries this event's weight.
+  Reweighter rw;
 
   // Range covers the full observed spread for tight clusters in this sample (checked
   // to run roughly -32 to +31 GeV) - a narrower range clipped a large fraction of
   // entries into the under/overflow bins and silently truncated the plotted shape.
   TH1D * h = new TH1D("hTopoIsoTight",
       ";Topo-isolation energy, iso_{topo}^{R=0.4} [GeV];Tight clusters", 100, -35, 35);
+  h->Sumw2();
 
   Long64_t nentries = tu.t->GetEntriesFast();
   for (Long64_t e = 0; e < nentries; e++) {
@@ -40,7 +45,7 @@ void draw_topo_iso() {
     int showershape = pho_object::get_showershape(tu.cluster_showershape, tu.cluster_pt);
     if (showershape != 2) continue; // tight only
 
-    h->Fill(tu.cluster_showershape[11]);
+    h->Fill(tu.cluster_showershape[11], rw.GetWeight(tu.vz, tu.cluster_pt));
   }
 
   // Sanitize NaN/Inf bin content before drawing - NaN poisons ROOT's axis auto-ranging

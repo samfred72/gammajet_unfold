@@ -58,7 +58,20 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 const int ir = 2; // nominal jet radius index (R=0.4)
 const int nPtBinsUsed = ana::nPtBinsUsed; // physics analysis only uses ana::ptBins[ana::firstUsedPtBin..]
 const int niterate = 2; // matches draw_purity_corrected.C's best-iteration scan result
-const vector<string> systematics = {"JERhigh","JERlow","emscale_high","emscale_low","jes_high","jes_low","threejet","narrowBDT","narrowISO","herwig","niterLow","niterHigh","priorSensitivity"};
+// Derived from ana::systags (src/ana.h) - the definitive systag reprocessing list, minus
+// "nominal" (the baseline every source here is compared against, not a source itself) -
+// plus the four sources that aren't systag reprocessings at all (herwig: different
+// generator sample; niterLow/niterHigh: different unfolding iteration count;
+// priorSensitivity: different unfolding prior - none of these have an insitu_tree
+// equivalent, see ana.h's comment on ana::systags). A systag added to ana::systags
+// propagates here automatically; it still needs its own systColors/systSources entry
+// below (that .at() lookup throws loudly, rather than silently dropping it, if missing).
+const vector<string> systematics = [] {
+  vector<string> v;
+  for (const string & s : ana::systags) if (s != "nominal") v.push_back(s);
+  v.insert(v.end(), {"herwig", "niterLow", "niterHigh", "priorSensitivity"});
+  return v;
+}();
 const map<string,int> systColors = {
   {"JERhigh",      kRed+1},
   {"JERlow",       kOrange+7},
@@ -105,12 +118,15 @@ const map<string, SystSource> systSources = {
 // "down" if negative that bin (not paired/enveloped with its high/low counterpart - each
 // of the eight contributes independently on its own sign). Every systag NOT listed here
 // is symmetrized instead (see the total systematic uncertainty section below).
-const set<string> asymmetricSystematics = {
-  "JERhigh", "JERlow",
-  "jes_high", "jes_low",
-  "emscale_high", "emscale_low",
-  "niterHigh", "niterLow",
-};
+// Derived from ana::asymmetricSystagPairs (src/ana.h) flattened to individual names,
+// plus niterHigh/niterLow (not a systags pair - see the systematics comment above) -
+// a pair added to ana::asymmetricSystagPairs propagates here automatically.
+const set<string> asymmetricSystematics = [] {
+  set<string> s;
+  for (const auto & pr : ana::asymmetricSystagPairs) { s.insert(pr.first); s.insert(pr.second); }
+  s.insert("niterHigh"); s.insert("niterLow");
+  return s;
+}();
 
 // Categorical palette for the 8 display groups below: a validated 8-hue, colorblind-safe
 // ordering (fixed order, never cycled/reassigned) - each hex registered once as a ROOT
@@ -152,57 +168,10 @@ const vector<DisplayGroup> displayGroups = {
 const char * pdfPath  = "/home/samson72/sphnx/gammajet_unfold/pdfs/draw_systematics.pdf";
 const char * rootPath = "/home/samson72/sphnx/gammajet_unfold/hists/systematics.root";
 
-// Ported from drawing/draw_purity_corrected.C - see that file for the full derivation.
-TH1D * purityCorrectP(TH1D * A, TH1D * C, float p, float pErrLow, float pErrHigh, const char * name) {
-  float NA = A->Integral();
-  float NC = C->Integral();
-  if (NC <= 0) {
-    cout << "WARNING: " << name << " has zero region-C statistics - cannot cross-normalize, skipping." << endl;
-    return nullptr;
-  }
-  float scale = (1-p)*(NA/NC);
-  TH1D * h = (TH1D*)A->Clone(name);
-  for (int i = 1; i <= A->GetNbinsX(); i++) {
-    float a  = A->GetBinContent(i);
-    float ae = A->GetBinError(i);
-    float c  = C->GetBinContent(i);
-    float ce = C->GetBinError(i);
-    float dPurityLow  = (NA/NC)*c*pErrLow;
-    float dPurityHigh = (NA/NC)*c*pErrHigh;
-    float content = a - scale*c;
-    float errLow  = sqrt(ae*ae + pow(scale*ce,2) + pow(dPurityLow,2));
-    float errHigh = sqrt(ae*ae + pow(scale*ce,2) + pow(dPurityHigh,2));
-    h->SetBinContent(i, content);
-    h->SetBinError(i, std::max(errLow, errHigh));
-  }
-  return h;
-}
-
-TH1D * densityForDisplay(TH1D * h, const char * name) {
-  TH1D * hd = (TH1D*)h->Clone(name);
-  hd->Scale(1., "width");
-  hd->GetYaxis()->SetTitle("Counts / bin width");
-  return hd;
-}
-
-// Ported from drawing/draw_purity_corrected.C - see that file for the full derivation.
-TH1D * buildFullyCorrected(TH1D * flatA, TH1D * flatC, const char * tag, string systag) {
-  TH1D * flatCorrected = (TH1D*)flatA->Clone(Form("hxjcorrected_flat_%s", tag));
-  flatCorrected->Reset("ICES");
-  for (int ipt = 0; ipt < ana::nPtBins; ipt++) {
-    float ptlow  = ana::ptBins[ipt];
-    float pthigh = ana::ptBins[ipt+1];
-    float p        = ana::getPurity(ptlow, pthigh, systag);
-    float pErrLow  = ana::getPurityErrorLow(ptlow, pthigh, systag);
-    float pErrHigh = ana::getPurityErrorHigh(ptlow, pthigh, systag);
-    TH1D * A = unfold_utility::unflattenXj(flatA, ipt, Form("htmpA_%s_pt%d", tag, ipt));
-    TH1D * C = unfold_utility::unflattenXj(flatC, ipt, Form("htmpC_%s_pt%d", tag, ipt));
-    TH1D * hcorr = purityCorrectP(A, C, p, pErrLow, pErrHigh, Form("htmpcorr_%s_pt%d", tag, ipt));
-    unfold_utility::reflattenXj(hcorr ? hcorr : A, ipt, flatCorrected);
-    delete A; delete C; if (hcorr) delete hcorr;
-  }
-  return flatCorrected;
-}
+// densityForDisplay now lives in unfold_utility - see src/unfold_utility.h.
+// buildFullyCorrected now lives in unfold_utility (purity-corrects all ana::nPtBins
+// slices via unfold_utility::purityCorrect and reflattens for RooUnfold) - see
+// src/unfold_utility.h.
 
 // Data's purity-corrected xJ spectrum, unfolded through systag's own response - the same
 // pipeline draw_purity_corrected.C uses for draw_one_sample(0, ...) ("data"), just
@@ -219,7 +188,7 @@ TH1D * getUnfoldedData(string sim, string systag, int niter, const char * name) 
   TH2D * respMatrix2D      = d.get2d(Form("hxjresponse%i",ir), 1);
   TH1D * flatA = d.get(Form("hrecoxj%i_0",ir), 0);
   TH1D * flatC = d.get(Form("hrecoxj%i_2",ir), 0);
-  TH1D * flatCorrected = buildFullyCorrected(flatA, flatC, systag.c_str(), systag);
+  TH1D * flatCorrected = unfold_utility::buildFullyCorrected(flatA, flatC, systag.c_str(), systag);
   return unfold_utility::unfoldOnce(respRecoTemplate, respTruthTemplate, respMatrix2D, flatCorrected, niter, name);
 }
 
@@ -239,7 +208,7 @@ void draw_systematics() {
   vector<TH1D*> nominalDisp(ana::nPtBins);
   for (int ipt = ana::firstUsedPtBin; ipt < ana::firstUsedPtBin+nPtBinsUsed; ipt++) {
     TH1D * hNom = unfold_utility::unflattenXj(flatNominal, ipt, Form("hNominal_pt%d", ipt));
-    nominalDisp[ipt] = densityForDisplay(hNom, Form("hNominalDisp_pt%d", ipt));
+    nominalDisp[ipt] = unfold_utility::densityForDisplay(hNom, Form("hNominalDisp_pt%d", ipt));
     // Shape-normalize before comparing - a systematic that shifts the total accepted
     // event count (e.g. narrowBDT/narrowISO/threejet change which Data events pass
     // selection) shouldn't masquerade as a shape difference in xJ.
@@ -276,7 +245,7 @@ void draw_systematics() {
       } else {
         hVar = unfold_utility::unflattenXj(flatVar, ipt, Form("h%s_pt%d", systag.c_str(), ipt));
       }
-      TH1D * hVarDisp = densityForDisplay(hVar, Form("h%s_pt%d_disp", systag.c_str(), ipt));
+      TH1D * hVarDisp = unfold_utility::densityForDisplay(hVar, Form("h%s_pt%d_disp", systag.c_str(), ipt));
       hVarDisp->Scale(1./hVarDisp->Integral());
       hVarDisp->GetYaxis()->SetTitle("Shape-normalized counts / bin width");
 

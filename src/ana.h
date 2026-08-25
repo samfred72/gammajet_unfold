@@ -24,15 +24,39 @@ class ana {
 
     static Bool_t   PassEtaCut(float eta, float vz);
     static Double_t GetShiftedEta(float _vz, float _eta);
-    static float    getPurity(float low, float high, string systag = "nominal");
-    static float    getPurity(float val, string systag = "nominal");
-    static float    getPurityErrorLow(float low, float high, string systag = "nominal");
-    static float    getPurityErrorHigh(float low, float high, string systag = "nominal");
+    // ir (default 2 = R=0.4) selects which jet radius's purity to read - purity is
+    // "of paired photons" (see puritymaker.C's hclusterpt_abcd%i_%i input, gated on
+    // ispaired[ir]/pairing status that genuinely differs by jet radius), not a pure
+    // photon-ID quantity independent of the jet, so it needs its own value per radius,
+    // not one number reused everywhere. Defaulting to ir=2 keeps every caller that
+    // doesn't pass ir reading exactly the pre-existing hists/purity_<systag>.root (see
+    // purityFilename below) with zero behavior change.
+    static float    getPurity(float low, float high, string systag = "nominal", int ir = 2);
+    static float    getPurity(float val, string systag = "nominal", int ir = 2);
+    static float    getPurityErrorLow(float low, float high, string systag = "nominal", int ir = 2);
+    static float    getPurityErrorHigh(float low, float high, string systag = "nominal", int ir = 2);
+    // Purity of the ABCD sideband region C (not region A) - same puritymaker.C bootstrap
+    // (S/A quadratic solve), read back from the "combined_C" graph. n_s^C = c*S falls out
+    // of the same leakage-corrected fit used for region A's purity, so this needs no
+    // separate MC template or independent solve - see puritymaker.C's combine_hists().
+    static float    getPurityC(float low, float high, string systag = "nominal", int ir = 2);
+    static float    getPurityCErrorLow(float low, float high, string systag = "nominal", int ir = 2);
+    static float    getPurityCErrorHigh(float low, float high, string systag = "nominal", int ir = 2);
+    // hists/purity_<systag>.root - one file per systag holding every jet radius's
+    // purity curve in its own ana::rnames[ir] subdirectory (see puritymaker.C, the only
+    // writer of this file). getPurity/getPurityC etc. below select the radius back out
+    // via that subdirectory.
+    static string   purityFilename(const string & systag);
     static Int_t findPtBin(double value);
     static Int_t findUnfoldXjBin(double value);
+    // Single overload only - a second (double,double,float,int) and third
+    // (double,int,int) overload used to exist here but were unused dead code, and their
+    // presence made ROOT/Cling's overload resolution for this call non-deterministic
+    // across process runs (the interpreter would occasionally bind the float bdt argument
+    // to the int showershape parameter instead of the intended double bdt parameter,
+    // truncating it to 0 and silently zeroing the ABCD signal-region count for the whole
+    // run). Do not re-add another findabcdBin overload without renaming it.
     static Int_t findabcdBin(double iso, double bdt, int bin = 0);
-    static Int_t findabcdBin(double iso, double bdt, float pt, int bin = 0);
-    static Int_t findabcdBin(double iso, int showershape, int bin = 0);
     static Int_t findxjBin(double value);
     static Int_t findBdtBin(double value);
     static Int_t findUnfoldBin(double xj, double pt);
@@ -81,6 +105,35 @@ class ana {
     static constexpr int nEmfracBins = 3;
     static constexpr int singleptlow = 15;
     static constexpr int singlepthigh = 35;
+
+    // Definitive systag reprocessing list: nominal + every named systematic-variation
+    // reprocessing of the same input tree (see unfolder.h's constructor comment for what
+    // each one changes). This is the SINGLE place to add/remove a systag - every
+    // consumer below reads it, so a new entry here automatically propagates:
+    //   - macros/unfold_allsys.C's default systags list (unfolder.cc then fills that
+    //     systag's histograms AND its insitu_tree for every jet radius - see
+    //     unfolder.h's per-(systag,radius) insitu_tree construction)
+    //   - insitu/run_grid.sh's systag loop (the in-situ JES scan then runs for it)
+    //   - drawing/draw_systematics.C's `systematics` source list and asymmetric/symmetric
+    //     classification (see asymmetricSystagPairs below)
+    // A systag that isn't a "nominal +/- something" reprocessing at all (a different
+    // generator sample like herwig, or a different unfolding setting like niterLow/
+    // niterHigh/priorSensitivity) isn't a systags entry - those have no insitu_tree
+    // equivalent and are wired up independently (draw_nonclosure.C,
+    // draw_iteration_halfclosure.C, draw_prior_sensitivity.C).
+    static const vector<string> systags;
+
+    // Two-point (high/low) systematic pairs within `systags` - both names in each pair
+    // must appear in `systags`. Per this project's asymmetric-systematic ground rule
+    // (see CLAUDE.md / drawing/draw_systematics.C's sign-split combination), each pair
+    // contributes its own signed per-bin value to whichever total (up/down) matches its
+    // sign; every `systags` entry NOT listed here (e.g. threejet, narrowBDT, narrowISO)
+    // is a symmetric single-sided source instead, contributing its full magnitude to
+    // both totals. Adding a new "*_high"/"*_low" pair to `systags` also needs an entry
+    // here to be treated as asymmetric - it is NOT auto-detected from the name, so a
+    // typo'd or renamed pair fails loud (missing from every total) rather than silently
+    // misclassifying.
+    static const vector<pair<string,string>> asymmetricSystagPairs;
     static constexpr double ptBins[nPtBins+1] = {13,15,20,25,35,100};
     // Plain duplicate of ptBins[firstUsedPtBin..firstUsedPtBin+nPtBinsUsed] (15,20,25,35) -
     // kept as its own literal array (not pointer arithmetic into ptBins) since a few

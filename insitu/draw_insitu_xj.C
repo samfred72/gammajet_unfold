@@ -1,4 +1,6 @@
 #include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
+#include "/home/samson72/sphnx/gammajet_unfold/src/insitu_utility.h"
+#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
 #include <string>
 #include <vector>
 #include "TFile.h"
@@ -20,38 +22,15 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 // below were themselves filled at this fixed R by unfolder.cc.
 const int ir = 2;
 
-// sPHENIX label block: bold-italic "sPHENIX Internal" title, then one line per sample,
-// then one line per feature - same text/font convention and stacking formula as
-// drawer::drawAll() (see src/drawer.cc) and grid_insitu.C's own drawSPhenixLabel(),
-// reimplemented locally so this self-contained macro doesn't have to construct a full
-// drawer (which opens a batch of unrelated unfolding-output files it has no other use for).
-void drawSPhenixLabel(vector<string> samples, vector<string> features, float drawx, float drawy, int fontsize, float csize) {
-  float titlescale = 1.25;
-  float subtitlescale = 1.25;
-  float ydiff = fontsize * 0.0017 * 700.0/csize;
-  auto drawOne = [&](const char * text, float xp, float yp, int size) {
-    TLatex * tex = new TLatex(xp, yp, text);
-    tex->SetTextFont(43);
-    tex->SetTextSize(size);
-    tex->SetTextColor(kBlack);
-    tex->SetLineWidth(1);
-    tex->SetNDC();
-    tex->Draw();
-  };
-  drawOne("#bf{#it{sPHENIX}} #kern[0.5]{Internal}", drawx, drawy, (int)(fontsize*titlescale));
-  for (unsigned i = 0; i < samples.size(); i++) {
-    drawOne(samples[i].c_str(), drawx, drawy-ydiff*subtitlescale*(i+1), (int)(fontsize*subtitlescale));
-  }
-  for (unsigned i = 0; i < features.size(); i++) {
-    drawOne(features[i].c_str(), drawx, drawy-ydiff*subtitlescale*samples.size()-ydiff*(i+1)*subtitlescale, fontsize);
-  }
-}
+// sPHENIX label block (insitu_utility::drawSPhenixLabel) and other insitu/*.C helpers
+// now shared in src/insitu_utility.h/.cc.
 
 // Reads the insitutree (pho_pt, jet_pt, abcd) written by unfolder.cc into
 // gammajet_unfold/insitu/, and builds x_{J#gamma} = jet_pt/pho_pt histograms for:
 //   1. Region A (signal region) in Data
 //   2. Region A in Pythia8 gamma+jet MC (Photon5+10+20 combined, cross-section weighted)
-//   3. Purity-corrected Data (Region A minus the scaled Region C background)
+//   3. Purity-corrected Data (Region A minus the two-purity background estimate,
+//      unfold_utility::purityCorrect - see src/unfold_utility.h)
 //
 // Physics-level comparison uses only ana::ptBinsUsed (15-35 GeV, ana::firstUsedPtBin
 // through +ana::nPtBinsUsed) - same restriction as drawing/draw_purity_corrected.C,
@@ -59,14 +38,22 @@ void drawSPhenixLabel(vector<string> samples, vector<string> features, float dra
 // (ana::ptBins[0] and [nPtBins-1] respectively - see ana.h's comment).
 const int nPtBinsUsed = ana::nPtBinsUsed;
 const char * systag = "nominal";
-const char * insitu_dir = "/home/samson72/sphnx/gammajet_unfold/insitu";
+// insitu/ is split into inputs/ (the raw Data/Photon insitu ntuples, written by
+// unfolder.h's production pipeline), output/ (this macro's own .root output), and
+// pdfs/ (its .pdf output).
+const char * insitu_input_dir  = "/home/samson72/sphnx/gammajet_unfold/insitu/inputs";
+const char * insitu_output_dir = "/home/samson72/sphnx/gammajet_unfold/insitu/output";
+const char * insitu_pdf_dir    = "/home/samson72/sphnx/gammajet_unfold/insitu/pdfs";
 
 // Cross-section weights for combining the Photon5/10/20 samples - same numbers as
 // drawer.h's scalemap[isphoton=1][sample] for sim="pythia".
 map<int,double> photon_scale = {{5,146359.3},{10,6944.675},{20,130.4461}};
 
 // Fills one x_{J} histogram per photon-pT bin (ana::ptBins binning) from a single
-// insitutree file, selecting only the requested ABCD region, scaled by `weight`.
+// insitutree file, selecting only the requested ABCD region, scaled by `weight` (the
+// sample's cross-section weight, 1.0 for Data) times the tree's own "weight" branch
+// (the vz/cluster_pt mcWeight from unfolder.cc - always 1.0 for Data, so this is a
+// no-op there and only reweights MC).
 // Returns nullptr entries (left as empty histograms) if the file/tree is missing.
 vector<TH1D*> fillXjByPtBin(const char * filename, int abcdSelect, double weight, const char * tag) {
   vector<TH1D*> h(ana::nPtBins);
@@ -83,19 +70,25 @@ vector<TH1D*> fillXjByPtBin(const char * filename, int abcdSelect, double weight
   }
   TTree * t = (TTree*)f->Get("insitutree");
 
-  Float_t pho_pt, jet_pt;
-  Int_t abcd;
+  Float_t pho_pt, jet_pt, mcWeight;
+  Int_t abcd, evIr;
   t->SetBranchAddress("pho_pt", &pho_pt);
   t->SetBranchAddress("jet_pt", &jet_pt);
   t->SetBranchAddress("abcd", &abcd);
+  t->SetBranchAddress("weight", &mcWeight);
+  t->SetBranchAddress("ir", &evIr);
 
   Long64_t nentries = t->GetEntries();
   for (Long64_t e = 0; e < nentries; e++) {
     t->GetEntry(e);
     if (abcd != abcdSelect) continue;
+    // insitutree now holds every jet radius together (one row per radius an event
+    // paired at) - filter to this file's fixed ir=2/R=0.4 (see the file-scope `ir`
+    // comment above) instead of silently averaging over all ana::nJetR radii.
+    if (evIr != ir) continue;
     int ipt = ana::findPtBin(pho_pt);
     if (ipt < 0) continue;
-    h[ipt]->Fill(jet_pt/pho_pt, weight);
+    h[ipt]->Fill(jet_pt/pho_pt, weight*mcWeight);
   }
   f->Close();
   return h;
@@ -108,43 +101,10 @@ void addInto(vector<TH1D*> & total, const vector<TH1D*> & add) {
   }
 }
 
-// signal(xJ) = A(xJ) - (1-P)*(N_A/N_C)*C(xJ), P = ana::getPurity(ptlow,pthigh,systag) -
-// same formula as drawing/draw_purity_corrected.C's purityCorrectP(), one purity value
-// (and its bootstrap errors) per pT bin, fully correlated across xJ bins in that bin.
-TH1D * purityCorrectP(TH1D * A, TH1D * C, float p, float pErrLow, float pErrHigh, const char * name) {
-  float NA = A->Integral();
-  float NC = C->Integral();
-  TH1D * h = (TH1D*)A->Clone(name);
-  if (NC <= 0) {
-    cout << "WARNING: " << name << " has zero region-C statistics - cannot cross-normalize, using raw region A." << endl;
-    return h;
-  }
-  float scale = (1-p)*(NA/NC);
-  for (int i = 1; i <= A->GetNbinsX(); i++) {
-    float a  = A->GetBinContent(i);
-    float ae = A->GetBinError(i);
-    float c  = C->GetBinContent(i);
-    float ce = C->GetBinError(i);
-    float dPurityLow  = (NA/NC)*c*pErrLow;
-    float dPurityHigh = (NA/NC)*c*pErrHigh;
-    float content = a - scale*c;
-    float errLow  = sqrt(ae*ae + pow(scale*ce,2) + pow(dPurityLow,2));
-    float errHigh = sqrt(ae*ae + pow(scale*ce,2) + pow(dPurityHigh,2));
-    h->SetBinContent(i, content);
-    h->SetBinError(i, std::max(errLow, errHigh));
-  }
-  return h;
-}
-
 // x_{J} bins are non-uniform (ana::unfoldXjBins) - divide by bin width so the
 // comparison plot shows a density, not raw counts with an artificial shelf where the
 // bin width changes.
-TH1D * densityForDisplay(TH1D * h, const char * name) {
-  TH1D * hd = (TH1D*)h->Clone(name);
-  hd->Scale(1., "width");
-  hd->GetYaxis()->SetTitle("Counts / bin width");
-  return hd;
-}
+// densityForDisplay now lives in unfold_utility - see src/unfold_utility.h.
 
 void draw_insitu_xj() {
   gStyle->SetOptStat(0);
@@ -152,29 +112,33 @@ void draw_insitu_xj() {
   // -----------------------------
   // 1. Region A in Data
   // -----------------------------
-  vector<TH1D*> hA_data = fillXjByPtBin(Form("%s/Data_%s_insitu.root", insitu_dir, systag), 0, 1.0, "A_data");
+  vector<TH1D*> hA_data = fillXjByPtBin(Form("%s/Data_%s_insitu.root", insitu_input_dir, systag), 0, 1.0, "A_data");
 
   // -----------------------------
   // 2. Region A in Pythia (Photon5+10+20, cross-section weighted)
   // -----------------------------
-  vector<TH1D*> hA_pythia = fillXjByPtBin(Form("%s/Photon5_pythia_%s_insitu.root", insitu_dir, systag), 0, photon_scale[5], "A_pythia_p5");
-  addInto(hA_pythia, fillXjByPtBin(Form("%s/Photon10_pythia_%s_insitu.root", insitu_dir, systag), 0, photon_scale[10], "A_pythia_p10"));
-  addInto(hA_pythia, fillXjByPtBin(Form("%s/Photon20_pythia_%s_insitu.root", insitu_dir, systag), 0, photon_scale[20], "A_pythia_p20"));
+  vector<TH1D*> hA_pythia = fillXjByPtBin(Form("%s/Photon5_pythia_%s_insitu.root", insitu_input_dir, systag), 0, photon_scale[5], "A_pythia_p5");
+  addInto(hA_pythia, fillXjByPtBin(Form("%s/Photon10_pythia_%s_insitu.root", insitu_input_dir, systag), 0, photon_scale[10], "A_pythia_p10"));
+  addInto(hA_pythia, fillXjByPtBin(Form("%s/Photon20_pythia_%s_insitu.root", insitu_input_dir, systag), 0, photon_scale[20], "A_pythia_p20"));
 
   // -----------------------------
-  // 3. Purity-corrected Data (Region A - scaled Region C)
+  // 3. Purity-corrected Data (Region A minus the two-purity background estimate)
   // -----------------------------
-  vector<TH1D*> hC_data = fillXjByPtBin(Form("%s/Data_%s_insitu.root", insitu_dir, systag), 2, 1.0, "C_data");
+  vector<TH1D*> hC_data = fillXjByPtBin(Form("%s/Data_%s_insitu.root", insitu_input_dir, systag), 2, 1.0, "C_data");
 
   vector<TH1D*> hCorrected(ana::nPtBins);
   for (int ipt = ana::firstUsedPtBin; ipt < ana::firstUsedPtBin + nPtBinsUsed; ipt++) {
     float ptlow  = ana::ptBins[ipt];
     float pthigh = ana::ptBins[ipt+1];
-    float p        = ana::getPurity(ptlow, pthigh, systag);
-    float pErrLow  = ana::getPurityErrorLow(ptlow, pthigh, systag);
-    float pErrHigh = ana::getPurityErrorHigh(ptlow, pthigh, systag);
-    hCorrected[ipt] = purityCorrectP(hA_data[ipt], hC_data[ipt], p, pErrLow, pErrHigh,
-        Form("hxjcorrected_data_pt%d", ipt));
+    float pA        = ana::getPurity(ptlow, pthigh, systag);
+    float pAErrLow  = ana::getPurityErrorLow(ptlow, pthigh, systag);
+    float pAErrHigh = ana::getPurityErrorHigh(ptlow, pthigh, systag);
+    float pC        = ana::getPurityC(ptlow, pthigh, systag);
+    float pCErrLow  = ana::getPurityCErrorLow(ptlow, pthigh, systag);
+    float pCErrHigh = ana::getPurityCErrorHigh(ptlow, pthigh, systag);
+    hCorrected[ipt] = unfold_utility::purityCorrect(hA_data[ipt], hC_data[ipt],
+        pA, pAErrLow, pAErrHigh, pC, pCErrLow, pCErrHigh, Form("hxjcorrected_data_pt%d", ipt));
+    if (!hCorrected[ipt]) hCorrected[ipt] = (TH1D*)hA_data[ipt]->Clone(Form("hxjcorrected_data_pt%d", ipt));
   }
 
   // -----------------------------
@@ -197,7 +161,7 @@ void draw_insitu_xj() {
   // -----------------------------
   // Save
   // -----------------------------
-  const char * outRootPath = Form("%s/insitu_xj_comparison.root", insitu_dir);
+  const char * outRootPath = Form("%s/insitu_xj_comparison.root", insitu_output_dir);
   TFile * fout = TFile::Open(outRootPath, "RECREATE");
   hxjA_data->Write();
   hxjA_pythia->Write();
@@ -209,9 +173,9 @@ void draw_insitu_xj() {
   // Comparison plot (shape-normalized density, since the three are at different
   // absolute scales - Data counts vs. MC cross-section-weighted counts).
   // -----------------------------
-  TH1D * dispA_data       = densityForDisplay(hxjA_data,       "hxjA_data_disp");
-  TH1D * dispA_pythia     = densityForDisplay(hxjA_pythia,     "hxjA_pythia_disp");
-  TH1D * dispCorrected    = densityForDisplay(hxjcorrected_data,"hxjcorrected_data_disp");
+  TH1D * dispA_data       = unfold_utility::densityForDisplay(hxjA_data,       "hxjA_data_disp");
+  TH1D * dispA_pythia     = unfold_utility::densityForDisplay(hxjA_pythia,     "hxjA_pythia_disp");
+  TH1D * dispCorrected    = unfold_utility::densityForDisplay(hxjcorrected_data,"hxjcorrected_data_disp");
   if (dispA_data->Integral() > 0)    dispA_data->Scale(1./dispA_data->Integral());
   if (dispA_pythia->Integral() > 0)  dispA_pythia->Scale(1./dispA_pythia->Integral());
   if (dispCorrected->Integral() > 0) dispCorrected->Scale(1./dispCorrected->Integral());
@@ -269,13 +233,13 @@ void draw_insitu_xj() {
   texMean->DrawLatex(.5, .54, Form("#LTx_{J#gamma}#GT_{corr.} = %.3f #pm %.3f",
         hxjcorrected_data->GetMean(), hxjcorrected_data->GetMeanError()));
 
-  drawSPhenixLabel({"p+p Run24 Data"}, {
+  insitu_utility::drawSPhenixLabel({"p+p Run24 Data"}, {
       Form("Jet R=%.1f", ana::JetRs[ir]),
       Form("|#eta^{#gamma}|<%.1f, |#eta^{jet}|<%.1f", ana::etacut, ana::etacut-ana::JetRs[ir]),
       Form("#Delta#phi>%.0f#pi/%.0f", ana::oppnum, ana::oppden)
     }, .18, .85, 16, gPad->GetWh());
 
-  const char * outPdfPath = Form("%s/insitu_xj_comparison.pdf", insitu_dir);
+  const char * outPdfPath = Form("%s/insitu_xj_comparison.pdf", insitu_pdf_dir);
   c->SaveAs(outPdfPath);
   cout << "Wrote " << outPdfPath << endl;
 }

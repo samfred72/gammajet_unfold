@@ -79,57 +79,10 @@ const int wIndex = 1; // which entry above is the reported systematic (PPG08's "
 // toy_data_iterations.C/draw_refolding.C/draw_nonclosure.C.
 const int nXjBinsForChi2 = ana::nUnfoldXjBins - 3;
 
-// Ported from drawing/draw_purity_corrected.C - see that file for the full derivation.
-TH1D * purityCorrectP(TH1D * A, TH1D * C, float p, float pErrLow, float pErrHigh, const char * name) {
-  float NA = A->Integral();
-  float NC = C->Integral();
-  if (NC <= 0) {
-    cout << "WARNING: " << name << " has zero region-C statistics - cannot cross-normalize, skipping." << endl;
-    return nullptr;
-  }
-  float scale = (1-p)*(NA/NC);
-  TH1D * h = (TH1D*)A->Clone(name);
-  for (int i = 1; i <= A->GetNbinsX(); i++) {
-    float a  = A->GetBinContent(i);
-    float ae = A->GetBinError(i);
-    float c  = C->GetBinContent(i);
-    float ce = C->GetBinError(i);
-    float dPurityLow  = (NA/NC)*c*pErrLow;
-    float dPurityHigh = (NA/NC)*c*pErrHigh;
-    float content = a - scale*c;
-    float errLow  = sqrt(ae*ae + pow(scale*ce,2) + pow(dPurityLow,2));
-    float errHigh = sqrt(ae*ae + pow(scale*ce,2) + pow(dPurityHigh,2));
-    h->SetBinContent(i, content);
-    h->SetBinError(i, std::max(errLow, errHigh));
-  }
-  return h;
-}
-
-TH1D * densityForDisplay(TH1D * h, const char * name) {
-  TH1D * hd = (TH1D*)h->Clone(name);
-  hd->Scale(1., "width");
-  hd->GetYaxis()->SetTitle("Counts / bin width");
-  return hd;
-}
-
-// Ported from drawing/draw_purity_corrected.C - see that file for the full derivation.
-TH1D * buildFullyCorrected(TH1D * flatA, TH1D * flatC, const char * tag, string systag) {
-  TH1D * flatCorrected = (TH1D*)flatA->Clone(Form("hxjcorrected_flat_%s", tag));
-  flatCorrected->Reset("ICES");
-  for (int ipt = 0; ipt < ana::nPtBins; ipt++) {
-    float ptlow  = ana::ptBins[ipt];
-    float pthigh = ana::ptBins[ipt+1];
-    float p        = ana::getPurity(ptlow, pthigh, systag);
-    float pErrLow  = ana::getPurityErrorLow(ptlow, pthigh, systag);
-    float pErrHigh = ana::getPurityErrorHigh(ptlow, pthigh, systag);
-    TH1D * A = unfold_utility::unflattenXj(flatA, ipt, Form("htmpA_%s_pt%d", tag, ipt));
-    TH1D * C = unfold_utility::unflattenXj(flatC, ipt, Form("htmpC_%s_pt%d", tag, ipt));
-    TH1D * hcorr = purityCorrectP(A, C, p, pErrLow, pErrHigh, Form("htmpcorr_%s_pt%d", tag, ipt));
-    unfold_utility::reflattenXj(hcorr ? hcorr : A, ipt, flatCorrected);
-    delete A; delete C; if (hcorr) delete hcorr;
-  }
-  return flatCorrected;
-}
+// densityForDisplay now lives in unfold_utility - see src/unfold_utility.h.
+// buildFullyCorrected now lives in unfold_utility (purity-corrects all ana::nPtBins
+// slices via unfold_utility::purityCorrect and reflattens for RooUnfold) - see
+// src/unfold_utility.h.
 
 // w(bin) = (shape-normalized nominal-unfolded Data) / (shape-normalized Pythia8 truth
 // prior), per pT-bin slice - see file header. Defaults to 1 (no reweighting) wherever
@@ -224,7 +177,7 @@ void draw_prior_sensitivity(string systag = "nominal") {
 
   TH1D * flatA = d.get(Form("hrecoxj%i_0",ir), 0);
   TH1D * flatC = d.get(Form("hrecoxj%i_2",ir), 0);
-  TH1D * flatMeasured = buildFullyCorrected(flatA, flatC, "data", systag);
+  TH1D * flatMeasured = unfold_utility::buildFullyCorrected(flatA, flatC, "data", systag);
 
   // Step 1: the current, un-reweighted-prior nominal - not redefined by this file.
   TH1D * flatUnfoldedNominal = unfold_utility::unfoldOnce(response, flatMeasured, niterate, "hUnfoldedNominal");
@@ -258,7 +211,7 @@ void draw_prior_sensitivity(string systag = "nominal") {
   vector<vector<double>> fracDiff(nPtBinsUsed, vector<double>(ana::nUnfoldXjBins, 0));
   for (int ipt = ana::firstUsedPtBin; ipt < ana::firstUsedPtBin+nPtBinsUsed; ipt++) {
     TH1D * hNominal = unfold_utility::unflattenXj(flatUnfoldedNominal, ipt, Form("hNominal_pt%d", ipt));
-    TH1D * hNominalDisp = densityForDisplay(hNominal, Form("hNominalDisp_pt%d", ipt));
+    TH1D * hNominalDisp = unfold_utility::densityForDisplay(hNominal, Form("hNominalDisp_pt%d", ipt));
 
     vector<TH1D*> hVariant(exponents.size()), hVariantDisp(exponents.size());
     double ymax = hNominalDisp->GetMaximum();
@@ -266,7 +219,7 @@ void draw_prior_sensitivity(string systag = "nominal") {
     cout << "  pt" << ipt << " (" << ana::ptBins[ipt] << "-" << ana::ptBins[ipt+1] << " GeV):";
     for (unsigned iv = 0; iv < exponents.size(); iv++) {
       hVariant[iv] = unfold_utility::unflattenXj(flatUnfoldedVariant[iv], ipt, Form("h%s_pt%d", variantNames[iv].c_str(), ipt));
-      hVariantDisp[iv] = densityForDisplay(hVariant[iv], Form("h%s_pt%d_disp", variantNames[iv].c_str(), ipt));
+      hVariantDisp[iv] = unfold_utility::densityForDisplay(hVariant[iv], Form("h%s_pt%d_disp", variantNames[iv].c_str(), ipt));
       ymax = std::max(ymax, hVariantDisp[iv]->GetMaximum());
       double chi2ndf = computeChi2NDF(hVariant[iv], hNominal);
       cout << " " << variantNames[iv] << " chi2/NDF=" << chi2ndf;

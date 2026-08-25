@@ -49,6 +49,9 @@ MODE=${1:-full}
 if [[ "$MODE" == "nominal" ]]; then
   SYSTAGS=(nominal)
 else
+  # Keep in sync with ana::systags (src/ana.h) - the definitive systag list - bash can't
+  # read a C++ static vector<string> directly, so this is a duplicated, explicit list
+  # (same convention as insitu/run_grid.sh's SYSTAGS).
   SYSTAGS=(nominal JERhigh JERlow emscale_high emscale_low jes_high jes_low threejet narrowBDT narrowISO)
 fi
 echo "Mode: $MODE (systags: ${SYSTAGS[*]})"
@@ -63,13 +66,18 @@ bash make.sh
 
 # ---- Stage 2: unfolder.cc - builds the response matrix + region A/B/C/D histograms ----
 # Reads the raw ntuples; writes hists/<trigger>_<sim>_<systag>_unfolding.root (MC) and
-# hists/<trigger>_<systag>_unfolding.root (Data). One process per (trigger,sim,systag) -
-# runall_unfold.sh (called once per systag below) already covers Data + Photon5/10/20 +
-# (for nominal only) the herwig generator-modeling sample.
+# hists/<trigger>_<systag>_unfolding.root (Data). Full mode reads each trigger's tree
+# once and fills every systag's histograms in that one pass (runall_unfold_allsys.sh /
+# unfold_allsys.C) instead of once per systag - validated bin-for-bin identical to the
+# old per-systag-loop output. Nominal-only mode stays on the plain single-systag
+# runall_unfold.sh - it's already just one tree read, nothing to consolidate there, and
+# this is the fast-iteration path so it shouldn't pay for the other 9 systags.
 echo "=== Stage 2: unfolder.cc (response matrix + region A/B/C/D) ==="
-for SYSTAG in "${SYSTAGS[@]}"; do
-  bash runall_unfold.sh "$SYSTAG"
-done
+if [[ "$MODE" == "nominal" ]]; then
+  bash runall_unfold.sh nominal
+else
+  bash runall_unfold_allsys.sh
+fi
 
 # ---- Stage 3: puritymaker.C - the step that was missed ----
 # Reads Data's region A/B/C/D histograms from stage 2's output and writes

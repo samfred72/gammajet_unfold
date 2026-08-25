@@ -42,57 +42,10 @@ const char * pdfPath      = "/home/samson72/sphnx/gammajet_unfold/pdfs/final_res
 const char * rootPath     = "/home/samson72/sphnx/gammajet_unfold/hists/final_result.root";
 const char * systRootPath = "/home/samson72/sphnx/gammajet_unfold/hists/systematics.root";
 
-// Ported from drawing/draw_purity_corrected.C - see that file for the full derivation.
-TH1D * purityCorrectP(TH1D * A, TH1D * C, float p, float pErrLow, float pErrHigh, const char * name) {
-  float NA = A->Integral();
-  float NC = C->Integral();
-  if (NC <= 0) {
-    cout << "WARNING: " << name << " has zero region-C statistics - cannot cross-normalize, skipping." << endl;
-    return nullptr;
-  }
-  float scale = (1-p)*(NA/NC);
-  TH1D * h = (TH1D*)A->Clone(name);
-  for (int i = 1; i <= A->GetNbinsX(); i++) {
-    float a  = A->GetBinContent(i);
-    float ae = A->GetBinError(i);
-    float c  = C->GetBinContent(i);
-    float ce = C->GetBinError(i);
-    float dPurityLow  = (NA/NC)*c*pErrLow;
-    float dPurityHigh = (NA/NC)*c*pErrHigh;
-    float content = a - scale*c;
-    float errLow  = sqrt(ae*ae + pow(scale*ce,2) + pow(dPurityLow,2));
-    float errHigh = sqrt(ae*ae + pow(scale*ce,2) + pow(dPurityHigh,2));
-    h->SetBinContent(i, content);
-    h->SetBinError(i, std::max(errLow, errHigh));
-  }
-  return h;
-}
-
-TH1D * densityForDisplay(TH1D * h, const char * name) {
-  TH1D * hd = (TH1D*)h->Clone(name);
-  hd->Scale(1., "width");
-  hd->GetYaxis()->SetTitle("Counts / bin width");
-  return hd;
-}
-
-// Ported from drawing/draw_purity_corrected.C - see that file for the full derivation.
-TH1D * buildFullyCorrected(TH1D * flatA, TH1D * flatC, const char * tag, string systag) {
-  TH1D * flatCorrected = (TH1D*)flatA->Clone(Form("hxjcorrected_flat_%s", tag));
-  flatCorrected->Reset("ICES");
-  for (int ipt = 0; ipt < ana::nPtBins; ipt++) {
-    float ptlow  = ana::ptBins[ipt];
-    float pthigh = ana::ptBins[ipt+1];
-    float p        = ana::getPurity(ptlow, pthigh, systag);
-    float pErrLow  = ana::getPurityErrorLow(ptlow, pthigh, systag);
-    float pErrHigh = ana::getPurityErrorHigh(ptlow, pthigh, systag);
-    TH1D * A = unfold_utility::unflattenXj(flatA, ipt, Form("htmpA_%s_pt%d", tag, ipt));
-    TH1D * C = unfold_utility::unflattenXj(flatC, ipt, Form("htmpC_%s_pt%d", tag, ipt));
-    TH1D * hcorr = purityCorrectP(A, C, p, pErrLow, pErrHigh, Form("htmpcorr_%s_pt%d", tag, ipt));
-    unfold_utility::reflattenXj(hcorr ? hcorr : A, ipt, flatCorrected);
-    delete A; delete C; if (hcorr) delete hcorr;
-  }
-  return flatCorrected;
-}
+// densityForDisplay now lives in unfold_utility - see src/unfold_utility.h.
+// buildFullyCorrected now lives in unfold_utility (purity-corrects all ana::nPtBins
+// slices via unfold_utility::purityCorrect and reflattens for RooUnfold) - see
+// src/unfold_utility.h.
 
 void draw_final_result() {
   gStyle->SetOptStat(0);
@@ -113,19 +66,19 @@ void draw_final_result() {
   TH2D * respMatrix2D      = d.get2d(Form("hxjresponse%i",ir), 1);
   TH1D * flatA = d.get(Form("hrecoxj%i_0",ir), 0);
   TH1D * flatC = d.get(Form("hrecoxj%i_2",ir), 0);
-  TH1D * flatCorrected = buildFullyCorrected(flatA, flatC, "data", "nominal");
+  TH1D * flatCorrected = unfold_utility::buildFullyCorrected(flatA, flatC, "data", "nominal");
   TH1D * flatUnfolded  = unfold_utility::unfoldOnce(respRecoTemplate, respTruthTemplate, respMatrix2D, flatCorrected, niterate, "hUnfoldedFinal");
 
   cout << "pT bin, xJ bin: nominal, stat frac, syst frac, total frac" << endl;
 
   for (int ipt = ana::firstUsedPtBin; ipt < ana::firstUsedPtBin+nPtBinsUsed; ipt++) {
     TH1D * hUnfold     = unfold_utility::unflattenXj(flatUnfolded, ipt, Form("hFinal_pt%d", ipt));
-    TH1D * hUnfoldDisp = densityForDisplay(hUnfold, Form("hFinalDisp_pt%d", ipt));
+    TH1D * hUnfoldDisp = unfold_utility::densityForDisplay(hUnfold, Form("hFinalDisp_pt%d", ipt));
     hUnfoldDisp->Scale(1./hUnfoldDisp->Integral());
     hUnfoldDisp->GetYaxis()->SetTitle("(1/N) dN/dx_{J#gamma}");
 
     TH1D * hTruth     = unfold_utility::unflattenXj(respTruthTemplate, ipt, Form("hFinalTruth_pt%d", ipt));
-    TH1D * hTruthDisp = densityForDisplay(hTruth, Form("hFinalTruthDisp_pt%d", ipt));
+    TH1D * hTruthDisp = unfold_utility::densityForDisplay(hTruth, Form("hFinalTruthDisp_pt%d", ipt));
     hTruthDisp->Scale(1./hTruthDisp->Integral());
 
     // Systematic-only uncertainty box - kept separate from the data points' own

@@ -61,13 +61,7 @@ const vector<int> iterationsToScan = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}; // f
 // (still drawn on the comparison pages). Same exclusion as draw_purity_corrected.C/
 // draw_iteration_halfclosure.C/toy_resp_iterations.C/toy_data_iterations.C/draw_refolding.C.
 const int nXjBinsForChi2 = ana::nUnfoldXjBins - 3;
-
-TH1D * densityForDisplay(TH1D * h, const char * name) {
-  TH1D * hd = (TH1D*)h->Clone(name);
-  hd->Scale(1., "width");
-  hd->GetYaxis()->SetTitle("Counts / bin width");
-  return hd;
-}
+// densityForDisplay now lives in unfold_utility - see src/unfold_utility.h.
 
 // Sets bin errors to a simple Poisson-like sqrt(content) stand-in - see file header for why
 // (these are deterministic reweightings/projections, not real independent measurements).
@@ -117,8 +111,8 @@ double computeChi2NDF(TH1D * hUnfolded, TH1D * hTruth) {
 void drawComparisonPage(TCanvas * c, const char * pdfPath, drawer & d, int ipt,
     TH1D * hA, const char * labelA, TH1D * hB, const char * labelB, const char * ratioTitle,
     vector<string> extraLines) {
-  TH1D * hAdisp = densityForDisplay(hA, Form("%s_disp", hA->GetName()));
-  TH1D * hBdisp = densityForDisplay(hB, Form("%s_disp", hB->GetName()));
+  TH1D * hAdisp = unfold_utility::densityForDisplay(hA, Form("%s_disp", hA->GetName()));
+  TH1D * hBdisp = unfold_utility::densityForDisplay(hB, Form("%s_disp", hB->GetName()));
 
   c->Clear();
   c->cd();
@@ -275,9 +269,9 @@ void draw_nonclosure() {
     chi2ByPt[ipt] = chi2ndf;
     cout << "  pt" << ipt << " (" << ana::ptBins[ipt] << "-" << ana::ptBins[ipt+1] << " GeV): bias chi2/NDF = " << chi2ndf << endl;
 
-    TH1D * hAltTruthDisp = densityForDisplay(hAltTruthPt, Form("hAltTruthDisp_pt%d", ipt));
-    TH1D * hAltUnfDisp   = densityForDisplay(hAltUnfPt, Form("hAltUnfDisp_pt%d", ipt));
-    TH1D * hNomTruthDisp = densityForDisplay(hNomTruthPt, Form("hNomTruthRefDisp_pt%d", ipt));
+    TH1D * hAltTruthDisp = unfold_utility::densityForDisplay(hAltTruthPt, Form("hAltTruthDisp_pt%d", ipt));
+    TH1D * hAltUnfDisp   = unfold_utility::densityForDisplay(hAltUnfPt, Form("hAltUnfDisp_pt%d", ipt));
+    TH1D * hNomTruthDisp = unfold_utility::densityForDisplay(hNomTruthPt, Form("hNomTruthRefDisp_pt%d", ipt));
 
     c->Clear();
     c->cd();

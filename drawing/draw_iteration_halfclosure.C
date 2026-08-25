@@ -22,10 +22,10 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 // halves of the same MC sample share the same expectation value - there's no real bias for
 // extra iterations to remove, only variance for them to add.
 //
-// This version instead unfolds Data's purity-corrected xJ spectrum (purityCorrectP/
-// buildFullyCorrected below, ported from drawing/draw_purity_corrected.C) through the
-// full, properly cross-section-weighted Photon5/10/20 response (same response
-// construction as that file too), comparing to the fixed #gamma+jet MC truth as a
+// This version instead unfolds Data's purity-corrected xJ spectrum
+// (unfold_utility::purityCorrect/buildFullyCorrected below) through the full, properly
+// cross-section-weighted Photon5/10/20 response (same response construction as
+// drawing/draw_purity_corrected.C too), comparing to the fixed #gamma+jet MC truth as a
 // reference. Since Data has no real truth level, this is no longer a strict closure
 // test - Data can genuinely differ from the MC prior for real physics reasons, not just
 // noise - but it shows how Data's unfolded result actually depends on iteration count,
@@ -40,82 +40,10 @@ const vector<int> iterationsToTest = {1,2,3,4,5,6,7,8,9,10};
 // behavior - excluded from errorScore/pairBiasScore below (still drawn everywhere else).
 const int nXjBinsForChi2 = ana::nUnfoldXjBins - 3;
 
-// Ported from drawing/draw_purity_corrected.C - see that file for the full derivation.
-// signal(xJ) = A(xJ) - (1-P)*(N_A/N_C)*C(xJ), with N_A, N_C the pT-bin-integrated
-// region A/C totals, P = ana::getPurity(ptBins[ipt],ptBins[ipt+1]) (the actual
-// puritymaker.C bootstrap point, not a smooth fit), and pErrLow/pErrHigh its asymmetric
-// bootstrap errors propagated through d(signal)/dP = (N_A/N_C)*C. h's bin errors use
-// the larger of errLow/errHigh (TH1D can't hold two) since this feeds RooUnfold here,
-// which doesn't support asymmetric errors anyway - no graphOut caller needed in this file.
-// Returns nullptr if region C has no statistics in this pT bin (N_A/N_C undefined).
-TH1D * purityCorrectP(TH1D * A, TH1D * C, float p, float pErrLow, float pErrHigh, const char * name, TGraphAsymmErrors ** graphOut = nullptr) {
-  float NA = A->Integral();
-  float NC = C->Integral();
-  if (NC <= 0) {
-    cout << "WARNING: " << name << " has zero region-C statistics - cannot cross-normalize, skipping." << endl;
-    if (graphOut) *graphOut = nullptr;
-    return nullptr;
-  }
-  float scale = (1-p)*(NA/NC);
-  TH1D * h = (TH1D*)A->Clone(name);
-  TGraphAsymmErrors * g = graphOut ? new TGraphAsymmErrors(A->GetNbinsX()) : nullptr;
-  if (g) g->SetName(Form("%s_graph", name));
-  for (int i = 1; i <= A->GetNbinsX(); i++) {
-    float a  = A->GetBinContent(i);
-    float ae = A->GetBinError(i);
-    float c  = C->GetBinContent(i);
-    float ce = C->GetBinError(i);
-    float dPurityLow  = (NA/NC)*c*pErrLow;
-    float dPurityHigh = (NA/NC)*c*pErrHigh;
-    float content = a - scale*c;
-    float errLow  = sqrt(ae*ae + pow(scale*ce,2) + pow(dPurityLow,2));
-    float errHigh = sqrt(ae*ae + pow(scale*ce,2) + pow(dPurityHigh,2));
-    h->SetBinContent(i, content);
-    h->SetBinError(i, std::max(errLow, errHigh));
-    if (g) {
-      double xc  = A->GetXaxis()->GetBinCenter(i);
-      double xlo = xc - A->GetXaxis()->GetBinLowEdge(i);
-      double xhi = A->GetXaxis()->GetBinUpEdge(i) - xc;
-      g->SetPoint(i-1, xc, content);
-      g->SetPointError(i-1, xlo, xhi, errLow, errHigh);
-    }
-  }
-  if (graphOut) *graphOut = g;
-  return h;
-}
-
-TH1D * densityForDisplay(TH1D * h, const char * name) {
-  TH1D * hd = (TH1D*)h->Clone(name);
-  hd->Scale(1., "width");
-  hd->GetYaxis()->SetTitle("Counts / bin width");
-  return hd;
-}
-
-// Ported from drawing/draw_purity_corrected.C. Purity-correct all ana::nPtBins slices
-// (not just the 3 used for physics results) of flatA/flatC and write the result into
-// one full flattened histogram matching the response matrix's dimensionality, so
-// RooUnfold sees a complete, consistently-binned "measured" vector - unfolding a 2D
-// (pT,xJ) measurement needs the whole flattened vector at once because migration
-// crosses pT-bin boundaries, not just xJ ones. Falls back to raw region A for any pT
-// slice where region C is empty (can't purity-correct) - it isn't part of the
-// displayed/physics-used bins anyway.
-TH1D * buildFullyCorrected(TH1D * flatA, TH1D * flatC, const char * tag, string systag) {
-  TH1D * flatCorrected = (TH1D*)flatA->Clone(Form("hxjcorrected_flat_%s", tag));
-  flatCorrected->Reset("ICES");
-  for (int ipt = 0; ipt < ana::nPtBins; ipt++) {
-    float ptlow  = ana::ptBins[ipt];
-    float pthigh = ana::ptBins[ipt+1];
-    float p        = ana::getPurity(ptlow, pthigh, systag);
-    float pErrLow  = ana::getPurityErrorLow(ptlow, pthigh, systag);
-    float pErrHigh = ana::getPurityErrorHigh(ptlow, pthigh, systag);
-    TH1D * A = unfold_utility::unflattenXj(flatA, ipt, Form("htmpA_%s_pt%d", tag, ipt));
-    TH1D * C = unfold_utility::unflattenXj(flatC, ipt, Form("htmpC_%s_pt%d", tag, ipt));
-    TH1D * hcorr = purityCorrectP(A, C, p, pErrLow, pErrHigh, Form("htmpcorr_%s_pt%d", tag, ipt));
-    unfold_utility::reflattenXj(hcorr ? hcorr : A, ipt, flatCorrected);
-    delete A; delete C; if (hcorr) delete hcorr;
-  }
-  return flatCorrected;
-}
+// densityForDisplay now lives in unfold_utility - see src/unfold_utility.h.
+// buildFullyCorrected now lives in unfold_utility (purity-corrects all ana::nPtBins
+// slices via unfold_utility::purityCorrect and reflattens for RooUnfold) - see
+// src/unfold_utility.h.
 
 // Rainbow gradient from red (i=0) to purple (i=n-1) - HSV hue 0 is red, 270 is
 // violet/purple; sweeping only that range (not the full 360, which would wrap back to
@@ -143,8 +71,8 @@ void draw_iteration_halfclosure(string systag = "nominal") {
   TH2D * respMatrix2D      = d.get2d(Form("hxjresponse%i",ir), 1);
   RooUnfoldResponse * response = new RooUnfoldResponse(respRecoTemplate, respTruthTemplate, respMatrix2D);
 
-  // Measured: Data's purity-corrected xJ spectrum (region A minus the purity-weighted
-  // region C contribution, per pT bin - see buildFullyCorrected/purityCorrectP above),
+  // Measured: Data's purity-corrected xJ spectrum (region A minus the two-purity
+  // background estimate, per pT bin - see buildFullyCorrected above / unfold_utility::purityCorrect),
   // matching what drawing/draw_purity_corrected.C actually feeds into unfolding for the
   // real result. Unfolding raw region-A reco (background and all) would answer a
   // different question than the one this scan is meant to inform. Truth reference: the
@@ -152,7 +80,7 @@ void draw_iteration_halfclosure(string systag = "nominal") {
   // its own.
   TH1D * flatA = d.get(Form("hrecoxj%i_0",ir), 0);
   TH1D * flatC = d.get(Form("hrecoxj%i_2",ir), 0);
-  TH1D * flatMeasured = buildFullyCorrected(flatA, flatC, "data", systag);
+  TH1D * flatMeasured = unfold_utility::buildFullyCorrected(flatA, flatC, "data", systag);
   TH1D * flatTruth = respTruthTemplate;
 
   // Per iteration: error = mean fractional uncertainty of the unfolded result itself,
@@ -246,9 +174,9 @@ void draw_iteration_halfclosure(string systag = "nominal") {
     // Shape-normalize (bin-width density, then unit area) - Data (raw counts) and the
     // weighted MC truth (cross-section scaled, ~10^9) are on wildly different absolute
     // scales; without this Data's real, non-zero curve is invisible next to truth's.
-    TH1D * hUnfoldDisp = densityForDisplay(hUnfold, Form("hxjunfold_final_pt%d_disp", ipt));
+    TH1D * hUnfoldDisp = unfold_utility::densityForDisplay(hUnfold, Form("hxjunfold_final_pt%d_disp", ipt));
     hUnfoldDisp->Scale(1./hUnfoldDisp->Integral());
-    TH1D * hTruthDisp  = densityForDisplay(hTruth,  Form("hxjtruth_final_pt%d_disp", ipt));
+    TH1D * hTruthDisp  = unfold_utility::densityForDisplay(hTruth,  Form("hxjtruth_final_pt%d_disp", ipt));
     hTruthDisp->Scale(1./hTruthDisp->Integral());
 
     c->Clear();
@@ -317,14 +245,14 @@ void draw_iteration_halfclosure(string systag = "nominal") {
   // weighted MC truth are on wildly different absolute scales.
   for (int ipt = ana::firstUsedPtBin; ipt < ana::firstUsedPtBin+nPtBinsUsed; ipt++) {
     TH1D * hTruth0     = unfold_utility::unflattenXj(flatTruth, ipt, Form("hxjtruth_perIter_pt%d", ipt));
-    TH1D * hTruthDisp0 = densityForDisplay(hTruth0, Form("hxjtruth_perIter_pt%d_disp", ipt));
+    TH1D * hTruthDisp0 = unfold_utility::densityForDisplay(hTruth0, Form("hxjtruth_perIter_pt%d_disp", ipt));
     hTruthDisp0->Scale(1./hTruthDisp0->Integral());
 
     vector<TH1D*> hUnfoldDispAll(iters.size());
     double ymax0 = hTruthDisp0->GetMaximum();
     for (unsigned k = 0; k < iters.size(); k++) {
       TH1D * hUnfold = unfoldedByIter[k][ipt];
-      hUnfoldDispAll[k] = densityForDisplay(hUnfold, Form("hxjunfold_perIter_pt%d_iter%d_disp", ipt, iters[k]));
+      hUnfoldDispAll[k] = unfold_utility::densityForDisplay(hUnfold, Form("hxjunfold_perIter_pt%d_iter%d_disp", ipt, iters[k]));
       hUnfoldDispAll[k]->Scale(1./hUnfoldDispAll[k]->Integral());
       ymax0 = std::max(ymax0, hUnfoldDispAll[k]->GetMaximum());
     }

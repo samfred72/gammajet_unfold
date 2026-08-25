@@ -1,5 +1,6 @@
 #include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
 #include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
+#include "/home/samson72/sphnx/gammajet_unfold/src/insitu_utility.h"
 #include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
 #include <string>
 #include <vector>
@@ -47,16 +48,14 @@ R__LOAD_LIBRARY(libRooUnfold.so);
 // across the whole scan - only the measured (Data) input changes with pa. This mirrors
 // exactly how grid_insitu.C holds its own MC reference fixed while scanning Data alone.
 
-const char * insitu_dir = "/home/samson72/sphnx/gammajet_unfold/insitu";
+// insitu/ is split into inputs/ (the raw Data insitu ntuple, written by unfolder.h's
+// production pipeline), output/ (this and the other grid_insitu*.C macros' own .root
+// output), and pdfs/ (their .pdf output).
+const char * insitu_input_dir  = "/home/samson72/sphnx/gammajet_unfold/insitu/inputs";
+const char * insitu_output_dir = "/home/samson72/sphnx/gammajet_unfold/insitu/output";
+const char * insitu_pdf_dir    = "/home/samson72/sphnx/gammajet_unfold/insitu/pdfs";
 
 const int nPtBinsUsed = ana::nPtBinsUsed;
-
-// The insitu trees are R=0.4 only (unfolder.cc fills insitu_tree under an explicit
-// `ir == 2` gate) and the response matrix retrieved below must be the R=0.4 one to
-// correspond to the same jets - unlike grid_insitu.C's ir function parameter (which only
-// ever makes sense at 2 for the same reason but is passed through anyway), ir is fixed
-// here since nothing else in this file can meaningfully vary it.
-const int ir = 2;
 
 // Bayesian-unfolding iteration count - same "best-iteration scan result" choice
 // drawing/draw_purity_corrected.C uses (see that file's niterate comment /
@@ -64,75 +63,22 @@ const int ir = 2;
 // since it comes from the same response matrix and the same purity-corrected input.
 const int niterate = 2;
 
-struct DataEvent { float pho_pt, jet_pt; int ptbin; };
-
-// Unlike grid_insitu.C's cacheDataEvents, this keeps every ana::ptBins bin (0..nPtBins-1,
-// including the low-pT migration buffer and high-pT overflow bins), not just the
-// nPtBinsUsed reported ones - the response matrix's flattened (pT,xJ) measured vector
-// needs a complete input for cross-pT-bin migration to unfold correctly, the same reason
-// drawing/draw_purity_corrected.C's buildFullyCorrected() purity-corrects all
+// struct DataEvent and cacheDataEvents now live in src/insitu_utility.h/.cc - unlike
+// grid_insitu.C's default (restrictToUsed=true) usage, this file calls
+// insitu_utility::cacheDataEvents(..., false) below to keep every ana::ptBins bin
+// (0..nPtBins-1, including the low-pT migration buffer and high-pT overflow bins), not
+// just the nPtBinsUsed reported ones - the response matrix's flattened (pT,xJ) measured
+// vector needs a complete input for cross-pT-bin migration to unfold correctly, the same
+// reason drawing/draw_purity_corrected.C's buildFullyCorrected() purity-corrects all
 // ana::nPtBins slices instead of just the used ones.
-vector<DataEvent> cacheDataEvents(const char * filename, int abcdSelect) {
-  vector<DataEvent> events;
-  TFile * f = TFile::Open(filename, "READ");
-  if (!f || f->IsZombie()) {
-    cout << "WARNING: could not open " << filename << endl;
-    return events;
-  }
-  TTree * t = (TTree*)f->Get("insitutree");
-  Float_t pho_pt, jet_pt;
-  Int_t abcd;
-  t->SetBranchAddress("pho_pt", &pho_pt);
-  t->SetBranchAddress("jet_pt", &jet_pt);
-  t->SetBranchAddress("abcd", &abcd);
-  Long64_t nentries = t->GetEntries();
-  for (Long64_t e = 0; e < nentries; e++) {
-    t->GetEntry(e);
-    if (abcd != abcdSelect) continue;
-    int ipt = ana::findPtBin(pho_pt);
-    if (ipt < 0) continue;
-    events.push_back({pho_pt, jet_pt, ipt});
-  }
-  f->Close();
-  return events;
-}
 
-// x_J histogram per ana::ptBins bin (all nPtBins, ana::unfoldXjBins binning - same
-// per-pT-bin layout unfold_utility::unflattenXj/reflattenXj use), at a trial
-// jet-energy-scale factor pa.
-vector<TH1D*> buildXjByPtBin(const vector<DataEvent> & data, float pa, const char * prefix) {
-  vector<TH1D*> h(ana::nPtBins);
-  for (int ipt = 0; ipt < ana::nPtBins; ipt++) {
-    h[ipt] = new TH1D(Form("%s_pt%d", prefix, ipt), ";x_{J#gamma};Counts", ana::nUnfoldXjBins, ana::unfoldXjBins);
-  }
-  for (auto & ev : data) {
-    h[ev.ptbin]->Fill((ev.jet_pt/pa)/ev.pho_pt);
-  }
-  return h;
-}
-
-// Purity-correct region A/C per ana::ptBins bin: A - (1-P)*(N_A/N_C)*C, same formula as
-// grid_insitu.C's purityCorrectByPtBin / drawing/draw_purity_corrected.C's
-// purityCorrectP (minus that file's separate purity-uncertainty term, which
-// grid_insitu.C's pa scan already omits too - purity is held fixed across the scan, see
-// file header). Falls back to raw region A (scale=0) when region C is empty in a pT
-// slice - only the unused buffer bins are ever at risk of this.
-vector<TH1D*> purityCorrectByPtBin(const vector<TH1D*> & hA, const vector<TH1D*> & hC,
-    const float purity[], const char * prefix) {
-  vector<TH1D*> h(ana::nPtBins);
-  for (int ipt = 0; ipt < ana::nPtBins; ipt++) {
-    h[ipt] = (TH1D*)hA[ipt]->Clone(Form("%s_pt%d", prefix, ipt));
-    float NA = hA[ipt]->Integral(), NC = hC[ipt]->Integral();
-    float scale = (NC > 0) ? (1-purity[ipt])*(NA/NC) : 0;
-    for (int ib = 1; ib <= h[ipt]->GetNbinsX(); ib++) {
-      float a = hA[ipt]->GetBinContent(ib), ae = hA[ipt]->GetBinError(ib);
-      float c = hC[ipt]->GetBinContent(ib), ce = hC[ipt]->GetBinError(ib);
-      h[ipt]->SetBinContent(ib, a - scale*c);
-      h[ipt]->SetBinError(ib, sqrt(ae*ae + pow(scale*ce,2)));
-    }
-  }
-  return h;
-}
+// buildXjByPtBin and purityCorrectByPtBin now live in src/insitu_utility.h/.cc
+// (insitu_utility:: namespace) - moved there after being found copy-pasted (differing
+// only in bin count / zero-vs-real purity-error arrays) across all six
+// grid_insitu*.C macros (see that header's comment). This macro always calls them
+// ana::nPtBins-sized with zero-filled purity-error arrays, since purity is held fixed
+// across the whole pa scan (file header) and the asymmetric purity-uncertainty term
+// isn't needed here.
 
 // Purity-correct (all nPtBins), reflatten into the response matrix's dimensionality,
 // unfold through the fixed nominal-JES response, and return mean(x_J)/error per USED
@@ -140,11 +86,15 @@ vector<TH1D*> purityCorrectByPtBin(const vector<TH1D*> & hA, const vector<TH1D*>
 // analogue of grid_insitu.C's computeCorrectedMeans(). If unfoldedOut is non-null, it is
 // filled with clones of the per-used-pT-bin unfolded x_J histograms (caller owns them).
 void computeUnfoldedMeans(const vector<DataEvent> & dataA, const vector<DataEvent> & dataC, float pa,
-    const float purity[], RooUnfoldResponse * response, TH1D * respRecoTemplate,
-    float mean[], float err[], vector<TH1D*> * unfoldedOut = nullptr) {
-  vector<TH1D*> hA    = buildXjByPtBin(dataA, pa, "hUnfA_tmp");
-  vector<TH1D*> hC    = buildXjByPtBin(dataC, pa, "hUnfC_tmp");
-  vector<TH1D*> hCorr = purityCorrectByPtBin(hA, hC, purity, "hUnfCorr_tmp");
+    const float purity[], const float purityC[], RooUnfoldResponse * response, TH1D * respRecoTemplate,
+    float mean[], float err[], const float lowXj[], vector<TH1D*> * unfoldedOut = nullptr) {
+  vector<TH1D*> hA    = insitu_utility::buildXjByPtBin(dataA, pa, ana::nPtBins, "hUnfA_tmp", lowXj);
+  vector<TH1D*> hC    = insitu_utility::buildXjByPtBin(dataC, pa, ana::nPtBins, "hUnfC_tmp", lowXj);
+  // Purity is held fixed across the whole pa scan (file header), so the asymmetric
+  // purity-uncertainty term isn't needed here - zero error arrays.
+  float zeroErr[ana::nPtBins] = {0};
+  vector<TH1D*> hCorr = insitu_utility::purityCorrectByPtBin(hA, hC, ana::nPtBins,
+      purity, zeroErr, zeroErr, purityC, zeroErr, zeroErr, "hUnfCorr_tmp");
 
   TH1D * flatCorrected = (TH1D*)respRecoTemplate->Clone("flatCorrected_tmp");
   flatCorrected->Reset("ICES");
@@ -168,79 +118,13 @@ void computeUnfoldedMeans(const vector<DataEvent> & dataA, const vector<DataEven
   delete flatUnfolded;
 }
 
-// Scans outward from the minimum on a chi2-vs-pa graph for the two Delta-chi2=1 points -
-// identical to grid_insitu.C's findError().
-void findError(TGraph * g, int ibest, float minchisq, float & errLow, float & errHigh) {
-  double xbest, ytmp;
-  g->GetPoint(ibest, xbest, ytmp);
-  errLow = xbest - g->GetX()[0];
-  errHigh = g->GetX()[g->GetN()-1] - xbest;
-  double x, y;
-  for (int i = ibest; i >= 0; i--) {
-    g->GetPoint(i, x, y);
-    if (y - minchisq > 1.0) { errLow = xbest - x; break; }
-  }
-  for (int i = ibest; i < g->GetN(); i++) {
-    g->GetPoint(i, x, y);
-    if (y - minchisq > 1.0) { errHigh = x - xbest; break; }
-  }
-}
-
-TGraphErrors * meanGraph(const float mean[], const float err[], const char * name) {
-  TGraphErrors * g = new TGraphErrors(nPtBinsUsed);
-  g->SetName(name);
-  for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
-    float lo = ana::ptBinsUsed[ipt], hi = ana::ptBinsUsed[ipt+1];
-    g->SetPoint(ipt, (lo+hi)/2.0, mean[ipt]);
-    g->SetPointError(ipt, (hi-lo)/2.0, err[ipt]);
-  }
-  return g;
-}
-
-TGraphErrors * ratioGraph(const float meanNum[], const float errNum[],
-    const float meanDen[], const float errDen[], const char * name) {
-  TGraphErrors * g = new TGraphErrors(nPtBinsUsed);
-  g->SetName(name);
-  for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
-    float lo = ana::ptBinsUsed[ipt], hi = ana::ptBinsUsed[ipt+1];
-    float num = meanNum[ipt], den = meanDen[ipt];
-    if (num <= 0 || den <= 0) { g->SetPoint(ipt, (lo+hi)/2.0, 0); g->SetPointError(ipt, (hi-lo)/2.0, 0); continue; }
-    float ratio = num/den;
-    float err = ratio*sqrt(pow(errNum[ipt]/num,2) + pow(errDen[ipt]/den,2));
-    g->SetPoint(ipt, (lo+hi)/2.0, ratio);
-    g->SetPointError(ipt, (hi-lo)/2.0, err);
-  }
-  return g;
-}
-
-// Same sPHENIX label block as grid_insitu.C's drawSPhenixLabel - see that file's comment.
-void drawSPhenixLabel(vector<string> samples, vector<string> features, float drawx, float drawy, int fontsize, float csize) {
-  float titlescale = 1.25;
-  float subtitlescale = 1.25;
-  float ydiff = fontsize * 0.0017 * 700.0/csize;
-  auto drawOne = [&](const char * text, float xp, float yp, int size) {
-    TLatex * tex = new TLatex(xp, yp, text);
-    tex->SetTextFont(43);
-    tex->SetTextSize(size);
-    tex->SetTextColor(kBlack);
-    tex->SetLineWidth(1);
-    tex->SetNDC();
-    tex->Draw();
-  };
-  drawOne("#bf{#it{sPHENIX}} #kern[0.5]{Internal}", drawx, drawy, (int)(fontsize*titlescale));
-  for (unsigned i = 0; i < samples.size(); i++) {
-    drawOne(samples[i].c_str(), drawx, drawy-ydiff*subtitlescale*(i+1), (int)(fontsize*subtitlescale));
-  }
-  for (unsigned i = 0; i < features.size(); i++) {
-    drawOne(features[i].c_str(), drawx, drawy-ydiff*subtitlescale*samples.size()-ydiff*(i+1)*subtitlescale, fontsize);
-  }
-}
+// findError, meanGraph, ratioGraph, drawSPhenixLabel now live in src/insitu_utility.h/.cc.
 
 // One comparison page: top panel is unfolded mean(x_J) vs pT for Truth (fixed) and raw
 // (pa=1) unfolded Data; bottom panel is the raw ratio and the corrected ratio (evaluated
 // at the scan's best-fit pa) - the latter should sit flat at 1 by construction. Same
 // layout as grid_insitu.C's drawJESPage, with "Data/MC" -> "Unfolded/Truth".
-void drawJESPage(TCanvas * c, const char * pdfPath, const char * label,
+void drawJESPage(TCanvas * c, const char * pdfPath, const char * label, int ir,
     TGraphErrors * gTruth, TGraphErrors * gUnfoldRaw, TGraphErrors * gRatioRaw, TGraphErrors * gRatioCorr,
     float pa, float paErrLow, float paErrHigh) {
   c->Clear();
@@ -271,7 +155,7 @@ void drawJESPage(TCanvas * c, const char * pdfPath, const char * label,
   l1->AddEntry(gTruth, "Pythia8 #gamma+jet (truth)");
   l1->AddEntry(gUnfoldRaw, "Data (unfolded, raw JES)");
   l1->Draw();
-  drawSPhenixLabel({label}, {
+  insitu_utility::drawSPhenixLabel({label}, {
       Form("Jet R=%.1f", ana::JetRs[ir]),
       Form("|#eta^{#gamma}|<%.1f, |#eta^{jet}|<%.1f", ana::etacut, ana::etacut-ana::JetRs[ir]),
       Form("#Delta#phi>%.0f#pi/%.0f", ana::oppnum, ana::oppden)
@@ -321,7 +205,7 @@ void drawJESPage(TCanvas * c, const char * pdfPath, const char * label,
 // (density, then unit-area) since reco/unfolded/truth sit at different absolute scales
 // from reconstruction efficiency, same convention as
 // drawing/draw_purity_corrected.C's page 2.
-void drawXjPage(TCanvas * c, const char * pdfPath, const char * label, float ptlow, float pthigh,
+void drawXjPage(TCanvas * c, const char * pdfPath, const char * label, int ir, float ptlow, float pthigh,
     TH1D * hTruth, TH1D * hUnfoldRaw, TH1D * hUnfoldCorr) {
   c->Clear();
   c->cd();
@@ -365,7 +249,7 @@ void drawXjPage(TCanvas * c, const char * pdfPath, const char * label, float ptl
   l->AddEntry(hCorrdisp,  "Data (unfolded, JES-corrected)");
   l->Draw();
 
-  drawSPhenixLabel({label, Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV", ptlow, pthigh)}, {
+  insitu_utility::drawSPhenixLabel({label, Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV", ptlow, pthigh)}, {
       Form("Jet R=%.1f", ana::JetRs[ir]),
       Form("p_{T}^{jet} > %.0f GeV", ana::jet_calib_pt_cut[ir]),
       Form("|#eta^{#gamma}|<%.1f, |#eta^{jet}|<%.1f", ana::etacut, ana::etacut-ana::JetRs[ir]),
@@ -375,33 +259,59 @@ void drawXjPage(TCanvas * c, const char * pdfPath, const char * label, float ptl
   c->SaveAs(pdfPath);
 }
 
-void grid_insitu_unfolded(string systag = "nominal", int na = 1000) {
+void grid_insitu_unfolded(string systag = "nominal", int na = insitu_utility::scanN) {
   // Newly created histograms are not registered to any TDirectory, so the ~20
   // temporaries allocated per pa grid point (computeUnfoldedMeans, called na times) don't
   // pile up in gROOT's object list or collide on name across iterations - they're freed
-  // by their own explicit `delete` calls instead.
+  // by their own explicit `delete` calls instead. This also means the per-pT-bin
+  // histograms that ARE meant to be saved below don't auto-register into whichever
+  // radius subdirectory was left current by the previous iteration's mkdir/cd (see
+  // grid_insitu.C's identical comment) - both are covered by this one call.
   TH1::AddDirectory(kFALSE);
 
-  const char * dataFile = Form("%s/Data_%s_insitu.root", insitu_dir, systag.c_str());
-  vector<DataEvent> dataA = cacheDataEvents(dataFile, 0);
-  vector<DataEvent> dataC = cacheDataEvents(dataFile, 2);
+  // Response-matrix source (see below) and output file/PDF are shared across every
+  // radius - constructed/opened once here, before the per-radius loop, instead of
+  // per-radius as before.
+  drawer d("pythia", systag);
+
+  string pdfPathStr = Form("%s/grid_insitu_unfolded_%s.pdf", insitu_pdf_dir, systag.c_str());
+  TCanvas * c = new TCanvas("c","",700,700);
+  c->SaveAs(Form("%s[", pdfPathStr.c_str()));
+
+  string outfilename = Form("%s/grid_insitu_unfolded_%s.root", insitu_output_dir, systag.c_str());
+  TFile * fout = TFile::Open(outfilename.c_str(), "RECREATE");
+
+  for (int ir = 0; ir < ana::nJetR; ir++) {
+
+  string dataFile = insitu_utility::insituFilename(insitu_input_dir, "Data", "", systag);
+  vector<DataEvent> dataA = insitu_utility::cacheDataEvents(dataFile.c_str(), 0, ir, false);
+  vector<DataEvent> dataC = insitu_utility::cacheDataEvents(dataFile.c_str(), 2, ir, false);
   cout << "Cached Data events: region A=" << dataA.size() << " region C=" << dataC.size() << endl;
+
+  // Low-xJ floor per ana::ptBins bin (all nPtBins, since buildXjByPtBin fills every one
+  // of them, not just the used bins - see the cacheDataEvents comment above) - same cut
+  // unfolder::check_pair applies at floorScale=1 before a reco jet enters hrecoxj/the
+  // response matrix (see src/insitu_utility.h's lowXjFloor comment).
+  float lowXj[ana::nPtBins];
+  for (int ipt = 0; ipt < ana::nPtBins; ipt++) lowXj[ipt] = insitu_utility::lowXjFloor(ir, ana::ptBins[ipt]);
 
   // Purity per ana::ptBins bin (all nPtBins, not just the used ones - see
   // cacheDataEvents comment) - computed once, held fixed across the whole pa scan, same
   // as grid_insitu.C.
-  float purity[ana::nPtBins];
+  float purity[ana::nPtBins], purityC[ana::nPtBins];
   for (int ipt = 0; ipt < ana::nPtBins; ipt++) {
-    purity[ipt] = ana::getPurity(ana::ptBins[ipt], ana::ptBins[ipt+1], systag);
-    cout << "Purity pt bin " << ipt << " [" << ana::ptBins[ipt] << "," << ana::ptBins[ipt+1] << "): " << purity[ipt] << endl;
+    purity[ipt]  = ana::getPurity(ana::ptBins[ipt], ana::ptBins[ipt+1], systag, ir);
+    purityC[ipt] = ana::getPurityC(ana::ptBins[ipt], ana::ptBins[ipt+1], systag, ir);
+    cout << "Purity pt bin " << ipt << " [" << ana::ptBins[ipt] << "," << ana::ptBins[ipt+1]
+         << "): P_A=" << purity[ipt] << " P_C=" << purityC[ipt] << endl;
   }
 
   // Response matrix: the physically meaningful photon+jet MC response (cross-section-
   // weighted combination of Photon5/10/20, type=1/isample=-1), built at the nominal
   // (uncorrected) MC jet energy scale and held fixed across the whole pa scan - only the
   // trial-pa-rescaled Data measured spectrum changes below. Same source/convention as
-  // drawing/draw_purity_corrected.C's response matrix.
-  drawer d("pythia", systag);
+  // drawing/draw_purity_corrected.C's response matrix. (drawer d itself is shared/
+  // hoisted above the radius loop - see top of function.)
   TH1D * respRecoTemplate  = d.get(Form("hrecoxj%i", ir), 1);
   TH1D * respTruthTemplate = d.get(Form("htruthxj%i", ir), 1);
   TH2D * respMatrix2D      = d.get2d(Form("hxjresponse%i", ir), 1);
@@ -422,12 +332,13 @@ void grid_insitu_unfolded(string systag = "nominal", int na = 1000) {
   }
 
   // -----------------------------
-  // Grid scan: single overall jet-energy-scale factor pa, no pT-dependence - same
-  // [0.95,1.05] range as grid_insitu.C. At each pa, purity-correct region A/C (all
-  // ana::nPtBins slices), unfold through the fixed response above, and chi2 the
-  // unfolded mean(x_J) (used bins only) against the fixed truth mean.
+  // Grid scan: single overall jet-energy-scale factor pa, no pT-dependence - same scan
+  // window (insitu_utility.h's scanLow/scanHigh) as grid_insitu.C. At each pa,
+  // purity-correct region A/C (all ana::nPtBins slices), unfold through the fixed
+  // response above, and chi2 the unfolded mean(x_J) (used bins only) against the fixed
+  // truth mean.
   // -----------------------------
-  const float lowa = 0.95, higha = 1.05;
+  const float lowa = insitu_utility::scanLow, higha = insitu_utility::scanHigh;
 
   TGraph * gchisqUnfold = new TGraph(na);
   gchisqUnfold->SetName("gchisq_unfolded");
@@ -440,7 +351,7 @@ void grid_insitu_unfolded(string systag = "nominal", int na = 1000) {
     float pa = lowa + ia*(higha-lowa)/na;
 
     float mean[nPtBinsUsed], err[nPtBinsUsed];
-    computeUnfoldedMeans(dataA, dataC, pa, purity, response, respRecoTemplate, mean, err);
+    computeUnfoldedMeans(dataA, dataC, pa, purity, purityC, response, respRecoTemplate, mean, err, lowXj);
 
     float chisq = 0;
     for (int k = 0; k < nPtBinsUsed; k++) {
@@ -458,7 +369,7 @@ void grid_insitu_unfolded(string systag = "nominal", int na = 1000) {
   }
 
   float errLowUnfold, errHighUnfold;
-  findError(gchisqUnfold, ibestUnfold, minchisqUnfold, errLowUnfold, errHighUnfold);
+  insitu_utility::findError(gchisqUnfold, ibestUnfold, minchisqUnfold, errLowUnfold, errHighUnfold);
 
   cout << "\nFINAL RESULT (jet R=" << ana::JetRs[ir] << ", systag=" << systag << ", unfolded vs. truth)\n";
   cout << "Purity-corrected + unfolded:  p_a = " << minpaUnfold
@@ -474,8 +385,8 @@ void grid_insitu_unfolded(string systag = "nominal", int na = 1000) {
   float rawMean[nPtBinsUsed], rawErr[nPtBinsUsed];
   float bestMean[nPtBinsUsed], bestErr[nPtBinsUsed];
   vector<TH1D*> hUnfoldRaw(nPtBinsUsed), hUnfoldBest(nPtBinsUsed);
-  computeUnfoldedMeans(dataA, dataC, 1.0,         purity, response, respRecoTemplate, rawMean,  rawErr,  &hUnfoldRaw);
-  computeUnfoldedMeans(dataA, dataC, minpaUnfold, purity, response, respRecoTemplate, bestMean, bestErr, &hUnfoldBest);
+  computeUnfoldedMeans(dataA, dataC, 1.0,         purity, purityC, response, respRecoTemplate, rawMean,  rawErr,  lowXj, &hUnfoldRaw);
+  computeUnfoldedMeans(dataA, dataC, minpaUnfold, purity, purityC, response, respRecoTemplate, bestMean, bestErr, lowXj, &hUnfoldBest);
 
   vector<TH1D*> hTruthPt(nPtBinsUsed);
   for (int k = 0; k < nPtBinsUsed; k++) {
@@ -483,28 +394,24 @@ void grid_insitu_unfolded(string systag = "nominal", int na = 1000) {
     hTruthPt[k] = unfold_utility::unflattenXj(respTruthTemplate, ipt, Form("hxjtruth_pt%d", k));
   }
 
-  TGraphErrors * gTruth      = meanGraph(truthMean, truthMeanErr, "gMeanTruth");
-  TGraphErrors * gUnfoldRaw  = meanGraph(rawMean,  rawErr,  "gMeanUnfold_raw");
-  TGraphErrors * gRatioRaw   = ratioGraph(rawMean,  rawErr,  truthMean, truthMeanErr, "gRatio_unfold_raw");
-  TGraphErrors * gRatioCorr  = ratioGraph(bestMean, bestErr, truthMean, truthMeanErr, "gRatio_unfold_corrected");
+  TGraphErrors * gTruth      = insitu_utility::meanGraph(truthMean, truthMeanErr, "gMeanTruth");
+  TGraphErrors * gUnfoldRaw  = insitu_utility::meanGraph(rawMean,  rawErr,  "gMeanUnfold_raw");
+  TGraphErrors * gRatioRaw   = insitu_utility::ratioGraph(rawMean,  rawErr,  truthMean, truthMeanErr, "gRatio_unfold_raw");
+  TGraphErrors * gRatioCorr  = insitu_utility::ratioGraph(bestMean, bestErr, truthMean, truthMeanErr, "gRatio_unfold_corrected");
 
-  const char * pdfPath = Form("%s/grid_insitu_unfolded_%s.pdf", insitu_dir, systag.c_str());
-  TCanvas * c = new TCanvas("c","",700,700);
-  c->SaveAs(Form("%s[", pdfPath));
-  drawJESPage(c, pdfPath, "Purity-corrected, unfolded", gTruth, gUnfoldRaw, gRatioRaw, gRatioCorr,
+  const char * pdfPath = pdfPathStr.c_str();
+  drawJESPage(c, pdfPath, "Purity-corrected, unfolded", ir, gTruth, gUnfoldRaw, gRatioRaw, gRatioCorr,
       minpaUnfold, errLowUnfold, errHighUnfold);
   for (int k = 0; k < nPtBinsUsed; k++) {
-    drawXjPage(c, pdfPath, "Purity-corrected, unfolded", ana::ptBinsUsed[k], ana::ptBinsUsed[k+1],
+    drawXjPage(c, pdfPath, "Purity-corrected, unfolded", ir, ana::ptBinsUsed[k], ana::ptBinsUsed[k+1],
         hTruthPt[k], hUnfoldRaw[k], hUnfoldBest[k]);
   }
-  c->SaveAs(Form("%s]", pdfPath));
-  cout << "Wrote " << pdfPath << endl;
 
   // -----------------------------
-  // Save
+  // Save - see grid_insitu.C's identical comment.
   // -----------------------------
-  const char * outfilename = Form("%s/grid_insitu_unfolded_%s.root", insitu_dir, systag.c_str());
-  TFile * fout = TFile::Open(outfilename, "RECREATE");
+  fout->cd();
+  fout->mkdir(ana::rnames[ir])->cd();
   gchisqUnfold->Write();
   gTruth->Write();
   gUnfoldRaw->Write();
@@ -524,6 +431,12 @@ void grid_insitu_unfolded(string systag = "nominal", int na = 1000) {
   wt->Branch("errHigh_unfolded", &werrHigh);
   wt->Fill();
   wt->Write();
+
+  cout << "Finished ir=" << ir << " (" << ana::rnames[ir] << ")" << endl;
+  } // end of ir loop
+
+  c->SaveAs(Form("%s]", pdfPathStr.c_str()));
+  cout << "Wrote " << pdfPathStr << endl;
   fout->Close();
   cout << "Wrote " << outfilename << endl;
 }

@@ -1,4 +1,6 @@
 #include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
+#include "/home/samson72/sphnx/gammajet_unfold/src/insitu_utility.h"
+#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -45,7 +47,12 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 // C, or the measured purity fraction itself ("the purity is independent of jet energy
 // scale, so we can use the same purity the whole way through").
 
-const char * insitu_dir = "/home/samson72/sphnx/gammajet_unfold/insitu";
+// insitu/ is split into inputs/ (the raw Data/Photon insitu ntuples, written by
+// unfolder.h's production pipeline), output/ (this and the other grid_insitu*.C
+// macros' own .root output), and pdfs/ (their .pdf output).
+const char * insitu_input_dir  = "/home/samson72/sphnx/gammajet_unfold/insitu/inputs";
+const char * insitu_output_dir = "/home/samson72/sphnx/gammajet_unfold/insitu/output";
+const char * insitu_pdf_dir    = "/home/samson72/sphnx/gammajet_unfold/insitu/pdfs";
 
 // Only ana::ptBinsUsed (15-20, 20-25, 25-35 GeV) is used for every calculation and
 // plot below - both the low-pT migration-only buffer bin (13-15 GeV, ana::ptBins[0])
@@ -58,207 +65,10 @@ const int nPtBinsUsed = ana::nPtBinsUsed;
 // drawer.h's scalemap[isphoton=1][sample] for sim="pythia".
 map<int,double> photon_scale = {{5,146359.3},{10,6944.675},{20,130.4461}};
 
-struct DataEvent { float pho_pt, jet_pt; int ptbin; };
-
-vector<DataEvent> cacheDataEvents(const char * filename, int abcdSelect) {
-  vector<DataEvent> events;
-  TFile * f = TFile::Open(filename, "READ");
-  if (!f || f->IsZombie()) {
-    cout << "WARNING: could not open " << filename << endl;
-    return events;
-  }
-  TTree * t = (TTree*)f->Get("insitutree");
-  Float_t pho_pt, jet_pt;
-  Int_t abcd;
-  t->SetBranchAddress("pho_pt", &pho_pt);
-  t->SetBranchAddress("jet_pt", &jet_pt);
-  t->SetBranchAddress("abcd", &abcd);
-  Long64_t nentries = t->GetEntries();
-  for (Long64_t e = 0; e < nentries; e++) {
-    t->GetEntry(e);
-    if (abcd != abcdSelect) continue;
-    int ipt = ana::findPtBin(pho_pt);
-    if (ipt < ana::firstUsedPtBin || ipt >= ana::firstUsedPtBin + nPtBinsUsed) continue;
-    ipt -= ana::firstUsedPtBin;
-    events.push_back({pho_pt, jet_pt, ipt});
-  }
-  f->Close();
-  return events;
-}
-
-// Weighted mean/error of x=jet_pt/pho_pt per photon-pT bin, combining several
-// (filename,weight) MC samples. This is the fixed reference the grid scan compares
-// against - MC's own jet energy scale is the "truth" here, so these events are never
-// rescaled below.
-void referenceMeans(const vector<pair<string,double>> & samples, int abcdSelect,
-    float refMean[], float refMeanErr[]) {
-  vector<double> sumw(nPtBinsUsed,0), sumw2(nPtBinsUsed,0), sumwx(nPtBinsUsed,0), sumwx2(nPtBinsUsed,0);
-  for (auto & s : samples) {
-    TFile * f = TFile::Open(s.first.c_str(), "READ");
-    if (!f || f->IsZombie()) {
-      cout << "WARNING: could not open " << s.first << endl;
-      continue;
-    }
-    TTree * t = (TTree*)f->Get("insitutree");
-    Float_t pho_pt, jet_pt;
-    Int_t abcd;
-    t->SetBranchAddress("pho_pt", &pho_pt);
-    t->SetBranchAddress("jet_pt", &jet_pt);
-    t->SetBranchAddress("abcd", &abcd);
-    Long64_t nentries = t->GetEntries();
-    for (Long64_t e = 0; e < nentries; e++) {
-      t->GetEntry(e);
-      if (abcd != abcdSelect) continue;
-      int ipt = ana::findPtBin(pho_pt);
-      if (ipt < ana::firstUsedPtBin || ipt >= ana::firstUsedPtBin + nPtBinsUsed) continue;
-      ipt -= ana::firstUsedPtBin;
-      double x = jet_pt/pho_pt;
-      double w = s.second;
-      sumw[ipt]   += w;
-      sumw2[ipt]  += w*w;
-      sumwx[ipt]  += w*x;
-      sumwx2[ipt] += w*x*x;
-    }
-    f->Close();
-  }
-  for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
-    if (sumw[ipt] <= 0) { refMean[ipt] = 0; refMeanErr[ipt] = 0; continue; }
-    double mean = sumwx[ipt]/sumw[ipt];
-    double var  = sumwx2[ipt]/sumw[ipt] - mean*mean;
-    double neff = sumw[ipt]*sumw[ipt]/sumw2[ipt]; // Kish effective sample size
-    refMean[ipt] = mean;
-    refMeanErr[ipt] = sqrt(std::max(var,0.)/neff);
-  }
-}
-
-// Scans outward from the minimum on a chi2-vs-pa graph for the two points where
-// chi2 first crosses minchisq+1 (68% CL for one parameter) - the same Delta-chi2=1
-// convention grid_insitu.C uses for its own (!domulti) single-scale-factor case.
-void findError(TGraph * g, int ibest, float minchisq, float & errLow, float & errHigh) {
-  double xbest, ytmp;
-  g->GetPoint(ibest, xbest, ytmp);
-  errLow = xbest - g->GetX()[0];
-  errHigh = g->GetX()[g->GetN()-1] - xbest;
-  double x, y;
-  for (int i = ibest; i >= 0; i--) {
-    g->GetPoint(i, x, y);
-    if (y - minchisq > 1.0) { errLow = xbest - x; break; }
-  }
-  for (int i = ibest; i < g->GetN(); i++) {
-    g->GetPoint(i, x, y);
-    if (y - minchisq > 1.0) { errHigh = x - xbest; break; }
-  }
-}
-
-// Region-A-only mean(x_J)/error per photon-pT bin, at a given trial jet-energy-scale
-// factor pa - same computation as the inner loop of the grid scan above, factored out
-// so it can also be evaluated at pa=1 (raw, uncorrected) and at the scan's winning pa
-// for the mean-vs-pT comparison plot below.
-void computeRegionAMeans(const vector<DataEvent> & dataA, float pa, float mean[], float err[]) {
-  vector<double> sum(nPtBinsUsed,0), sum2(nPtBinsUsed,0);
-  vector<int> count(nPtBinsUsed,0);
-  for (auto & ev : dataA) {
-    float x = (ev.jet_pt/pa)/ev.pho_pt;
-    sum[ev.ptbin]  += x;
-    sum2[ev.ptbin] += x*x;
-    count[ev.ptbin]++;
-  }
-  for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
-    if (count[ipt] == 0) { mean[ipt] = 0; err[ipt] = 0; continue; }
-    double m   = sum[ipt]/count[ipt];
-    double var = sum2[ipt]/count[ipt] - m*m;
-    mean[ipt] = m;
-    err[ipt]  = sqrt(std::max(var,0.)/count[ipt]);
-  }
-}
-
-// Purity-corrected mean(x_J)/error per photon-pT bin, at a given trial pa - both region
-// A and region C are scaled by the same pa, purity[] is fixed (see file header).
-void computeCorrectedMeans(const vector<DataEvent> & dataA, const vector<DataEvent> & dataC,
-    float pa, const float purity[], float mean[], float err[]) {
-  vector<double> sumA(nPtBinsUsed,0), sumA2(nPtBinsUsed,0);
-  vector<int> countA(nPtBinsUsed,0);
-  vector<double> sumC(nPtBinsUsed,0), sumC2(nPtBinsUsed,0);
-  vector<int> countC(nPtBinsUsed,0);
-  for (auto & ev : dataA) {
-    float x = (ev.jet_pt/pa)/ev.pho_pt;
-    sumA[ev.ptbin] += x; sumA2[ev.ptbin] += x*x; countA[ev.ptbin]++;
-  }
-  for (auto & ev : dataC) {
-    float x = (ev.jet_pt/pa)/ev.pho_pt;
-    sumC[ev.ptbin] += x; sumC2[ev.ptbin] += x*x; countC[ev.ptbin]++;
-  }
-  for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
-    if (countA[ipt] == 0 || countC[ipt] == 0) { mean[ipt] = 0; err[ipt] = 0; continue; }
-    double NA = countA[ipt], NC = countC[ipt];
-    double scale = (1-purity[ipt])*(NA/NC);
-    double sumXcorr  = sumA[ipt]  - scale*sumC[ipt];
-    double sumX2corr = sumA2[ipt] - scale*sumC2[ipt];
-    double Ncorr = NA - scale*NC;
-    if (Ncorr <= 0) { mean[ipt] = 0; err[ipt] = 0; continue; }
-    double m   = sumXcorr/Ncorr;
-    double var = sumX2corr/Ncorr - m*m;
-    mean[ipt] = m;
-    err[ipt]  = sqrt(std::max(var,0.)/Ncorr);
-  }
-}
-
-// Mean(x_J) vs. photon pT, one point per ana::ptBins bin (x error = half bin width).
-TGraphErrors * meanGraph(const float mean[], const float err[], const char * name) {
-  TGraphErrors * g = new TGraphErrors(nPtBinsUsed);
-  g->SetName(name);
-  for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
-    float lo = ana::ptBinsUsed[ipt], hi = ana::ptBinsUsed[ipt+1];
-    g->SetPoint(ipt, (lo+hi)/2.0, mean[ipt]);
-    g->SetPointError(ipt, (hi-lo)/2.0, err[ipt]);
-  }
-  return g;
-}
-
-// Ratio of two mean(x_J) arrays (e.g. Data/MC) vs. photon pT, errors combined assuming
-// the numerator and denominator are independent.
-TGraphErrors * ratioGraph(const float meanNum[], const float errNum[],
-    const float meanDen[], const float errDen[], const char * name) {
-  TGraphErrors * g = new TGraphErrors(nPtBinsUsed);
-  g->SetName(name);
-  for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
-    float lo = ana::ptBinsUsed[ipt], hi = ana::ptBinsUsed[ipt+1];
-    float num = meanNum[ipt], den = meanDen[ipt];
-    if (num <= 0 || den <= 0) { g->SetPoint(ipt, (lo+hi)/2.0, 0); g->SetPointError(ipt, (hi-lo)/2.0, 0); continue; }
-    float ratio = num/den;
-    float err = ratio*sqrt(pow(errNum[ipt]/num,2) + pow(errDen[ipt]/den,2));
-    g->SetPoint(ipt, (lo+hi)/2.0, ratio);
-    g->SetPointError(ipt, (hi-lo)/2.0, err);
-  }
-  return g;
-}
-
-// sPHENIX label block: bold-italic "sPHENIX Internal" title, then one line per sample,
-// then one line per feature - same text/font convention and stacking formula as
-// drawer::drawAll() (see src/drawer.cc), reimplemented locally so this self-contained
-// macro doesn't have to construct a full drawer (which opens a batch of unrelated
-// unfolding-output files it has no other use for).
-void drawSPhenixLabel(vector<string> samples, vector<string> features, float drawx, float drawy, int fontsize, float csize) {
-  float titlescale = 1.25;
-  float subtitlescale = 1.25;
-  float ydiff = fontsize * 0.0017 * 700.0/csize;
-  auto drawOne = [&](const char * text, float xp, float yp, int size) {
-    TLatex * tex = new TLatex(xp, yp, text);
-    tex->SetTextFont(43);
-    tex->SetTextSize(size);
-    tex->SetTextColor(kBlack);
-    tex->SetLineWidth(1);
-    tex->SetNDC();
-    tex->Draw();
-  };
-  drawOne("#bf{#it{sPHENIX}} #kern[0.5]{Internal}", drawx, drawy, (int)(fontsize*titlescale));
-  for (unsigned i = 0; i < samples.size(); i++) {
-    drawOne(samples[i].c_str(), drawx, drawy-ydiff*subtitlescale*(i+1), (int)(fontsize*subtitlescale));
-  }
-  for (unsigned i = 0; i < features.size(); i++) {
-    drawOne(features[i].c_str(), drawx, drawy-ydiff*subtitlescale*samples.size()-ydiff*(i+1)*subtitlescale, fontsize);
-  }
-}
+// referenceMeans, computeRegionAMeans, computeCorrectedMeans, buildXjByPtBin,
+// buildMCXjByPtBin, and purityCorrectByPtBin now live in src/insitu_utility.h/.cc
+// (insitu_utility:: namespace) - moved there after being found copy-pasted
+// byte-for-byte across all six grid_insitu*.C macros (see that header's comment).
 
 // One comparison page: top panel is mean(x_J) vs pT for MC and raw Data; bottom panel
 // is the raw ratio (raw Data/MC) and the corrected ratio (best-fit-scaled Data/MC) -
@@ -296,7 +106,7 @@ void drawJESPage(TCanvas * c, const char * pdfPath, const char * label, int ir,
   l1->AddEntry(gMC, "Pythia8 #gamma+jet (reco)");
   l1->AddEntry(gDataRaw, "Data (reco)");
   l1->Draw();
-  drawSPhenixLabel({label}, {
+  insitu_utility::drawSPhenixLabel({label}, {
       Form("Jet R=%.1f", ana::JetRs[ir]),
       Form("|#eta^{#gamma}|<%.1f, |#eta^{jet}|<%.1f", ana::etacut, ana::etacut-ana::JetRs[ir]),
       Form("#Delta#phi>%.0f#pi/%.0f", ana::oppnum, ana::oppden)
@@ -339,66 +149,6 @@ void drawJESPage(TCanvas * c, const char * pdfPath, const char * label, int ir,
   jestext.DrawLatex(.18,.28, Form("Data to MC JES = %.4f #pm %.4f", pa, paErr));
 
   c->SaveAs(pdfPath);
-}
-
-// x_J histogram per photon-pT bin (ana::unfoldXjBins binning) from a cached Data
-// sample, at a given trial jet-energy-scale factor pa.
-vector<TH1D*> buildXjByPtBin(const vector<DataEvent> & data, float pa, const char * prefix) {
-  vector<TH1D*> h(nPtBinsUsed);
-  for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
-    h[ipt] = new TH1D(Form("%s_pt%d", prefix, ipt), ";x_{J#gamma};Counts", ana::nUnfoldXjBins, ana::unfoldXjBins);
-  }
-  for (auto & ev : data) {
-    h[ev.ptbin]->Fill((ev.jet_pt/pa)/ev.pho_pt);
-  }
-  return h;
-}
-
-// x_J histogram per photon-pT bin for the fixed (never rescaled) cross-section-weighted
-// Pythia8 MC reference - same samples/weights as referenceMeans() above.
-vector<TH1D*> buildMCXjByPtBin(const vector<pair<string,double>> & samples, const char * prefix) {
-  vector<TH1D*> h(nPtBinsUsed);
-  for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
-    h[ipt] = new TH1D(Form("%s_pt%d", prefix, ipt), ";x_{J#gamma};Counts", ana::nUnfoldXjBins, ana::unfoldXjBins);
-  }
-  for (auto & s : samples) {
-    TFile * f = TFile::Open(s.first.c_str(), "READ");
-    if (!f || f->IsZombie()) continue;
-    TTree * t = (TTree*)f->Get("insitutree");
-    Float_t pho_pt, jet_pt; Int_t abcd;
-    t->SetBranchAddress("pho_pt", &pho_pt);
-    t->SetBranchAddress("jet_pt", &jet_pt);
-    t->SetBranchAddress("abcd", &abcd);
-    Long64_t nentries = t->GetEntries();
-    for (Long64_t e = 0; e < nentries; e++) {
-      t->GetEntry(e);
-      if (abcd != 0) continue;
-      int ipt = ana::findPtBin(pho_pt);
-      if (ipt < ana::firstUsedPtBin || ipt >= ana::firstUsedPtBin + nPtBinsUsed) continue;
-      ipt -= ana::firstUsedPtBin;
-      h[ipt]->Fill(jet_pt/pho_pt, s.second);
-    }
-    f->Close();
-  }
-  return h;
-}
-
-// Purity-correct region A/C per photon-pT bin: A - (1-P)*(N_A/N_C)*C, same formula as
-// draw_insitu_xj.C's purityCorrectP(), applied bin-by-bin. hA/hC must already be built
-// at the same jet-energy-scale factor (see buildXjByPtBin above).
-vector<TH1D*> purityCorrectByPtBin(const vector<TH1D*> & hA, const vector<TH1D*> & hC,
-    const float purity[], const char * prefix) {
-  vector<TH1D*> h(nPtBinsUsed);
-  for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
-    h[ipt] = (TH1D*)hA[ipt]->Clone(Form("%s_pt%d", prefix, ipt));
-    float NA = hA[ipt]->Integral(), NC = hC[ipt]->Integral();
-    float scale = (NC > 0) ? (1-purity[ipt])*(NA/NC) : 0;
-    for (int ib = 1; ib <= h[ipt]->GetNbinsX(); ib++) {
-      float content = hA[ipt]->GetBinContent(ib) - scale*hC[ipt]->GetBinContent(ib);
-      h[ipt]->SetBinContent(ib, content);
-    }
-  }
-  return h;
 }
 
 // One xJ-distribution comparison page, for a single photon-pT bin: the fixed MC
@@ -453,7 +203,7 @@ void drawXjPage(TCanvas * c, const char * pdfPath, const char * label, int ir, f
   l->AddEntry(hCorrdisp, dataCorrLabel);
   l->Draw();
 
-  drawSPhenixLabel({label, Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV", ptlow, pthigh)}, {
+  insitu_utility::drawSPhenixLabel({label, Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV", ptlow, pthigh)}, {
       Form("Jet R=%.1f", ana::JetRs[ir]),
       Form("p_{T}^{jet} > %.0f GeV", ana::jet_calib_pt_cut[ir]),
       Form("|#eta^{#gamma}|<%.1f, |#eta^{jet}|<%.1f", ana::etacut, ana::etacut-ana::JetRs[ir]),
@@ -463,37 +213,82 @@ void drawXjPage(TCanvas * c, const char * pdfPath, const char * label, int ir, f
   c->SaveAs(pdfPath);
 }
 
-void grid_insitu(string systag = "nominal", int ir = 2) {
+void grid_insitu(string systag = "nominal") {
+  // Newly created histograms are not auto-registered to whatever TDirectory happens to
+  // be gDirectory at construction time - without this, buildXjByPtBin/buildMCXjByPtBin's
+  // fixed-name per-pT-bin histograms would auto-register into (and "Replacing existing
+  // TH1" warn against) whichever radius subdirectory was left current by the *previous*
+  // iteration's mkdir/cd below, since they're built before this iteration's own mkdir/cd
+  // runs. Every actual save still goes through this file's explicit ->Write() calls
+  // (unaffected by this setting), same precedent as grid_insitu_unfolded.C.
+  TH1::AddDirectory(kFALSE);
 
-  const char * dataFile = Form("%s/Data_%s_insitu.root", insitu_dir, systag.c_str());
-  vector<DataEvent> dataA = cacheDataEvents(dataFile, 0);
-  vector<DataEvent> dataC = cacheDataEvents(dataFile, 2);
+  // One file/one PDF for the whole systag, all seven jet radii inside - opened/created
+  // here, before the per-radius loop, instead of grid_insitu.C's old per-radius
+  // filenames. Each radius's objects land in their own ana::rnames[ir] subdirectory of
+  // fout (mkdir/cd'd right before that radius's own "Save" block below - a TTree binds
+  // to whatever TDirectory is current at construction time, so this has to happen
+  // before "results" is constructed, not just before its Write()); each radius's pages
+  // become one more page in the same multi-page PDF via the standard "file.pdf["/
+  // "file.pdf"/"file.pdf]" SaveAs bracket already used per-pT-bin below, just wrapped
+  // one level higher.
+  string pdfPathStr = Form("%s/grid_insitu_%s.pdf", insitu_pdf_dir, systag.c_str());
+  TCanvas * c = new TCanvas("c","",700,700);
+  c->SaveAs(Form("%s[", pdfPathStr.c_str()));
+
+  string outfilename = Form("%s/grid_insitu_%s.root", insitu_output_dir, systag.c_str());
+  TFile * fout = TFile::Open(outfilename.c_str(), "RECREATE");
+
+  for (int ir = 0; ir < ana::nJetR; ir++) {
+
+  string dataFile = insitu_utility::insituFilename(insitu_input_dir, "Data", "", systag);
+  vector<DataEvent> dataA = insitu_utility::cacheDataEvents(dataFile.c_str(), 0, ir);
+  vector<DataEvent> dataC = insitu_utility::cacheDataEvents(dataFile.c_str(), 2, ir);
   cout << "Cached Data events: region A=" << dataA.size() << " region C=" << dataC.size() << endl;
 
+  // Low-xJ floor per used pT bin - same cut unfolder::check_pair applies at floorScale=1
+  // before a reco jet enters hrecoxj/the response matrix (see src/insitu_utility.h's
+  // lowXjFloor comment). Applied below to every mean(x_J)/shape computation (Data and
+  // MC reference alike) so this scan excludes exactly the events the main unfolding
+  // pipeline would exclude at the same jet radius.
+  float lowXj[nPtBinsUsed];
+  for (int ipt = 0; ipt < nPtBinsUsed; ipt++) lowXj[ipt] = insitu_utility::lowXjFloor(ir, ana::ptBinsUsed[ipt]);
+
   float refMean[nPtBinsUsed], refMeanErr[nPtBinsUsed];
-  referenceMeans({
-      {Form("%s/Photon5_pythia_%s_insitu.root",  insitu_dir, systag.c_str()), photon_scale[5]},
-      {Form("%s/Photon10_pythia_%s_insitu.root", insitu_dir, systag.c_str()), photon_scale[10]},
-      {Form("%s/Photon20_pythia_%s_insitu.root", insitu_dir, systag.c_str()), photon_scale[20]},
-    }, 0, refMean, refMeanErr);
+  insitu_utility::referenceMeans({
+      {insitu_utility::insituFilename(insitu_input_dir, "Photon5",  "pythia", systag), photon_scale[5]},
+      {insitu_utility::insituFilename(insitu_input_dir, "Photon10", "pythia", systag), photon_scale[10]},
+      {insitu_utility::insituFilename(insitu_input_dir, "Photon20", "pythia", systag), photon_scale[20]},
+    }, 0, ir, refMean, refMeanErr, lowXj);
   for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
     cout << "MC reference <x_J> pt bin " << ipt << " [" << ana::ptBinsUsed[ipt] << "," << ana::ptBinsUsed[ipt+1]
          << "): " << refMean[ipt] << " +/- " << refMeanErr[ipt] << endl;
   }
 
-  // Purity per photon-pT bin - computed once, held fixed across the whole pa scan.
-  float purity[nPtBinsUsed];
+  // Purity per photon-pT bin (region A and region C) - computed once, held fixed across
+  // the whole pa scan. Error arrays are only needed by purityCorrectByPtBin's asymmetric
+  // purity-uncertainty term below; the scalar-moment grid scan/computeCorrectedMeans use
+  // only the central values (purity has always been held fixed, not scanned, here).
+  float purity[nPtBinsUsed], purityErrLow[nPtBinsUsed], purityErrHigh[nPtBinsUsed];
+  float purityC[nPtBinsUsed], purityCErrLow[nPtBinsUsed], purityCErrHigh[nPtBinsUsed];
   for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
-    purity[ipt] = ana::getPurity(ana::ptBinsUsed[ipt], ana::ptBinsUsed[ipt+1], systag);
-    cout << "Purity pt bin " << ipt << ": " << purity[ipt] << endl;
+    purity[ipt]        = ana::getPurity(ana::ptBinsUsed[ipt], ana::ptBinsUsed[ipt+1], systag, ir);
+    purityErrLow[ipt]  = ana::getPurityErrorLow(ana::ptBinsUsed[ipt], ana::ptBinsUsed[ipt+1], systag, ir);
+    purityErrHigh[ipt] = ana::getPurityErrorHigh(ana::ptBinsUsed[ipt], ana::ptBinsUsed[ipt+1], systag, ir);
+    purityC[ipt]        = ana::getPurityC(ana::ptBinsUsed[ipt], ana::ptBinsUsed[ipt+1], systag, ir);
+    purityCErrLow[ipt]  = ana::getPurityCErrorLow(ana::ptBinsUsed[ipt], ana::ptBinsUsed[ipt+1], systag, ir);
+    purityCErrHigh[ipt] = ana::getPurityCErrorHigh(ana::ptBinsUsed[ipt], ana::ptBinsUsed[ipt+1], systag, ir);
+    cout << "Purity pt bin " << ipt << ": P_A=" << purity[ipt] << " P_C=" << purityC[ipt] << endl;
   }
 
   // -----------------------------
   // Grid scan: single overall jet-energy-scale factor pa, no pT-dependence - matches
-  // run_grid.sh's gammajet-only mode (na=1000 over [0.95,1.05], nb=1, pb=0).
+  // run_grid.sh's gammajet-only mode (nb=1, pb=0). Scan window/step live in
+  // insitu_utility.h (scanLow/scanHigh/scanN) so they're shared across every
+  // grid_insitu*.C.
   // -----------------------------
-  const int na = 1000;
-  const float lowa = 0.95, higha = 1.05;
+  const int na = insitu_utility::scanN;
+  const float lowa = insitu_utility::scanLow, higha = insitu_utility::scanHigh;
 
   TGraph * gchisqA    = new TGraph(na);
   TGraph * gchisqCorr = new TGraph(na);
@@ -513,6 +308,7 @@ void grid_insitu(string systag = "nominal", int ir = 2) {
     vector<int> countA(nPtBinsUsed,0);
     for (auto & ev : dataA) {
       float x = (ev.jet_pt/pa)/ev.pho_pt;
+      if (x < lowXj[ev.ptbin]) continue;
       sumA[ev.ptbin]  += x;
       sumA2[ev.ptbin] += x*x;
       countA[ev.ptbin]++;
@@ -521,6 +317,7 @@ void grid_insitu(string systag = "nominal", int ir = 2) {
     vector<int> countC(nPtBinsUsed,0);
     for (auto & ev : dataC) {
       float x = (ev.jet_pt/pa)/ev.pho_pt;
+      if (x < lowXj[ev.ptbin]) continue;
       sumC[ev.ptbin]  += x;
       sumC2[ev.ptbin] += x*x;
       countC[ev.ptbin]++;
@@ -541,13 +338,15 @@ void grid_insitu(string systag = "nominal", int ir = 2) {
         if (errt > 0) chisqA += diff*diff/(errt*errt);
       }
 
-      // Purity-corrected: A - (1-P)*(N_A/N_C)*C, both scaled by the same pa.
+      // Purity-corrected (two-purity method, both regions scaled by the same pa) - see
+      // unfold_utility::purityCorrectCoeffs for the coeffA/coeffC derivation.
       if (countA[ipt] > 0 && countC[ipt] > 0) {
         double NA = countA[ipt], NC = countC[ipt];
-        double scale = (1-purity[ipt])*(NA/NC);
-        double sumXcorr  = sumA[ipt]  - scale*sumC[ipt];
-        double sumX2corr = sumA2[ipt] - scale*sumC2[ipt];
-        double Ncorr = NA - scale*NC;
+        float coeffA, coeffC;
+        unfold_utility::purityCorrectCoeffs(purity[ipt], purityC[ipt], NA, NC, coeffA, coeffC);
+        double sumXcorr  = coeffA*sumA[ipt]  - coeffC*sumC[ipt];
+        double sumX2corr = coeffA*sumA2[ipt] - coeffC*sumC2[ipt];
+        double Ncorr = coeffA*NA - coeffC*NC;
         if (Ncorr > 0) {
           double mean = sumXcorr/Ncorr;
           double var  = sumX2corr/Ncorr - mean*mean;
@@ -568,8 +367,8 @@ void grid_insitu(string systag = "nominal", int ir = 2) {
   }
 
   float errLowA, errHighA, errLowCorr, errHighCorr;
-  findError(gchisqA,    ibestA,    minchisqA,    errLowA,    errHighA);
-  findError(gchisqCorr, ibestCorr, minchisqCorr, errLowCorr, errHighCorr);
+  insitu_utility::findError(gchisqA,    ibestA,    minchisqA,    errLowA,    errHighA);
+  insitu_utility::findError(gchisqCorr, ibestCorr, minchisqCorr, errLowCorr, errHighCorr);
 
   cout << "\nFINAL RESULT (jet R=" << ana::JetRs[ir] << ", systag=" << systag << ")\n";
   cout << "Region A only:        p_a = " << minpaA
@@ -585,20 +384,22 @@ void grid_insitu(string systag = "nominal", int ir = 2) {
   // macro.
   // -----------------------------
   vector<pair<string,double>> mcSamples = {
-    {Form("%s/Photon5_pythia_%s_insitu.root",  insitu_dir, systag.c_str()), photon_scale[5]},
-    {Form("%s/Photon10_pythia_%s_insitu.root", insitu_dir, systag.c_str()), photon_scale[10]},
-    {Form("%s/Photon20_pythia_%s_insitu.root", insitu_dir, systag.c_str()), photon_scale[20]},
+    {insitu_utility::insituFilename(insitu_input_dir, "Photon5",  "pythia", systag), photon_scale[5]},
+    {insitu_utility::insituFilename(insitu_input_dir, "Photon10", "pythia", systag), photon_scale[10]},
+    {insitu_utility::insituFilename(insitu_input_dir, "Photon20", "pythia", systag), photon_scale[20]},
   };
-  vector<TH1D*> hxjMC_pt       = buildMCXjByPtBin(mcSamples, "hxjA_pythia");
-  vector<TH1D*> hxjA_raw_pt    = buildXjByPtBin(dataA, 1.0,       "hxjA_data_raw");
-  vector<TH1D*> hxjA_corr_pt   = buildXjByPtBin(dataA, minpaA,    "hxjA_data_corr");
-  vector<TH1D*> hxjC_raw_pt    = buildXjByPtBin(dataC, 1.0,       "hxjC_data_raw");
-  vector<TH1D*> hxjA_atCorr_pt = buildXjByPtBin(dataA, minpaCorr, "hxjA_data_atCorrScale");
-  vector<TH1D*> hxjC_atCorr_pt = buildXjByPtBin(dataC, minpaCorr, "hxjC_data_atCorrScale");
-  // Purity-corrected (A - (1-P)*(N_A/N_C)*C), once raw (pa=1) and once at the
+  vector<TH1D*> hxjMC_pt       = insitu_utility::buildMCXjByPtBin(mcSamples, 0, ir, "hxjA_pythia", lowXj);
+  vector<TH1D*> hxjA_raw_pt    = insitu_utility::buildXjByPtBin(dataA, 1.0,       nPtBinsUsed, "hxjA_data_raw", lowXj);
+  vector<TH1D*> hxjA_corr_pt   = insitu_utility::buildXjByPtBin(dataA, minpaA,    nPtBinsUsed, "hxjA_data_corr", lowXj);
+  vector<TH1D*> hxjC_raw_pt    = insitu_utility::buildXjByPtBin(dataC, 1.0,       nPtBinsUsed, "hxjC_data_raw", lowXj);
+  vector<TH1D*> hxjA_atCorr_pt = insitu_utility::buildXjByPtBin(dataA, minpaCorr, nPtBinsUsed, "hxjA_data_atCorrScale", lowXj);
+  vector<TH1D*> hxjC_atCorr_pt = insitu_utility::buildXjByPtBin(dataC, minpaCorr, nPtBinsUsed, "hxjC_data_atCorrScale", lowXj);
+  // Purity-corrected (two-purity method), once raw (pa=1) and once at the
   // purity-corrected study's best-fit pa - purity is fixed either way (file header).
-  vector<TH1D*> hxjcorr_raw_pt  = purityCorrectByPtBin(hxjA_raw_pt,    hxjC_raw_pt,    purity, "hxjcorrected_data_raw");
-  vector<TH1D*> hxjcorr_best_pt = purityCorrectByPtBin(hxjA_atCorr_pt, hxjC_atCorr_pt, purity, "hxjcorrected_data_bestscale");
+  vector<TH1D*> hxjcorr_raw_pt  = insitu_utility::purityCorrectByPtBin(hxjA_raw_pt,    hxjC_raw_pt, nPtBinsUsed,
+      purity, purityErrLow, purityErrHigh, purityC, purityCErrLow, purityCErrHigh, "hxjcorrected_data_raw");
+  vector<TH1D*> hxjcorr_best_pt = insitu_utility::purityCorrectByPtBin(hxjA_atCorr_pt, hxjC_atCorr_pt, nPtBinsUsed,
+      purity, purityErrLow, purityErrHigh, purityC, purityCErrLow, purityCErrHigh, "hxjcorrected_data_bestscale");
 
   auto sumPtBins = [&](const vector<TH1D*> & h, const char * name) {
     TH1D * hsum = (TH1D*)h[0]->Clone(name);
@@ -620,26 +421,24 @@ void grid_insitu(string systag = "nominal", int ir = 2) {
 
   float rawMeanA[nPtBinsUsed], rawErrA[nPtBinsUsed];
   float corrMeanA[nPtBinsUsed], corrErrA[nPtBinsUsed]; // "corr" here = best-fit-scaled, not purity-corrected
-  computeRegionAMeans(dataA, 1.0,    rawMeanA,  rawErrA);
-  computeRegionAMeans(dataA, minpaA, corrMeanA, corrErrA);
+  insitu_utility::computeRegionAMeans(dataA, 1.0,    rawMeanA,  rawErrA,  lowXj);
+  insitu_utility::computeRegionAMeans(dataA, minpaA, corrMeanA, corrErrA, lowXj);
 
   float rawMeanCorr[nPtBinsUsed], rawErrCorr[nPtBinsUsed];
   float bestMeanCorr[nPtBinsUsed], bestErrCorr[nPtBinsUsed];
-  computeCorrectedMeans(dataA, dataC, 1.0,        purity, rawMeanCorr,  rawErrCorr);
-  computeCorrectedMeans(dataA, dataC, minpaCorr,  purity, bestMeanCorr, bestErrCorr);
+  insitu_utility::computeCorrectedMeans(dataA, dataC, 1.0,        purity, purityC, rawMeanCorr,  rawErrCorr,  lowXj);
+  insitu_utility::computeCorrectedMeans(dataA, dataC, minpaCorr,  purity, purityC, bestMeanCorr, bestErrCorr, lowXj);
 
-  TGraphErrors * gMC              = meanGraph(refMean, refMeanErr, "gMeanMC");
-  TGraphErrors * gDataRaw_A       = meanGraph(rawMeanA,  rawErrA,  "gMeanData_regionA_raw");
-  TGraphErrors * gRatioRaw_A      = ratioGraph(rawMeanA,  rawErrA,  refMean, refMeanErr, "gRatio_regionA_raw");
-  TGraphErrors * gRatioCorr_A     = ratioGraph(corrMeanA, corrErrA, refMean, refMeanErr, "gRatio_regionA_corrected");
+  TGraphErrors * gMC              = insitu_utility::meanGraph(refMean, refMeanErr, "gMeanMC");
+  TGraphErrors * gDataRaw_A       = insitu_utility::meanGraph(rawMeanA,  rawErrA,  "gMeanData_regionA_raw");
+  TGraphErrors * gRatioRaw_A      = insitu_utility::ratioGraph(rawMeanA,  rawErrA,  refMean, refMeanErr, "gRatio_regionA_raw");
+  TGraphErrors * gRatioCorr_A     = insitu_utility::ratioGraph(corrMeanA, corrErrA, refMean, refMeanErr, "gRatio_regionA_corrected");
 
-  TGraphErrors * gDataRaw_Corr    = meanGraph(rawMeanCorr,  rawErrCorr,  "gMeanData_puritycorrected_raw");
-  TGraphErrors * gRatioRaw_Corr   = ratioGraph(rawMeanCorr,  rawErrCorr,  refMean, refMeanErr, "gRatio_puritycorrected_raw");
-  TGraphErrors * gRatioCorr_Corr  = ratioGraph(bestMeanCorr, bestErrCorr, refMean, refMeanErr, "gRatio_puritycorrected_corrected");
+  TGraphErrors * gDataRaw_Corr    = insitu_utility::meanGraph(rawMeanCorr,  rawErrCorr,  "gMeanData_puritycorrected_raw");
+  TGraphErrors * gRatioRaw_Corr   = insitu_utility::ratioGraph(rawMeanCorr,  rawErrCorr,  refMean, refMeanErr, "gRatio_puritycorrected_raw");
+  TGraphErrors * gRatioCorr_Corr  = insitu_utility::ratioGraph(bestMeanCorr, bestErrCorr, refMean, refMeanErr, "gRatio_puritycorrected_corrected");
 
-  const char * pdfPath = Form("%s/grid_insitu_%s.pdf", insitu_dir, systag.c_str());
-  TCanvas * c = new TCanvas("c","",700,700);
-  c->SaveAs(Form("%s[", pdfPath));
+  const char * pdfPath = pdfPathStr.c_str();
   drawJESPage(c, pdfPath, "Region A", ir, gMC, gDataRaw_A, gRatioRaw_A, gRatioCorr_A, minpaA, errLowA, errHighA);
   for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
     drawXjPage(c, pdfPath, "Region A", ir, ana::ptBinsUsed[ipt], ana::ptBinsUsed[ipt+1],
@@ -650,14 +449,14 @@ void grid_insitu(string systag = "nominal", int ir = 2) {
     drawXjPage(c, pdfPath, "Purity-corrected", ir, ana::ptBinsUsed[ipt], ana::ptBinsUsed[ipt+1],
         hxjMC_pt[ipt], hxjcorr_raw_pt[ipt], hxjcorr_best_pt[ipt], "Data (raw, purity-corr.)", "Data (JES+purity-corr.)");
   }
-  c->SaveAs(Form("%s]", pdfPath));
-  cout << "Wrote " << pdfPath << endl;
 
   // -----------------------------
-  // Save
+  // Save - into this radius's own subdirectory of the shared, once-opened fout (see
+  // top of function). mkdir/cd has to happen before "results" (a TTree) is
+  // constructed below, not just before its Write().
   // -----------------------------
-  const char * outfilename = Form("%s/grid_insitu_%s.root", insitu_dir, systag.c_str());
-  TFile * fout = TFile::Open(outfilename, "RECREATE");
+  fout->cd();
+  fout->mkdir(ana::rnames[ir])->cd();
   gchisqA->Write();
   gchisqCorr->Write();
   hxjA_pythia->Write();
@@ -695,6 +494,12 @@ void grid_insitu(string systag = "nominal", int ir = 2) {
   wt->Branch("errHigh_puritycorrected", &werrHighCorr);
   wt->Fill();
   wt->Write();
+
+  cout << "Finished ir=" << ir << " (" << ana::rnames[ir] << ")" << endl;
+  } // end of ir loop
+
+  c->SaveAs(Form("%s]", pdfPathStr.c_str()));
+  cout << "Wrote " << pdfPathStr << endl;
   fout->Close();
   cout << "Wrote " << outfilename << endl;
 }

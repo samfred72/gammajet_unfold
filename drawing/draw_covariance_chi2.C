@@ -59,50 +59,9 @@ const vector<int> iterationsToScan = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}; // s
 // chi2 metrics below, same exclusion as every other macro in this directory.
 const int nXjBinsForChi2 = ana::nUnfoldXjBins - 3;
 
-// Ported from drawing/draw_purity_corrected.C - see that file for the full derivation.
-TH1D * purityCorrectP(TH1D * A, TH1D * C, float p, float pErrLow, float pErrHigh, const char * name) {
-  float NA = A->Integral();
-  float NC = C->Integral();
-  if (NC <= 0) {
-    cout << "WARNING: " << name << " has zero region-C statistics - cannot cross-normalize, skipping." << endl;
-    return nullptr;
-  }
-  float scale = (1-p)*(NA/NC);
-  TH1D * h = (TH1D*)A->Clone(name);
-  for (int i = 1; i <= A->GetNbinsX(); i++) {
-    float a  = A->GetBinContent(i);
-    float ae = A->GetBinError(i);
-    float c  = C->GetBinContent(i);
-    float ce = C->GetBinError(i);
-    float dPurityLow  = (NA/NC)*c*pErrLow;
-    float dPurityHigh = (NA/NC)*c*pErrHigh;
-    float content = a - scale*c;
-    float errLow  = sqrt(ae*ae + pow(scale*ce,2) + pow(dPurityLow,2));
-    float errHigh = sqrt(ae*ae + pow(scale*ce,2) + pow(dPurityHigh,2));
-    h->SetBinContent(i, content);
-    h->SetBinError(i, std::max(errLow, errHigh));
-  }
-  return h;
-}
-
-// Ported from drawing/draw_purity_corrected.C - see that file for the full derivation.
-TH1D * buildFullyCorrected(TH1D * flatA, TH1D * flatC, const char * tag, string systag) {
-  TH1D * flatCorrected = (TH1D*)flatA->Clone(Form("hxjcorrected_flat_%s", tag));
-  flatCorrected->Reset("ICES");
-  for (int ipt = 0; ipt < ana::nPtBins; ipt++) {
-    float ptlow  = ana::ptBins[ipt];
-    float pthigh = ana::ptBins[ipt+1];
-    float p        = ana::getPurity(ptlow, pthigh, systag);
-    float pErrLow  = ana::getPurityErrorLow(ptlow, pthigh, systag);
-    float pErrHigh = ana::getPurityErrorHigh(ptlow, pthigh, systag);
-    TH1D * A = unfold_utility::unflattenXj(flatA, ipt, Form("htmpA_%s_pt%d", tag, ipt));
-    TH1D * C = unfold_utility::unflattenXj(flatC, ipt, Form("htmpC_%s_pt%d", tag, ipt));
-    TH1D * hcorr = purityCorrectP(A, C, p, pErrLow, pErrHigh, Form("htmpcorr_%s_pt%d", tag, ipt));
-    unfold_utility::reflattenXj(hcorr ? hcorr : A, ipt, flatCorrected);
-    delete A; delete C; if (hcorr) delete hcorr;
-  }
-  return flatCorrected;
-}
+// buildFullyCorrected now lives in unfold_utility (purity-corrects all ana::nPtBins
+// slices via unfold_utility::purityCorrect and reflattens for RooUnfold) - see
+// src/unfold_utility.h.
 
 // flatbin(ipt,ixj), 0-indexed, matching TMatrixD/TVectorD element ordering - identical to
 // draw_covariance.C's own matrixIndex() (and to unfold_utility::unflattenXj's "flatbin"),
@@ -125,7 +84,7 @@ void draw_covariance_chi2(string systag = "nominal") {
 
   TH1D * flatA = d.get(Form("hrecoxj%i_0",ir), 0);
   TH1D * flatC = d.get(Form("hrecoxj%i_2",ir), 0);
-  TH1D * flatMeasured = buildFullyCorrected(flatA, flatC, "data", systag);
+  TH1D * flatMeasured = unfold_utility::buildFullyCorrected(flatA, flatC, "data", systag);
 
   TFile * fout = TFile::Open(rootPath.c_str(), "RECREATE");
   TCanvas * c = new TCanvas("c","",700,900);

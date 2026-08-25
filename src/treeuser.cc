@@ -41,10 +41,12 @@ void treeuser::treesetup() {
     t->SetBranchAddress("truth_cluster_iso3", &truth_cluster_iso3, &b_truth_cluster_iso3);
     t->SetBranchAddress("truth_cluster_iso4", &truth_cluster_iso4, &b_truth_cluster_iso4);
     
-    t->SetBranchAddress("jet_pt_smear" , jet_pt_smear , &b_jet_pt_smear );
     t->SetBranchAddress("jet_pt_smear_reco" , jet_pt_smear_reco , &b_jet_pt_smear_reco );
-    t->SetBranchAddress("jet_pt_smear_high" , jet_pt_smear_high , &b_jet_pt_smear_high );
-    t->SetBranchAddress("jet_pt_smear_low"  , jet_pt_smear_low  , &b_jet_pt_smear_low  );
+    t->SetBranchAddress("jet_pt_smear_high_reco" , jet_pt_smear_high_reco , &b_jet_pt_smear_high_reco );
+    t->SetBranchAddress("jet_pt_smear_low_reco"  , jet_pt_smear_low_reco  , &b_jet_pt_smear_low_reco  );
+    t->SetBranchAddress("jet_pt_smear_truth" , jet_pt_smear_truth , &b_jet_pt_smear_truth );
+    t->SetBranchAddress("jet_pt_smear_high_truth" , jet_pt_smear_high_truth , &b_jet_pt_smear_high_truth );
+    t->SetBranchAddress("jet_pt_smear_low_truth"  , jet_pt_smear_low_truth  , &b_jet_pt_smear_low_truth  );
     
     t->SetBranchAddress("truth_jet_pt" , truth_jet_pt , &b_truth_jet_pt );
     t->SetBranchAddress("truth_jet_e"  , truth_jet_e  , &b_truth_jet_e  );

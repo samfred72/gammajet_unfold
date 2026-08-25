@@ -1,4 +1,4 @@
-rm -f unfolder.o drawer.o ana.o object.o pho_object.o jet_object.o treeuser.o unfold_utility.o libgammajet_unfold.so
+rm -f unfolder.o drawer.o ana.o object.o pho_object.o jet_object.o treeuser.o unfold_utility.o insitu_utility.o libgammajet_unfold.so
 rm -f /home/samson72/root/lib/libgammajet_unfold.so
 $(root-config --cxx) -c -fPIC -Wno-deprecated-declarations\
   drawer.cc \
@@ -9,6 +9,7 @@ $(root-config --cxx) -c -fPIC -Wno-deprecated-declarations\
   jet_object.cc \
   treeuser.cc \
   unfold_utility.cc \
+  insitu_utility.cc \
   `root-config --cflags`
 echo ".o files made"
 $(root-config --cxx) -shared -Wno-deprecated-declarations -o \
@@ -21,6 +22,7 @@ $(root-config --cxx) -shared -Wno-deprecated-declarations -o \
   jet_object.o \
   treeuser.o \
   unfold_utility.o \
+  insitu_utility.o \
   `root-config --libs`
 echo "library made"
 cp libgammajet_unfold.so /home/samson72/root/lib/

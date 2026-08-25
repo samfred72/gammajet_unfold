@@ -76,7 +76,7 @@ void diagnose_nikhil_only(string trigger = "Photon20", string sim = "pythia") {
     }
 
     // --- Step 2: check_keep_MC trigger truth-pt window ---
-    vector<bool> keepMC = tu.check_keep_MC(tu.truth_cluster_pt, tu.cluster_pt, tu.truth_jet_pt, tu.jet_pt_smear, trigger);
+    vector<bool> keepMC = tu.check_keep_MC(tu.truth_cluster_pt, tu.cluster_pt, tu.truth_jet_pt, tu.jet_pt_smear_reco, trigger);
     if (!keepMC.at(keepMC.size() - 1)) {
       cout << "  CUT: truth_cluster_pt=" << tu.truth_cluster_pt
            << " fails trigger window (Photon20/pythia: 24 < pt < 100)" << endl;
