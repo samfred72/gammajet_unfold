@@ -34,28 +34,45 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 // (hw_pt<N>, re-shape-normalized here the same way every other source is) is used, as
 // discussed there - sqrt(w)/w^1.5 are diagnostic only in that file and aren't read here.
 //
-// Total uncertainty: JER/JES/emscale/niter are true two-point (high/low) systematics -
-// each of their eight sources feeds ONLY the up or down total per bin, whichever matches
-// its own sign that bin (see asymmetricSystematics below), rather than being symmetrized.
-// Every other source (threejet/narrowBDT/narrowISO/herwig/priorSensitivity) has no
-// natural direction of its own, so it's symmetrized: its full magnitude feeds both the
-// up and down total.
+// Total uncertainty: JER/JES/emscale/EMR/niter are true two-point (high/low)
+// systematics - each of their ten sources feeds ONLY the up or down total per bin,
+// whichever matches its own sign that bin (see asymmetricSystematics below), rather
+// than being symmetrized. The five ABCD sideband-boundary sources (narrowBDT/narrowISO/
+// narrowBDTbkg/narrowISObkg/wideISObkg - see ana.h's isoBins/isoBinsHigh/bdtGoodLow/
+// bdtBadLow comment) are first combined into their own symmetric purityUnc quadrature sum
+// (purityMembers below - every one of the five is treated as an independent symmetrized
+// source, including narrowISObkg/wideISObkg even though they're a genuine two-sided
+// variation of the same boundary, NOT sign-split against each other) and enters the grand
+// total as ONE more symmetric source, rather than five independent ones - this follows
+// PPG12's treatment of the ABCD boundary variations as a single combined "Purity"
+// systematic (sPHENIX isolated-photon analysis note, Sec. 5.3) rather than independently
+// summing each cut shift. Every remaining source (threejet/herwig/priorSensitivity) is
+// symmetrized the same way: its full magnitude feeds both the up and down total.
 //
 // Per (systematic, pT bin): a page with nominal vs variation overlaid (top) and their
 // ratio (bottom) - both the ratio and the fractional difference (ratio-1) are also
 // written to systematics.root for reuse as the actual systematic uncertainty numbers.
+// This still runs (and is written to systematics.root) individually for each of the five
+// purityMembers, even though they're combined into one Purity source below - useful for
+// debugging any one boundary's own effect.
 // Final page: fractional difference vs xJ, one panel per pT bin, all variations overlaid,
 // so the relative size of each systematic is visible at a glance - grouped per
 // displayGroups: each high/low pair shares one color/legend entry (both member curves
 // drawn as-is), while each symmetric source is drawn twice (its curve and that curve's
 // negation, same color) so the page visually matches the +/- treatment the total gives it.
+// The five purityMembers are excluded from displayGroups entirely - the combined
+// purityUnc curve gets its own single "Purity" entry on this page instead, drawn the same
+// curve-plus-negation way as any other symmetric source.
 //
 // Both nominal and each variation are shape-normalized (unit area) before the ratio is
 // taken, so a systematic that shifts the total accepted Data event count (narrowBDT/
 // narrowISO/threejet all change which events pass selection) doesn't masquerade as a
 // shape difference in xJ - only genuine shape effects survive into the ratio/fracdiff.
 
-const int ir = 2; // nominal jet radius index (R=0.4)
+// Jet radius index - mutable (not const) so draw_systematics(int) can set it at the top
+// of the function, before any of the code below (all written against this global) runs.
+// Defaults to the nominal R=0.4 working point used throughout the note.
+int ir = 2;
 const int nPtBinsUsed = ana::nPtBinsUsed; // physics analysis only uses ana::ptBins[ana::firstUsedPtBin..]
 const int niterate = 2; // matches draw_purity_corrected.C's best-iteration scan result
 // Derived from ana::systags (src/ana.h) - the definitive systag reprocessing list, minus
@@ -77,11 +94,16 @@ const map<string,int> systColors = {
   {"JERlow",       kOrange+7},
   {"emscale_high", kAzure+1},
   {"emscale_low",  kTeal+2},
+  {"EMRhigh",      kGray+2},
+  {"EMRlow",       kGray+1},
   {"jes_high",     kPink+6},
   {"jes_low",      kYellow+2},
   {"threejet",     kGreen+2},
   {"narrowBDT",    kBlue+1},
   {"narrowISO",    kMagenta+1},
+  {"narrowBDTbkg", kBlue+3},
+  {"narrowISObkg", kMagenta+3},
+  {"wideISObkg",   kMagenta-4},
   {"herwig",       kSpring+5},
   {"niterLow",     kCyan+2},
   {"niterHigh",    kViolet+1},
@@ -103,11 +125,16 @@ const map<string, SystSource> systSources = {
   {"JERlow",       {"pythia", "JERlow",       niterate}},
   {"emscale_high", {"pythia", "emscale_high", niterate}},
   {"emscale_low",  {"pythia", "emscale_low",  niterate}},
+  {"EMRhigh",      {"pythia", "EMRhigh",      niterate}},
+  {"EMRlow",       {"pythia", "EMRlow",       niterate}},
   {"jes_high",     {"pythia", "jes_high",     niterate}},
   {"jes_low",      {"pythia", "jes_low",      niterate}},
   {"threejet",     {"pythia", "threejet",     niterate}},
   {"narrowBDT",    {"pythia", "narrowBDT",    niterate}},
   {"narrowISO",    {"pythia", "narrowISO",    niterate}},
+  {"narrowBDTbkg", {"pythia", "narrowBDTbkg", niterate}},
+  {"narrowISObkg", {"pythia", "narrowISObkg", niterate}},
+  {"wideISObkg",   {"pythia", "wideISObkg",   niterate}},
   {"herwig",       {"herwig", "nominal",      niterate}},
   {"niterLow",     {"pythia", "nominal",      niterate-1}},
   {"niterHigh",    {"pythia", "nominal",      niterate+1}},
@@ -128,20 +155,21 @@ const set<string> asymmetricSystematics = [] {
   return s;
 }();
 
-// Categorical palette for the 8 display groups below: a validated 8-hue, colorblind-safe
-// ordering (fixed order, never cycled/reassigned) - each hex registered once as a ROOT
-// color index via TColor::GetColor(). Chosen over plain kXXX constants because several of
-// those (kAzure/kCyan/kTeal, kMagenta/kPink, kGreen/kSpring) sit too close in hue to
-// reliably tell apart across 8 overlaid curves.
+// Categorical palette for the 8 display groups below (plus the separately-drawn Purity
+// curve - see purityMembers): a validated 9-hue, colorblind-safe ordering (fixed order,
+// never cycled/reassigned) - each hex registered once as a ROOT color index via
+// TColor::GetColor(). Chosen over plain kXXX constants because several of those
+// (kAzure/kCyan/kTeal, kMagenta/kPink, kGreen/kSpring) sit too close in hue to reliably
+// tell apart across several overlaid curves.
 const int colorBlue    = TColor::GetColor("#2a78d6");
 const int colorOrange  = TColor::GetColor("#eb6834");
 const int colorAqua    = TColor::GetColor("#1baf7a");
 const int colorYellow  = TColor::GetColor("#eda100");
 const int colorMagenta = TColor::GetColor("#e87ba4");
-const int colorGreen   = TColor::GetColor("#008300");
-const int colorViolet  = TColor::GetColor("#4a3aa7");
+const int colorPurity  = TColor::GetColor("#008300");
 const int colorRed     = TColor::GetColor("#e34948");
 const int colorBrown   = TColor::GetColor("#8c564b");
+const int colorGrey    = TColor::GetColor("#767676");
 
 // Display grouping for the final overlay page only (the per-(systag,pT) comparison pages
 // above still use systColors, one distinct color per individual systag). Each
@@ -153,20 +181,40 @@ const int colorBrown   = TColor::GetColor("#8c564b");
 // visually shows the same +/- treatment the total's quadrature sum already applies to it
 // (a single symmetric source only measures one sign of deviation, but contributes
 // symmetrically to the total).
+//
+// purityMembers (narrowBDT/narrowISO/narrowBDTbkg/narrowISObkg/wideISObkg) are
+// deliberately NOT listed here - they're combined into one symmetric purityUnc curve
+// below and drawn as their own single "Purity" entry further down (curve plus negation,
+// same as any other symmetric source here), rather than getting individual DisplayGroup
+// entries (which would show five sub-source curves instead of the one combined
+// systematic they actually feed into the total as).
 struct DisplayGroup { string label; int color; vector<string> members; bool symmetric; };
 const vector<DisplayGroup> displayGroups = {
   {"JER",       colorBlue,    {"JERhigh", "JERlow"},          false},
   {"JES",       colorOrange,  {"jes_high", "jes_low"},        false},
   {"EM scale",  colorAqua,    {"emscale_high", "emscale_low"},false},
+  {"EMR",       colorGrey,    {"EMRhigh", "EMRlow"},          false},
   {"niter",     colorYellow,  {"niterHigh", "niterLow"},      false},
   {"threejet",  colorMagenta, {"threejet"},                   true},
-  {"narrowBDT", colorGreen,   {"narrowBDT"},                  true},
-  {"narrowISO", colorViolet,  {"narrowISO"},                  true},
   {"herwig",    colorRed,     {"herwig"},                     true},
   {"prior sens.", colorBrown, {"priorSensitivity"},           true},
 };
-const char * pdfPath  = "/home/samson72/sphnx/gammajet_unfold/pdfs/draw_systematics.pdf";
-const char * rootPath = "/home/samson72/sphnx/gammajet_unfold/hists/systematics.root";
+// The five ABCD sideband-boundary systematics combined into one "Purity" systematic
+// before entering the grand total - see the header comment and the total-uncertainty
+// section below. All five are treated as independent symmetrized sources here (none of
+// them are in ana::asymmetricSystagPairs, so asymmetricSystematics below doesn't include
+// them either) - narrowISObkg/wideISObkg are a genuine two-sided variation of the same
+// isolation-gap boundary, but are deliberately NOT sign-split against each other like
+// JER/emscale/jes/EMR are; each contributes its own full magnitude to both up and down.
+const set<string> purityMembers = {
+  "narrowBDT", "narrowISO", "narrowBDTbkg", "narrowISObkg", "wideISObkg"
+};
+// Set inside draw_systematics(int) from ir - the nominal R=0.4 default reproduces the
+// unsuffixed filenames every other macro/main.tex reads; every other radius gets its own
+// _<rname>-suffixed pair instead of clobbering the nominal file.
+string pdfPathStr, rootPathStr;
+const char * pdfPath;
+const char * rootPath;
 
 // densityForDisplay now lives in unfold_utility - see src/unfold_utility.h.
 // buildFullyCorrected now lives in unfold_utility (purity-corrects all ana::nPtBins
@@ -192,8 +240,16 @@ TH1D * getUnfoldedData(string sim, string systag, int niter, const char * name) 
   return unfold_utility::unfoldOnce(respRecoTemplate, respTruthTemplate, respMatrix2D, flatCorrected, niter, name);
 }
 
-void draw_systematics() {
+void draw_systematics(int jetRadiusIndex = 2) {
   gStyle->SetOptStat(0);
+
+  ir = jetRadiusIndex;
+  pdfPathStr  = (ir == 2) ? "/home/samson72/sphnx/gammajet_unfold/pdfs/draw_systematics.pdf"
+                          : Form("/home/samson72/sphnx/gammajet_unfold/pdfs/draw_systematics_%s.pdf", ana::rnames[ir]);
+  rootPathStr = (ir == 2) ? "/home/samson72/sphnx/gammajet_unfold/hists/systematics.root"
+                          : Form("/home/samson72/sphnx/gammajet_unfold/hists/systematics_%s.root", ana::rnames[ir]);
+  pdfPath  = pdfPathStr.c_str();
+  rootPath = rootPathStr.c_str();
 
   // drawText/drawAll don't touch any per-instance file data - one generic instance
   // (default sim/systag - irrelevant here) is reused purely for label drawing, since the
@@ -327,14 +383,43 @@ void draw_systematics() {
     }
   }
 
+  // Purity: combine the five ABCD sideband-boundary sources (purityMembers) into one
+  // symmetric quadrature sum - every member here is treated as its own independent
+  // symmetrized source (full magnitude feeds both up and down), including
+  // narrowISObkg/wideISObkg even though they're a genuine two-sided variation of the same
+  // isolation-gap boundary - they are NOT sign-split against each other the way
+  // JER/emscale/jes/EMR are (see ana::asymmetricSystagPairs's comment). One combined
+  // histogram is enough since there's no asymmetry left to carry: see the header comment
+  // and PPG12 Sec. 5.3 for why these five are pre-combined into one systematic rather than
+  // entering the grand total independently.
+  vector<TH1D*> purityUnc(ana::nPtBins);
+  for (int ipt = ana::firstUsedPtBin; ipt < ana::firstUsedPtBin+nPtBinsUsed; ipt++) {
+    TH1D * hPurity = (TH1D*)fracDiff[systematics[0]][ipt]->Clone(Form("hpurity_pt%d", ipt));
+    hPurity->Reset("ICES");
+    for (int b = 1; b <= hPurity->GetNbinsX(); b++) {
+      double sumsq = 0;
+      for (const string & systag : purityMembers) {
+        double v = fracDiff[systag][ipt]->GetBinContent(b);
+        sumsq += v*v;
+      }
+      hPurity->SetBinContent(b, sqrt(sumsq));
+    }
+    hPurity->GetYaxis()->SetTitle("Purity systematic uncertainty");
+    purityUnc[ipt] = hPurity;
+    fout->cd();
+    hPurity->Write();
+  }
+
   // Total systematic uncertainty per pT bin: quadrature sum of the individual fractional
-  // differences at each xJ bin, treating the sources as independent. Symmetric sources
-  // contribute their full (signed-then-squared) magnitude to both totals; each
-  // asymmetricSystematics source instead contributes only to whichever total matches its
-  // own sign that bin (0 to the other) - up = sqrt(symmetric^2 + sum of positive
-  // asymmetric values squared), down = sqrt(symmetric^2 + sum of negative asymmetric
-  // values squared). Both totals are always >= 0 by construction, drawn as an asymmetric
-  // +/- band.
+  // differences at each xJ bin, treating the sources as independent, PLUS the already-
+  // combined Purity source above in place of its five individual purityMembers (not
+  // double-counted - see the skip below; Purity itself is symmetric, so it feeds both
+  // totals like any other symmetric source). Symmetric sources contribute their full
+  // (signed-then-squared) magnitude to both totals; each asymmetricSystematics source
+  // instead contributes only to whichever total matches its own sign that bin (0 to the
+  // other) - up = sqrt(symmetric^2 + sum of positive asymmetric values squared), down =
+  // sqrt(symmetric^2 + sum of negative asymmetric values squared). Both totals are always
+  // >= 0 by construction, drawn as an asymmetric +/- band.
   vector<TH1D*> totalUncUp(ana::nPtBins), totalUncDown(ana::nPtBins);
   for (int ipt = ana::firstUsedPtBin; ipt < ana::firstUsedPtBin+nPtBinsUsed; ipt++) {
     TH1D * hTotalUp   = (TH1D*)fracDiff[systematics[0]][ipt]->Clone(Form("hquadsum_up_pt%d", ipt));
@@ -344,6 +429,7 @@ void draw_systematics() {
     for (int b = 1; b <= hTotalUp->GetNbinsX(); b++) {
       double sumsqUp = 0, sumsqDown = 0;
       for (const string & systag : systematics) {
+        if (purityMembers.count(systag)) continue; // folded into purityUnc instead
         double v = fracDiff[systag][ipt]->GetBinContent(b);
         if (asymmetricSystematics.count(systag)) {
           if (v > 0) sumsqUp   += v*v;
@@ -353,6 +439,9 @@ void draw_systematics() {
           sumsqDown += v*v;
         }
       }
+      double p = purityUnc[ipt]->GetBinContent(b);
+      sumsqUp   += p*p;
+      sumsqDown += p*p;
       hTotalUp->SetBinContent(b, sqrt(sumsqUp));
       hTotalDown->SetBinContent(b, sqrt(sumsqDown));
     }
@@ -395,6 +484,9 @@ void draw_systematics() {
       ymax = std::max(ymax, fracDiff[systag][ipt]->GetMaximum());
     for (const string & systag : systematics)
       ymax = std::max(ymax, -fracDiff[systag][ipt]->GetMinimum());
+    // purityUnc is a quadrature sum of its members, so it can exceed any single
+    // purityMembers curve already covered by the two loops above.
+    ymax = std::max(ymax, purityUnc[ipt]->GetMaximum());
     ymax = std::max(ymax, totalUncUp[ipt]->GetMaximum());
     ymax = std::max(ymax, totalUncDown[ipt]->GetMaximum());
 
@@ -439,6 +531,20 @@ void draw_systematics() {
         }
       }
     }
+    // Purity: a single combined symmetric magnitude (not a single systag's real
+    // fracDiff), drawn the same curve-plus-negation way as any other symmetric
+    // DisplayGroup member above, rather than through that generic loop directly.
+    TH1D * hPurityDisp = (TH1D*)purityUnc[ipt]->Clone(Form("hpurity_pt%d_disp", ipt));
+    for (int b = 1; b <= hPurityDisp->GetNbinsX(); b++) hPurityDisp->SetBinError(b, 0);
+    hPurityDisp->SetLineColor(colorPurity);
+    hPurityDisp->SetLineWidth(1);
+    hPurityDisp->Draw("hist same");
+    ls->AddEntry(hPurityDisp, "Purity", "l");
+
+    TH1D * hPurityDispNeg = (TH1D*)hPurityDisp->Clone(Form("hpurity_pt%d_disp_neg", ipt));
+    hPurityDispNeg->Scale(-1);
+    hPurityDispNeg->Draw("hist same");
+
     // Asymmetric total: up and down are independent magnitudes now (not mirror images of
     // each other), so each is its own histogram - "down" negated only for display, to
     // draw on the same signed axis as the fracDiff curves above.

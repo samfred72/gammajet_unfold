@@ -24,31 +24,53 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 //
 // Systematic uncertainty: the quadrature-sum fractional uncertainty (hquadsum_up/down_pt<N>)
 // already computed and saved by draw_systematics.C - JERhigh/JERlow/emscale_high/
-// emscale_low/jes_high/jes_low/threejet/narrowBDT/narrowISO/herwig (generator-modeling)/
-// priorSensitivity (data-informed prior reweighting - see drawing/draw_prior_sensitivity.C)
-// combined in quadrature. Asymmetric: JER/JES/emscale are true two-point (high/low)
-// systematics there, combined via their per-bin envelope rather than symmetrized, so the
-// box below is a TGraphAsymmErrors, not a plain TH1 (which can only carry one symmetric
-// error per bin).
+// emscale_low/EMRhigh/EMRlow/jes_high/jes_low/threejet/Purity (narrowBDT/narrowISO/
+// narrowBDTbkg/narrowISObkg/wideISObkg's own combined ABCD sideband-boundary systematic,
+// following PPG12's treatment - see draw_systematics.C's purityMembers)/herwig
+// (generator-modeling)/priorSensitivity (data-informed prior reweighting - see
+// drawing/draw_prior_sensitivity.C) combined in quadrature. Asymmetric: JER/JES/emscale/
+// EMR are true two-point (high/low) systematics there, combined via their per-bin
+// envelope rather than symmetrized (Purity is symmetric, like threejet/herwig/
+// priorSensitivity - see draw_systematics.C's purityMembers), so the box below is a
+// TGraphAsymmErrors, not a plain TH1 (which can only carry one symmetric error per bin).
 //
 // Statistical uncertainty stays on the data points' own error bars; systematic
 // uncertainty is drawn as a separate azure box behind them. MC truth is overlaid for
 // reference, with a ratio panel below.
 
-const int ir = 2; // nominal jet radius index (R=0.4)
+// Jet radius index - mutable (not const) so draw_final_result(int) can set it at the top
+// of the function, before any of the code below (all written against this global) runs.
+// Defaults to the nominal R=0.4 working point used throughout the note.
+int ir = 2;
 const int nPtBinsUsed = ana::nPtBinsUsed; // physics analysis only uses ana::ptBins[ana::firstUsedPtBin..]
 const int niterate = 2; // matches draw_purity_corrected.C's best-iteration scan result
-const char * pdfPath      = "/home/samson72/sphnx/gammajet_unfold/pdfs/final_result.pdf";
-const char * rootPath     = "/home/samson72/sphnx/gammajet_unfold/hists/final_result.root";
-const char * systRootPath = "/home/samson72/sphnx/gammajet_unfold/hists/systematics.root";
+// Set inside draw_final_result(int) from ir - the nominal R=0.4 default reproduces the
+// unsuffixed filenames every other macro/main.tex reads; every other radius gets its own
+// _<rname>-suffixed triple instead of clobbering the nominal file. systRootPath must match
+// whatever suffix draw_systematics(int) was run with for the same radius.
+string pdfPathStr, rootPathStr, systRootPathStr;
+const char * pdfPath;
+const char * rootPath;
+const char * systRootPath;
 
 // densityForDisplay now lives in unfold_utility - see src/unfold_utility.h.
 // buildFullyCorrected now lives in unfold_utility (purity-corrects all ana::nPtBins
 // slices via unfold_utility::purityCorrect and reflattens for RooUnfold) - see
 // src/unfold_utility.h.
 
-void draw_final_result() {
+void draw_final_result(int jetRadiusIndex = 2) {
   gStyle->SetOptStat(0);
+
+  ir = jetRadiusIndex;
+  pdfPathStr      = (ir == 2) ? "/home/samson72/sphnx/gammajet_unfold/pdfs/final_result.pdf"
+                              : Form("/home/samson72/sphnx/gammajet_unfold/pdfs/final_result_%s.pdf", ana::rnames[ir]);
+  rootPathStr     = (ir == 2) ? "/home/samson72/sphnx/gammajet_unfold/hists/final_result.root"
+                              : Form("/home/samson72/sphnx/gammajet_unfold/hists/final_result_%s.root", ana::rnames[ir]);
+  systRootPathStr = (ir == 2) ? "/home/samson72/sphnx/gammajet_unfold/hists/systematics.root"
+                              : Form("/home/samson72/sphnx/gammajet_unfold/hists/systematics_%s.root", ana::rnames[ir]);
+  pdfPath      = pdfPathStr.c_str();
+  rootPath     = rootPathStr.c_str();
+  systRootPath = systRootPathStr.c_str();
 
   TFile * fsyst = TFile::Open(systRootPath);
   if (!fsyst || fsyst->IsZombie()) {
