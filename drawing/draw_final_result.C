@@ -26,13 +26,16 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 // already computed and saved by draw_systematics.C - JERhigh/JERlow/emscale_high/
 // emscale_low/EMRhigh/EMRlow/jes_high/jes_low/threejet/Purity (narrowBDT/narrowISO/
 // narrowBDTbkg/narrowISObkg/wideISObkg's own combined ABCD sideband-boundary systematic,
-// following PPG12's treatment - see draw_systematics.C's purityMembers)/herwig
-// (generator-modeling)/priorSensitivity (data-informed prior reweighting - see
-// drawing/draw_prior_sensitivity.C) combined in quadrature. Asymmetric: JER/JES/emscale/
-// EMR are true two-point (high/low) systematics there, combined via their per-bin
-// envelope rather than symmetrized (Purity is symmetric, like threejet/herwig/
-// priorSensitivity - see draw_systematics.C's purityMembers), so the box below is a
-// TGraphAsymmErrors, not a plain TH1 (which can only carry one symmetric error per bin).
+// following PPG12's treatment - see draw_systematics.C's purityMembers)/Unfolding
+// (niterHigh+priorSensitivity in quadrature feeding up, niterLow+priorSensitivity in
+// quadrature feeding down - see draw_systematics.C's unfoldingUncUp/unfoldingUncDown)/
+// herwig (generator-modeling) combined in quadrature. Asymmetric: JER/JES/emscale/EMR are
+// true two-point (high/low) systematics there, combined via their per-bin envelope rather
+// than symmetrized; Unfolding is likewise asymmetric, but via its own direct high/low
+// source pairing rather than a per-bin sign test (see draw_systematics.C's header
+// comment); Purity is symmetric, like threejet/herwig. Because at least one source is
+// asymmetric, the box below is a TGraphAsymmErrors, not a plain TH1 (which can only carry
+// one symmetric error per bin).
 //
 // Statistical uncertainty stays on the data points' own error bars; systematic
 // uncertainty is drawn as a separate azure box behind them. MC truth is overlaid for
