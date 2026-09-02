@@ -187,6 +187,11 @@ void puritymaker(string systag = "nominal") {
   string purityPdfPath = Form("/home/samson72/sphnx/gammajet_unfold/pdfs/purity_%s.pdf", systag.c_str());
   cu->SaveAs(Form("%s[", purityPdfPath.c_str()));
 
+  // MC leakage-fraction (f^X) plot, one page per radius - previously drawn to canvas
+  // `cf` but never saved to disk.
+  string leakagePdfPath = Form("/home/samson72/sphnx/gammajet_unfold/pdfs/purity_leakage_%s.pdf", systag.c_str());
+  cf->SaveAs(Form("%s[", leakagePdfPath.c_str()));
+
   for (int ir = 0; ir < ana::nJetR; ir++) {
   TH1D * h[4]; // for ABCD
   TH1D * hp[4];
@@ -212,6 +217,10 @@ void puritymaker(string systag = "nominal") {
   }
   lf->SetLineWidth(0);
   lf->Draw();
+  fp[1]->GetXaxis()->SetTitle("Leading cluster p_{T} [GeV]");
+  fp[1]->GetYaxis()->SetTitle("f^{X} = N^{X}_{sig}/N^{A}_{sig}");
+  d.drawAll({"Pythia8 #gamma+jet MC"},{Form("systag: %s",systag.c_str()),Form("Jet R=%.1f",ana::JetRs[ir]),"truth-matched leakage fractions"},.5,.55,16,700);
+  cf->SaveAs(leakagePdfPath.c_str());
   //return;
 
 
@@ -322,6 +331,8 @@ void puritymaker(string systag = "nominal") {
 
   cu->SaveAs(Form("%s]", purityPdfPath.c_str()));
   cout << "Wrote " << purityPdfPath << endl;
+  cf->SaveAs(Form("%s]", leakagePdfPath.c_str()));
+  cout << "Wrote " << leakagePdfPath << endl;
   fout->Close();
   cout << "Wrote " << purityOutfile << endl;
 }
