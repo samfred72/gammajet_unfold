@@ -204,12 +204,18 @@ void puritymaker(string systag = "nominal") {
   }
   cf->cd();
   cf->Clear();
+  gPad->SetTicks();
+  gPad->SetLeftMargin(.15);
+  // DrawFrame (rather than relying on the first "same"-drawn histogram to create an
+  // axis frame) so the axes reliably render on every page of the multi-page save below -
+  // same pattern as cu's frameu further down.
+  TH1F * framef = cf->DrawFrame(ana::ptBinsUsed[0], 0, ana::ptBinsUsed[ana::nPtBinsUsed], 1.2);
+  framef->GetXaxis()->SetTitle("Leading cluster p_{T} [GeV]");
+  framef->GetYaxis()->SetTitle("f^{X} = N^{X}_{sig}/N^{A}_{sig}");
   int colors[4] = {kBlack,kRed, kBlue, kOrange};
   const char * letters[4] = {"A","B","C","D"};
   TLegend * lf = new TLegend(0.5, 0.65, 0.8, 0.8);
   for (int i = 1; i < 4; i++) {
-    fp[i]->GetXaxis()->SetRangeUser(10,35);
-    fp[i]->GetYaxis()->SetRangeUser(0,1.2);
     fp[i]->SetLineColor(colors[i]);
     fp[i]->SetLineWidth(2);
     fp[i]->Draw("hist e same");
@@ -217,8 +223,6 @@ void puritymaker(string systag = "nominal") {
   }
   lf->SetLineWidth(0);
   lf->Draw();
-  fp[1]->GetXaxis()->SetTitle("Leading cluster p_{T} [GeV]");
-  fp[1]->GetYaxis()->SetTitle("f^{X} = N^{X}_{sig}/N^{A}_{sig}");
   d.drawAll({"Pythia8 #gamma+jet MC"},{Form("systag: %s",systag.c_str()),Form("Jet R=%.1f",ana::JetRs[ir]),"truth-matched leakage fractions"},.5,.55,16,700);
   cf->SaveAs(leakagePdfPath.c_str());
   //return;
