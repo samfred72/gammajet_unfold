@@ -1,11 +1,13 @@
 #/bin/bash
 # Usage: runall_unfold.sh [jet|photon|data] [systag]
-# systag: nominal (default), JERhigh, JERlow, emscale_high, emscale_low, jes_high,
-# jes_low, threejet, narrowBDT, narrowISO - see the unfolder constructor comment in
-# src/unfolder.h. JERhigh/JERlow/emscale_high/emscale_low are MC-only (Data silently
-# reprocesses as nominal under that filename) - skip "data" for those four. jes_high/
-# jes_low are the reverse: Data-only (Photon MC silently reprocesses as nominal under
-# that filename) - skip "photon" for those two.
+# systag: nominal (default), JERhigh, JERlow, emscale_high, emscale_low, EMRhigh,
+# EMRlow, jes_high, jes_low, threejet, narrowBDT, narrowISO, narrowBDTbkg,
+# narrowISObkg, wideISObkg - see the unfolder constructor comment in src/unfolder.h.
+# JERhigh/JERlow/emscale_high/emscale_low/
+# EMRhigh/EMRlow are MC-only (Data silently reprocesses as nominal under that
+# filename) - skip "data" for those six. jes_high/jes_low are the reverse: Data-only
+# (Photon MC silently reprocesses as nominal under that filename) - skip "photon" for
+# those two.
 DODATA=0
 DOPHOTON=0
 DOJET=0

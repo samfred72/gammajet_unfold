@@ -30,9 +30,10 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 // hists/prior_sensitivity_nominal.root, written by drawing/draw_prior_sensitivity.C -
 // run that macro (with its default "nominal" argument) before this one. See that file's
 // header for the full method (data-informed prior reweighting, following the sPHENIX
-// PPG08 dijet-xJ note and ATLAS's photon-jet xJ paper); only its "w"-variant fracDiff
-// (hw_pt<N>, re-shape-normalized here the same way every other source is) is used, as
-// discussed there - sqrt(w)/w^1.5 are diagnostic only in that file and aren't read here.
+// PPG08 dijet-xJ note and ATLAS's photon-jet xJ paper); only its "w"-variant raw unfolded
+// distribution (hw_pt<N>, re-shape-normalized here the same way every other source is) is
+// used, as discussed there - sqrt(w)/w^1.5 are diagnostic only in that file and aren't
+// read here.
 //
 // Total uncertainty: JER/JES/emscale/EMR are true two-point (high/low) systematics -
 // each of their eight sources feeds ONLY the up or down total per bin, whichever matches
@@ -266,7 +267,7 @@ TH1D * getUnfoldedData(string sim, string systag, int niter, const char * name) 
   TH2D * respMatrix2D      = d.get2d(Form("hxjresponse%i",ir), 1);
   TH1D * flatA = d.get(Form("hrecoxj%i_0",ir), 0);
   TH1D * flatC = d.get(Form("hrecoxj%i_2",ir), 0);
-  TH1D * flatCorrected = unfold_utility::buildFullyCorrected(flatA, flatC, systag.c_str(), systag);
+  TH1D * flatCorrected = unfold_utility::buildFullyCorrected(flatA, flatC, systag.c_str(), systag, ir);
   return unfold_utility::unfoldOnce(respRecoTemplate, respTruthTemplate, respMatrix2D, flatCorrected, niter, name);
 }
 
@@ -322,6 +323,18 @@ void draw_systematics(int jetRadiusIndex = 2) {
     for (int ipt = ana::firstUsedPtBin; ipt < ana::firstUsedPtBin+nPtBinsUsed; ipt++) {
       TH1D * hVar;
       if (isPriorSens) {
+        // "hw_pt<N>" is draw_prior_sensitivity.C's raw, absolute-count unfolded xJ
+        // distribution for the reported "w"-exponent variant (variantNames[1]=="w"),
+        // written via hVariant[iv]->Write() with its unflattenXj-assigned object name
+        // Form("h%s_pt%d", variantNames[iv].c_str(), ipt) - NOT a precomputed fractional
+        // difference. It is read here and fed through exactly the same generic
+        // unflatten -> densityForDisplay -> shape-normalize -> ratio-to-nominal -> "-1"
+        // pipeline every other systag's hVar goes through below, so its resulting
+        // fracDiff is derived the same way as every other source's. (A separate object,
+        // hPriorSensFracDiff_pt<N>, is also written by that file - its own internal,
+        // redundant fracDiff computation - but nothing in this codebase reads it; do not
+        // substitute it here, it is already a ratio-1 quantity and re-running it through
+        // this block's shape-normalize/ratio steps would silently corrupt the result.)
         TH1D * hRaw = fPriorSens ? (TH1D*)fPriorSens->Get(Form("hw_pt%d", ipt)) : nullptr;
         if (!hRaw) {
           cout << "WARNING: hw_pt" << ipt << " missing from prior_sensitivity_nominal.root - skipping pt" << ipt << "." << endl;
@@ -449,6 +462,15 @@ void draw_systematics(int jetRadiusIndex = 2) {
   // has no natural direction of its own, so its full magnitude enters both combinations.
   vector<TH1D*> unfoldingUncUp(ana::nPtBins), unfoldingUncDown(ana::nPtBins);
   for (int ipt = ana::firstUsedPtBin; ipt < ana::firstUsedPtBin+nPtBinsUsed; ipt++) {
+    // Fail loudly rather than segfaulting: fracDiff["priorSensitivity"][ipt] is only left
+    // null if hw_pt<N> is missing from prior_sensitivity_nominal.root entirely (the
+    // isPriorSens block above already warned and skipped it in that case) - most likely
+    // because drawing/draw_prior_sensitivity.C("nominal") simply hasn't been run yet.
+    if (!fracDiff["priorSensitivity"][ipt]) {
+      cout << "ERROR: fracDiff[\"priorSensitivity\"][" << ipt << "] is missing - run "
+           << "drawing/draw_prior_sensitivity.C(\"nominal\") before draw_systematics.C." << endl;
+      exit(1);
+    }
     TH1D * hUp   = (TH1D*)fracDiff[systematics[0]][ipt]->Clone(Form("hunfolding_up_pt%d", ipt));
     TH1D * hDown = (TH1D*)fracDiff[systematics[0]][ipt]->Clone(Form("hunfolding_down_pt%d", ipt));
     hUp->Reset("ICES");

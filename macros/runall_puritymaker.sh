@@ -12,7 +12,7 @@
 # Keep SYSTAGS in sync with ana::systags (src/ana.h) - the definitive systag list - bash
 # can't read a C++ static vector<string> directly, so this is a duplicated, explicit
 # list (same convention as insitu/run_grid.sh's SYSTAGS).
-SYSTAGS=(nominal JERhigh JERlow emscale_high emscale_low jes_high jes_low threejet narrowBDT narrowISO)
+SYSTAGS=(nominal JERhigh JERlow emscale_high emscale_low EMRhigh EMRlow jes_high jes_low threejet narrowBDT narrowISO narrowBDTbkg narrowISObkg wideISObkg)
 
 for SYSTAG in "${SYSTAGS[@]}"; do
   bash run_puritymaker.sh $SYSTAG &

@@ -25,33 +25,4 @@ class jet_object : public object {
     float ohfrac = 0;
 };
 
-//--------------------------------------
-// Helper functions to create vectors
-//--------------------------------------
-
-inline std::vector<jet_object> make_jets(
-    const std::vector<float>& pt,
-    const std::vector<float>& e,
-    const std::vector<float>& eta,
-    const std::vector<float>& phi,
-    const std::vector<float>& emfrac = {},
-    const std::vector<float>& ihfrac = {},
-    const std::vector<float>& ohfrac = {},
-    const std::vector<float>& t = {}) 
-{
-  std::vector<jet_object> v;
-  for (size_t i = 0; i < pt.size(); i++) {
-    if (!t.empty()) {
-      v.emplace_back(pt[i], e[i], eta[i], phi[i],
-          emfrac.empty() ? 0 : emfrac[i],
-          ihfrac.empty() ? 0 : ihfrac[i],
-          ohfrac.empty() ? 0 : ohfrac[i],
-          t[i] * 17.6);
-    } else {
-      v.emplace_back(pt[i], e[i], eta[i], phi[i], 0, 0, 0, 0);
-    }
-  }
-  return v;
-}
-
 #endif // JET_OBJECT_H

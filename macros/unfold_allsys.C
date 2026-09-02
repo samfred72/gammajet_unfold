@@ -10,7 +10,7 @@ R__LOAD_LIBRARY(libRooUnfold.so);
 // Produces exactly the same output files (hists/<trigger>_<sim>_<systag>_unfolding.root,
 // insitu/<trigger>_<sim>_<systag>_insitu.root) as calling unfold.C once per systag would.
 //
-// systags defaults to ana::systags (src/ana.h) - the definitive nominal + 9-named-
+// systags defaults to ana::systags (src/ana.h) - the definitive nominal + 14-named-
 // systematic-variation list every consumer of systags reads, so adding a new one there
 // propagates here automatically; pass a shorter list (e.g. just {"nominal","JERhigh"})
 // to validate against unfold.C's single-systag output for a subset without paying for

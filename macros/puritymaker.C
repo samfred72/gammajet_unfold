@@ -1,6 +1,5 @@
 #include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
 #include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "TFitResult.h"
 // The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
 // into /home/samson72/root/lib/libgammajet.so, sitting on the same library search path
 // as this project's libgammajet_unfold.so. Without forcing which one loads first, ROOT's
@@ -126,9 +125,11 @@ TGraphAsymmErrors * combine_hists(TH1D * h[], TH1D * f[], TGraphAsymmErrors ** g
   func->SetParameter(0,1);
   func->SetParameter(1,13);
   func->SetParameter(2,5);
-  // "S" stores the full fit result (incl. covariance matrix) so ana::getPurityError
-  // can propagate the fit uncertainty into the purity-corrected plots downstream.
-  TFitResultPtr fitResult = oh->Fit(func,"RIMQS0");
+  // func itself (fitted here) is what ana::getPurity(val,...) evaluates downstream - no
+  // caller reads the fit's own covariance, so the fit isn't asked to return one ("S"
+  // dropped from the option string below; used to be captured as a TFitResultPtr and
+  // written out as "purityFitResult", but nothing ever read that object back).
+  oh->Fit(func,"RIMQ0");
 
   for (int i = 0; i < ana::nPtBins; i++) {
     H[i]->Write();
@@ -141,15 +142,15 @@ TGraphAsymmErrors * combine_hists(TH1D * h[], TH1D * f[], TGraphAsymmErrors ** g
   oH_noleak->Write();
   oHC->Write();
   func->Write();
-  fitResult->Write("purityFitResult");
 
   if (graphCOut) *graphCOut = ohC;
   return oh;
 }
 
     
-// systag: nominal (default), JERhigh, JERlow, emscale_high, emscale_low, jes_high,
-// jes_low, threejet, narrowBDT, narrowISO - selects which reprocessing of
+// systag: nominal (default), JERhigh, JERlow, emscale_high, emscale_low, EMRhigh,
+// EMRlow, jes_high, jes_low, threejet, narrowBDT, narrowISO, narrowBDTbkg,
+// narrowISObkg, wideISObkg - selects which reprocessing of
 // hclusterpt_abcd (both Data and the Photon MC leakage fractions)
 // this purity curve is derived from. See the unfolder constructor comment in
 // src/unfolder.h for what each one means.
@@ -165,6 +166,13 @@ TGraphAsymmErrors * combine_hists(TH1D * h[], TH1D * f[], TGraphAsymmErrors ** g
 // one process.
 void puritymaker(string systag = "nominal") {
   const char * histname = "hclusterpt_abcd";
+  // MC leakage-fraction templates (fp[i] below) are read from the truth-matched (photon
+  // deltaR<0.1) subset instead of histname - the method's own definition is
+  // f^X=N_sig^X/N_sig^A, a true-signal ratio, not an all-reconstructed-cluster ratio.
+  // Data's own ABCD counts (h[] below) still read histname unchanged: Data has no truth
+  // info, and its raw ABCD counts are genuinely what the data-driven method has to work
+  // with regardless.
+  const char * histname_truthmatched = "hclusterpt_abcd_truthmatched";
   drawer d("pythia", systag);
   gStyle->SetOptStat(0);
 
@@ -185,7 +193,7 @@ void puritymaker(string systag = "nominal") {
   TH1D * fp[4];
   for (int i = 0; i < 4; i++) {
     h[i] = d.get(Form("%s%i_%i",histname,ir,i),0);
-    hp[i] = d.get(Form("%s%i_%i",histname,ir,i),1);
+    hp[i] = d.get(Form("%s%i_%i",histname_truthmatched,ir,i),1);
     fp[i] = (TH1D*)hp[i]->Clone(Form("fp%i",i));
     fp[i]->Divide(hp[i],hp[0]);
   }

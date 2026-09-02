@@ -53,10 +53,16 @@ void unfolder::fill_matrix() {
   vector<int> systagAbcdBinArr(nsys);
   vector<bool> systagThreejetVetoArr(nsys);
   vector<float> systagEmscaleShiftArr(nsys);
-  vector<float> jesCorrectionArr(nsys);
+  vector<float> systagEmrSigmaArr(nsys);
+  // jesCorrectionArr[isys][ir]: per-(systag,radius), unlike the other arrays above -
+  // see the JES comment below, where the per-radius jesNominal/jesTotalErrLow/High
+  // tables live (ana.h).
+  vector<vector<float>> jesCorrectionArr(nsys, vector<float>(ana::nJetR));
   for (int isys = 0; isys < nsys; isys++) {
     const string & systag = systags[isys];
-    systagAbcdBinArr[isys] = (systag == "narrowBDT") ? 1 : (systag == "narrowISO") ? 2 : 0;
+    systagAbcdBinArr[isys] = (systag == "narrowBDT") ? 1 : (systag == "narrowISO") ? 2 :
+                              (systag == "narrowBDTbkg") ? 3 : (systag == "narrowISObkg") ? 4 :
+                              (systag == "wideISObkg") ? 5 : 0;
     systagThreejetVetoArr[isys] = (systag == "threejet");
     // emscale_high/emscale_low shift the EM-calorimeter energy scale by +-1.1%: applied in
     // full to the (entirely-EM) photon cluster, and to only the EM-fraction portion of the
@@ -65,21 +71,32 @@ void unfolder::fill_matrix() {
     // always falls back to its nominal reco pT regardless of systag.
     systagEmscaleShiftArr[isys] = (systag == "emscale_high") ? 0.011 :
                                    (systag == "emscale_low")  ? -0.011 : 0.0;
+    // EMRhigh/EMRlow: electromagnetic (cluster) resolution systematic. Nominal smears
+    // MC's cluster pT by a Gaussian of width 2% (matching Data's EM resolution); the
+    // high/low variants widen/narrow that smearing to 6%/0%, independent of the
+    // emscale_high/emscale_low mean-scale shift above. MC-only, same convention as
+    // JERhigh/JERlow/emscale_high/emscale_low - Data has no smeared-high/low variant of
+    // itself, so Data always falls back to its unsmeared reco cluster pT regardless of
+    // systag (see recoClusterPt below).
+    systagEmrSigmaArr[isys] = (systag == "EMRhigh") ? 0.06 :
+                               (systag == "EMRlow")  ? 0.0  : 0.02;
     // JES: Data's reconstructed jet pT has a residual calibration gap relative to MC (found
-    // via the in-situ jet-photon pT-balance study - see insitu/), corrected by dividing by
-    // 0.9446 (grid_insitu.C's purity-corrected best-fit p_a, nominal systag - see
-    // insitu/output/grid_insitu_nominal.root's "R04/results" tree). jes_high/jes_low vary that
-    // correction factor by +-0.03; this +-0.03 has NOT been re-derived from the
-    // purity-corrected scan's own (smaller, asymmetric) error - +0.008/-0.006 per the
-    // FINAL RESULT printout - so it's carried over unchanged from the old 0.9729 central
-    // value pending an explicit decision to update it. Data-only - this corrects a gap
-    // specific to real Data's calibration, so MC (already on-scale by construction) is
-    // untouched regardless of systag, the reverse convention from
+    // via the in-situ jet-photon pT-balance study - see insitu/), corrected per jet radius
+    // by dividing by ana::jesNominal[ir] (grid_insitu.C's purity-corrected best-fit p_a,
+    // nominal systag, one value per radius from the full 7-radius scan - see ana.h).
+    // jes_high/jes_low vary that correction factor by the scan's own per-radius total
+    // (stat+syst) asymmetric uncertainty (ana::jesTotalErrLow/High) instead of the old
+    // flat, unsourced +-0.03 placeholder that was reused across every radius. Data-only -
+    // this corrects a gap specific to real Data's calibration, so MC (already on-scale by
+    // construction) is untouched regardless of systag, the reverse convention from
     // JERhigh/JERlow/emscale_high/emscale_low above. Applied to recoJetPt (and everything
     // downstream: unfold response matrices, purity histograms, pairing) below, but
     // deliberately NOT to insitu_jet_pt - see rawJetPt.
-    jesCorrectionArr[isys] = 0.9446 + ((systag == "jes_high") ? -0.03 :
-                                       (systag == "jes_low")  ?  0.03 : 0.0);
+    for (int ir = 0; ir < ana::nJetR; ir++) {
+      jesCorrectionArr[isys][ir] = ana::jesNominal[ir] +
+          ((systag == "jes_high") ? -ana::jesTotalErrLow[ir] :
+           (systag == "jes_low")  ?  ana::jesTotalErrHigh[ir] : 0.0);
+    }
   }
 
   TCanvas * c = new TCanvas("c","",500,1000);
@@ -124,12 +141,13 @@ void unfolder::fill_matrix() {
       int systagAbcdBin = systagAbcdBinArr[isys];
       bool systagThreejetVeto = systagThreejetVetoArr[isys];
       float systagEmscaleShift = systagEmscaleShiftArr[isys];
-      float jesCorrection = jesCorrectionArr[isys];
+      float systagEmrSigma = systagEmrSigmaArr[isys];
 
       // -----------------------
       // Leading photon & isolation
       // -----------------------
       float recoClusterPt = isMC ? cluster_pt * (1.0 + systagEmscaleShift) : cluster_pt;
+      recoClusterPt = isMC ? rand.Gaus(recoClusterPt, recoClusterPt*systagEmrSigma) : cluster_pt;
       pho_object maxpho = pho_object(
           recoClusterPt,
           cluster_e,
@@ -186,14 +204,14 @@ void unfolder::fill_matrix() {
                             + jet_pt_smear_truth[ir]*(1-jet_emfrac[ir]) :
                       jet_pt_smear_truth[ir];
         } else {
-          recoJetPt = jet_pt_calib[ir] / jesCorrection;
+          recoJetPt = jet_pt_calib[ir] / jesCorrectionArr[isys][ir];
         }
         // Uncorrected Data jet pT, for the insitu tree only (see insitu_jet_pt fill
-        // below) - the insitu study is what jesCorrection (0.9446, see above) is itself
-        // derived from, so baking that correction into insitu_jet_pt would make the
-        // in-situ grid scan measure only the residual gap around an already-applied
-        // guess instead of the actual Data/MC JES gap. MC never has jesCorrection
-        // applied in the first place (see the isMC branch above), so this is just
+        // below) - the insitu study is what jesCorrectionArr (ana::jesNominal, see
+        // above) is itself derived from, so baking that correction into insitu_jet_pt
+        // would make the in-situ grid scan measure only the residual gap around an
+        // already-applied guess instead of the actual Data/MC JES gap. MC never has
+        // jesCorrection applied in the first place (see the isMC branch above), so this is just
         // recoJetPt there.
         float rawJetPt = isMC ? recoJetPt : jet_pt_calib[ir];
         maxjet[ir] = jet_object(
@@ -271,20 +289,29 @@ void unfolder::fill_matrix() {
         if (maxpho_truth.pt >= ana::ptBins[0] && maxpho_truth.pt < ana::ptBins[ana::nPtBins] && maxjet_truth[ir].pt > ana::jet_calib_pt_cut[ir]) {
           ispaired_truth[ir] = check_pair(maxjet_truth[ir], ir, maxpho_truth,1);
         }
-        // narrowBDT/narrowISO reselect the reco ABCD grid with a tighter working point
-        // (ana::findabcdBin bin 1/2 instead of nominal bin 0) across all four regions, not
-        // just region A, since purity correction downstream needs A and C together. The
-        // truth-side ABCD stays pinned to bin 0 for every systag, including narrowBDT/
-        // narrowISO: the response matrix's truth axis is the fixed fiducial definition
-        // being measured, and a reconstruction/selection systematic should vary how well
-        // that fixed target is reconstructed, not the target itself. (Truth photons do
-        // have a real, non-trivial isolation spread - this is a deliberate choice, not an
-        // invariant simplification.)
+        // narrowBDT/narrowISO/narrowBDTbkg/narrowISObkg/wideISObkg each reselect the reco
+        // ABCD grid with one boundary shifted (ana::findabcdBin bin 1-5 instead of nominal
+        // bin 0 - see ana.h's isoBins/isoBinsHigh/bdtGoodLow/bdtBadLow comment) across all
+        // four regions, not just region A, since purity correction downstream needs A and
+        // C together. The truth-side ABCD stays pinned to bin 0 for every systag,
+        // including all five of these: the response matrix's truth axis is the fixed
+        // fiducial definition being measured, and a reconstruction/selection systematic
+        // should vary how well that fixed target is reconstructed, not the target itself.
+        // (Truth photons do have a real, non-trivial isolation spread - this is a
+        // deliberate choice, not an invariant simplification.)
         int iabcd_reco = ana::findabcdBin(maxpho.iso4, maxpho.bdt, systagAbcdBin);
         int iabcd_truth = ana::findabcdBin(maxpho_truth.iso4, maxpho_truth.bdt, 0);
         if (ispaired[ir] && iabcd_reco != -1) hrecoxj_abcd[isys][ir][iabcd_reco]->Fill(bin, mcWeight);
         if (ispaired_truth[ir] && iabcd_truth != -1) htruthxj_abcd[isys][ir][iabcd_truth]->Fill(bin, mcWeight);
         if (ispaired[ir] && iabcd_reco != -1) hclusterpt_abcd[isys][ir][iabcd_reco]->Fill(maxpho.pt, mcWeight);
+        // MC-only, truth-matched (photon deltaR<0.1) subset of the fill above - the actual
+        // signal template macros/puritymaker.C's leakage fractions (fp[i]=N_sig^i/N_sig^A)
+        // are defined against, rather than an all-reconstructed-cluster ratio. isMC guards
+        // this since maxpho_truth is not a real generator-level photon for Data (see its
+        // isMC-gated construction above) - check_match(maxpho, maxpho_truth) against that
+        // would be meaningless for Data, not just redundant.
+        if (isMC && ispaired[ir] && iabcd_reco != -1 && check_match(maxpho, maxpho_truth))
+          hclusterpt_abcd_truthmatched[isys][ir][iabcd_reco]->Fill(maxpho.pt, mcWeight);
 
         // In-situ test tree: one per systag (not per radius - see insitu_tree's
         // construction in unfolder.h), an "ir" branch distinguishes which jet radius
@@ -533,56 +560,37 @@ void unfolder::fill_matrix() {
   }
 }
 
+// Despite the name, this no longer runs any Bayesian unfolding itself - it only extracts
+// each RooUnfoldResponse's own response-matrix histogram (Hresponse(), populated already
+// by fill_matrix()'s Fill()/Miss()/Fake() calls, independent of ever constructing a
+// RooUnfoldBayes object). It used to also run a RooUnfoldBayes unfold at a hardcoded
+// niterate=1 and store the result (hunfoldjetpt*/hunfoldphopt*/hunfoldxj*, + _half
+// variants) - dead computation, since nothing outside this class ever read those
+// histograms (confirmed by a repo-wide grep): every real plot re-unfolds from the raw
+// response matrix at the actual nominal niterate=2 via unfold_utility::unfoldOnce
+// instead. Removed rather than left to keep computing and writing output nothing uses.
 void unfolder::unfold() {
-  // -----------------------
-  // Unfold
-  // -----------------------
   int nsys = (int)systags.size();
 
   for (int isys = 0; isys < nsys; isys++) {
     for (int ir = 0; ir < ana::nJetR; ir++) {
       // Full Closure
-      RooUnfoldBayes jet_unfold(jet_response[isys][ir], hrecojetpt[isys][ir], niterate, 0, 1);
-      jet_unfold.SetVerbose(-1);
-      hunfoldjetpt[isys][ir] = (TH1D*)jet_unfold.Hreco();
-      hunfoldjetpt[isys][ir]->SetName(Form("hunfoldjetpt%i", ir));
       hjetresponse[isys][ir] = (TH2D*)jet_response[isys][ir]->Hresponse();
       hjetresponse[isys][ir]->SetName(Form("hjetresponse%i", ir));
 
-      RooUnfoldBayes pho_unfold(pho_response[isys][ir], hrecophopt[isys][ir], niterate, 0, 1);
-      pho_unfold.SetVerbose(-1);
-      hunfoldphopt[isys][ir] = (TH1D*)pho_unfold.Hreco();
-      hunfoldphopt[isys][ir]->SetName(Form("hunfoldphopt%i",ir));
       hphoresponse[isys][ir] = (TH2D*)pho_response[isys][ir]->Hresponse();
       hphoresponse[isys][ir]->SetName(Form("hphoresponse%i",ir));
 
-      RooUnfoldBayes jet_unfold2D(jet_response2D[isys][ir], hrecoxj[isys][ir], niterate, 0, 1);
-      jet_unfold2D.SetVerbose(-1);
-      hunfoldxj[isys][ir] = (TH1D*)jet_unfold2D.Hreco();
-      hunfoldxj[isys][ir]->SetName(Form("hunfoldxj%i",  ir));
       hxjresponse[isys][ir] = (TH2D*)jet_response2D[isys][ir]->Hresponse();
       hxjresponse[isys][ir]->SetName(Form("hxjresponse%i", ir));
 
       // Half closure
-      RooUnfoldBayes jet_unfold_half(jet_response_half[isys][ir], hrecojetpt_half[isys][ir], niterate, 0, 1);
-      jet_unfold_half.SetVerbose(-1);
-      hunfoldjetpt_half[isys][ir] = (TH1D*)jet_unfold_half.Hreco();
-      hunfoldjetpt_half[isys][ir]->SetName(Form("hunfoldjetpt_half%i", ir));
       hjetresponse_half[isys][ir] = (TH2D*)jet_response_half[isys][ir]->Hresponse();
       hjetresponse_half[isys][ir]->SetName(Form("hjetresponse_half%i", ir));
 
-      RooUnfoldBayes pho_unfold_half(pho_response_half[isys][ir], hrecophopt_half[isys][ir], niterate, 0, 1);
-      pho_unfold_half.SetVerbose(-1);
-      hunfoldphopt_half[isys][ir] = (TH1D*)pho_unfold_half.Hreco();
-      hunfoldphopt_half[isys][ir]->SetName(Form("hunfoldphopt_half%i",ir));
       hphoresponse_half[isys][ir] = (TH2D*)pho_response_half[isys][ir]->Hresponse();
       hphoresponse_half[isys][ir]->SetName(Form("hphoresponse_half%i",ir));
 
-
-      RooUnfoldBayes jet_unfold_half2D(jet_response_half2D[isys][ir], hrecoxj_half[isys][ir], niterate, 0, 1);
-      jet_unfold_half2D.SetVerbose(-1);
-      hunfoldxj_half[isys][ir] = (TH1D*)jet_unfold_half2D.Hreco();
-      hunfoldxj_half[isys][ir]->SetName(Form("hunfoldxj_half%i", ir));
       hxjresponse_half[isys][ir] = (TH2D*)jet_response_half2D[isys][ir]->Hresponse();
       hxjresponse_half[isys][ir]->SetName(Form("hxjresponse_half%i", ir));
     }
@@ -629,30 +637,24 @@ void unfolder::end() {
 
     savehists(hrecojetpt[isys].data(),ana::nJetR);
     savehists(htruthjetpt[isys].data(),ana::nJetR);
-    savehists(hunfoldjetpt[isys].data(),ana::nJetR);
     savehists(hjetresponse[isys].data(),ana::nJetR);
     savehists(hrecophopt[isys].data(),ana::nJetR);
     savehists(htruthphopt[isys].data(),ana::nJetR);
-    savehists(hunfoldphopt[isys].data(),ana::nJetR);
     savehists(hphoresponse[isys].data(),ana::nJetR);
 
     savehists(hrecojetpt_half[isys].data(),ana::nJetR);
     savehists(htruthjetpt_half[isys].data(),ana::nJetR);
-    savehists(hunfoldjetpt_half[isys].data(),ana::nJetR);
     savehists(hjetresponse_half[isys].data(),ana::nJetR);
     savehists(hrecophopt_half[isys].data(),ana::nJetR);
     savehists(htruthphopt_half[isys].data(),ana::nJetR);
-    savehists(hunfoldphopt_half[isys].data(),ana::nJetR);
     savehists(hphoresponse_half[isys].data(),ana::nJetR);
 
     savehists(hrecoxj[isys].data(),ana::nJetR);
     savehists(htruthxj[isys].data(),ana::nJetR);
-    savehists(hunfoldxj[isys].data(),ana::nJetR);
     savehists(hxjresponse[isys].data(),ana::nJetR);
 
     savehists(hrecoxj_half[isys].data(),ana::nJetR);
     savehists(htruthxj_half[isys].data(),ana::nJetR);
-    savehists(hunfoldxj_half[isys].data(),ana::nJetR);
     savehists(hxjresponse_half[isys].data(),ana::nJetR);
 
     savehists(jet_response2D[isys].data(),ana::nJetR);
@@ -676,6 +678,7 @@ void unfolder::end() {
         hrecoxj_abcd[isys][i][j]->Write();
         htruthxj_abcd[isys][i][j]->Write();
         hclusterpt_abcd[isys][i][j]->Write();
+        hclusterpt_abcd_truthmatched[isys][i][j]->Write();
       }
     }
 

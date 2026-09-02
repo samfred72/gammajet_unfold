@@ -2,7 +2,7 @@
 # Runs the in-situ JES scan (all four methods - grid_insitu.C, grid_insitu_shapechi2.C,
 # grid_insitu_unfolded.C, grid_insitu_unfolded_shapechi2.C - plus the fifth,
 # Jet12_long-referenced grid_insitu_jet12.C method, plus draw_grid_chi2.C's comparison
-# page) for every systag in ana::systags (src/ana.h) - nominal + the 9 named
+# page) for every systag in ana::systags (src/ana.h) - nominal + the 14 named
 # systematic-variation reprocessings. Every macro below now loops internally over every
 # jet radius (ana::nJetR=7, R=0.2-0.8) and writes all seven into one file/one multi-page
 # PDF per systag (one ana::rnames[ir] subdirectory/page per radius - see grid_insitu.C's
@@ -12,7 +12,7 @@
 #   --systag TAG   Restrict the sweep to one systag (e.g. "nominal") instead of the
 #                   full SYSTAGS list below - e.g. for a quick nominal-only comparison
 #                   right after running unfold once, without waiting on the full
-#                   10-systag sweep.
+#                   15-systag sweep.
 #
 # SYSTAGS below must be kept in sync with ana::systags (src/ana.h) - bash can't read a
 # C++ static vector<string> directly, so this is a duplicated, explicit list (same
@@ -28,7 +28,7 @@
 # per-(systag,radius) insitu_tree schema change in src/unfolder.h/.cc - the old
 # <trigger>_<systag>_insitu.root files (no radius suffix) predate that change and won't
 # be read by anything below.
-SYSTAGS=(nominal JERhigh JERlow emscale_high emscale_low jes_high jes_low threejet narrowBDT narrowISO)
+SYSTAGS=(nominal JERhigh JERlow emscale_high emscale_low EMRhigh EMRlow jes_high jes_low threejet narrowBDT narrowISO narrowBDTbkg narrowISObkg wideISObkg)
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

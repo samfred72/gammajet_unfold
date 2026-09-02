@@ -96,7 +96,13 @@ class ana {
     static constexpr int nPtBinsUsed = 3;
     static constexpr int firstUsedPtBin = 1;
     static constexpr int nUnfoldXjBins = 16;
-    static constexpr int nIsoBdtBins = 3;
+    // findabcdBin's `bin` selector: index 0 is the nominal ABCD grid; indices 1-5 each
+    // override exactly one of the four cut boundaries below (isoBins/isoBinsHigh/
+    // bdtGoodLow/bdtBadLow) to a Data/MC systag reprocessing - see systagAbcdBinArr in
+    // unfolder.cc's fill_matrix() for the systag-name -> bin mapping, and CLAUDE.md /
+    // drawing/draw_systematics.C's purityMembers for how the resulting five systags are
+    // combined into one "Purity" systematic.
+    static constexpr int nIsoBdtBins = 6;
     static constexpr int nBdtBins = 4;
     static constexpr int nxjBins = 3;
     static constexpr int nJetR = 7;
@@ -143,13 +149,26 @@ class ana {
     // static constexpr array members in default member initializers.
     static constexpr double ptBinsUsed[nPtBinsUsed+1] = {15,20,25,35};
     static constexpr double unfoldXjBins[nUnfoldXjBins+1] = {0.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0,1.1,1.2,1.3,1.5,1.7,2.0};
-    static constexpr double isoBins[nIsoBdtBins] = {2,2,1.5};
-    static constexpr double isoBinsHigh[nIsoBdtBins] = {4,4,4};
-    static constexpr double bdtGoodHigh[nIsoBdtBins] = {1.0, 1.0, 1.0};
-    //static constexpr double bdtGoodLow[nIsoBdtBins] = {0.9, 0.7, 0.9};
-    static constexpr double bdtGoodLow[nIsoBdtBins] = {0.8, 0.7, 0.8}; // For unfolding
-    static constexpr double bdtBadHigh[nIsoBdtBins] = {0.6, 0.6, 0.6};
-    static constexpr double bdtBadLow[nIsoBdtBins] = {0.2, 0.2, 0.2};
+    // ABCD grid boundaries, one column per nIsoBdtBins bin index (0=nominal, 1=narrowBDT,
+    // 2=narrowISO, 3=narrowBDTbkg, 4=narrowISObkg, 5=wideISObkg - see nIsoBdtBins comment
+    // above). Each non-nominal bin overrides exactly ONE of the four boundaries below and
+    // leaves the other three at nominal, following PPG12's ABCD sideband-systematic
+    // treatment (sPHENIX isolated-photon analysis note, Sec. 5.3): narrowBDT/narrowISO
+    // shift the SIGNAL-side cut (bdtGoodLow/isoBins) that separates region A from B/C;
+    // narrowBDTbkg/narrowISObkg/wideISObkg shift the BACKGROUND-side cut (bdtBadLow/
+    // isoBinsHigh) that separates the B/C/D sideband definition from the excluded middle
+    // ground - PPG12's analog of this boundary is a two-sided variation (tighter/looser
+    // gap), unlike the one-sided BDT edges, so it gets two bins (tight=4, loose=5); this
+    // project treats each as its own independent symmetrized single-sided source rather
+    // than sign-splitting them against each other as an asymmetric pair (see
+    // ana::asymmetricSystagPairs's comment). See drawing/draw_systematics.C's
+    // purityMembers for how all five are then combined into one "Purity" systematic.
+    static constexpr double isoBins[nIsoBdtBins]      = {2,   2,   1.5, 2,   2,   2  };
+    static constexpr double isoBinsHigh[nIsoBdtBins]  = {4,   4,   4,   4,   3,   5  };
+    static constexpr double bdtGoodHigh[nIsoBdtBins]  = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0};
+    static constexpr double bdtGoodLow[nIsoBdtBins]   = {0.8, 0.7, 0.8, 0.8, 0.8, 0.8}; 
+    static constexpr double bdtBadHigh[nIsoBdtBins]   = {0.6, 0.6, 0.6, 0.6, 0.6, 0.6};
+    static constexpr double bdtBadLow[nIsoBdtBins]    = {0.2, 0.2, 0.2, 0.1, 0.2, 0.2};
     static constexpr double bdtBins[nBdtBins+1] = {0.4,0.7,0.8,0.9,1.0};
     static constexpr double xjBins[nxjBins+1] = {0,0.3,0.7,2.0};
     static constexpr double hadronBins[nHadronBins][2] = {{20,25},{35,45},{50,60}};
@@ -160,6 +179,20 @@ class ana {
     static constexpr double jet_pt_cut[nJetR] = {3,3,3,3,3,3,3};
     //static constexpr double jet_calib_pt_cut[nJetR] = {3,3,3,3,3,3,3};
     static constexpr double jet_calib_pt_cut[nJetR] = {5,5,5,5,5,5,5};
+
+    // In-situ JES calibration, one value per jet radius (insitu/grid_insitu.C's
+    // purity-corrected best-fit p_a, full 7-radius scan - replaces the old single
+    // R=0.4-derived 0.9446 that used to be reused across every radius in
+    // unfolder.cc's fill_matrix()). jesTotalErrLow/High are that same scan's own
+    // total (stat+syst combined in quadrature) asymmetric uncertainty on p_a, used
+    // directly as the jes_high/jes_low systematic shift - replacing the old flat,
+    // unsourced +-0.03 placeholder. jes_high subtracts jesTotalErrLow (a smaller p_a
+    // means a bigger 1/p_a correction, i.e. Data's jet pT scaled UP more relative to
+    // nominal); jes_low adds jesTotalErrHigh (a larger p_a, smaller correction) -
+    // the same sign convention the old symmetric +-0.03 followed.
+    static constexpr double jesNominal[nJetR]      = {0.9066, 0.9244, 0.9354, 0.9269, 0.9281, 0.9256, 0.9469};
+    static constexpr double jesTotalErrLow[nJetR]  = {0.0216, 0.0301, 0.0221, 0.0132, 0.0132, 0.0125, 0.0187};
+    static constexpr double jesTotalErrHigh[nJetR] = {0.0285, 0.0322, 0.0254, 0.0262, 0.0208, 0.0210, 0.0239};
 
   private:
 };

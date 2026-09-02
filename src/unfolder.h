@@ -37,14 +37,20 @@ class unfolder : public treeuser {
     // selection among branches already present in a single tree entry (e.g. the JER
     // high/low variants are pre-computed branches, not fresh random draws), so nothing
     // requires a second pass. Recognized values: "nominal" (default), "JERhigh", "JERlow",
-    // "emscale_high", "emscale_low" (all four MC-only - Data has no JER-smearing or
-    // EM-scale-shifted variant of itself, since smearing is applied to MC to match Data's
-    // resolution, not something Data itself has; silently falls back to nominal
-    // JES-corrected reco jet pT/cluster pT for Data regardless of systag), "jes_high",
-    // "jes_low" (the reverse - Data-only, varying the +-0.03 uncertainty on Data's 0.977
-    // in-situ JES correction; MC is already on-scale and falls back to nominal regardless
-    // of systag), "threejet", "narrowBDT", "narrowISO". See fill_matrix() for exactly what
-    // each one changes.
+    // "emscale_high", "emscale_low", "EMRhigh", "EMRlow" (all six MC-only - Data has no
+    // JER-smearing, EM-scale-shifted, or EM-resolution-smeared variant of itself, since
+    // smearing is applied to MC to match Data's resolution, not something Data itself has;
+    // silently falls back to nominal JES-corrected reco jet pT/cluster pT for Data
+    // regardless of systag), "jes_high", "jes_low" (the reverse - Data-only, varying the
+    // per-radius correction (ana::jesNominal[ir]) by that same radius's own total
+    // stat+syst uncertainty from the in-situ scan (ana::jesTotalErrLow/High[ir]) - see
+    // src/ana.h; MC is already on-scale and falls back to nominal regardless of systag),
+    // "threejet", "narrowBDT",
+    // "narrowISO", "narrowBDTbkg", "narrowISObkg", "wideISObkg" (the last five each shift
+    // one ABCD sideband boundary - narrowBDT/narrowISO on the signal-side cut, the other
+    // three on the background-side cut - applied identically to Data and MC, unlike the
+    // MC-only/Data-only pairs above; see ana.h's isoBins/isoBinsHigh/bdtGoodLow/bdtBadLow
+    // comment). See fill_matrix() for exactly what each one changes.
     //
     // TH1::AddDirectory(kFALSE) below is essential: every systag's histogram set uses the
     // SAME names (e.g. "hphodr0") as every other systag's, by design - so that end()'s
@@ -99,20 +105,16 @@ class unfolder : public treeuser {
 
       hrecojetpt.resize(nsys, vector<TH1D*>(ana::nJetR));
       htruthjetpt.resize(nsys, vector<TH1D*>(ana::nJetR));
-      hunfoldjetpt.resize(nsys, vector<TH1D*>(ana::nJetR));
       hjetresponse.resize(nsys, vector<TH2D*>(ana::nJetR));
       hrecophopt.resize(nsys, vector<TH1D*>(ana::nJetR));
       htruthphopt.resize(nsys, vector<TH1D*>(ana::nJetR));
-      hunfoldphopt.resize(nsys, vector<TH1D*>(ana::nJetR));
       hphoresponse.resize(nsys, vector<TH2D*>(ana::nJetR));
 
       hrecojetpt_half.resize(nsys, vector<TH1D*>(ana::nJetR));
       htruthjetpt_half.resize(nsys, vector<TH1D*>(ana::nJetR));
-      hunfoldjetpt_half.resize(nsys, vector<TH1D*>(ana::nJetR));
       hjetresponse_half.resize(nsys, vector<TH2D*>(ana::nJetR));
       hrecophopt_half.resize(nsys, vector<TH1D*>(ana::nJetR));
       htruthphopt_half.resize(nsys, vector<TH1D*>(ana::nJetR));
-      hunfoldphopt_half.resize(nsys, vector<TH1D*>(ana::nJetR));
       hphoresponse_half.resize(nsys, vector<TH2D*>(ana::nJetR));
 
       jet_response2D.resize(nsys, vector<RooUnfoldResponse*>(ana::nJetR));
@@ -121,14 +123,13 @@ class unfolder : public treeuser {
       hrecoxj_abcd.resize(nsys, vector<vector<TH1D*>>(ana::nJetR, vector<TH1D*>(4)));
       htruthxj_abcd.resize(nsys, vector<vector<TH1D*>>(ana::nJetR, vector<TH1D*>(4)));
       hclusterpt_abcd.resize(nsys, vector<vector<TH1D*>>(ana::nJetR, vector<TH1D*>(4)));
+      hclusterpt_abcd_truthmatched.resize(nsys, vector<vector<TH1D*>>(ana::nJetR, vector<TH1D*>(4)));
       hrecoxj.resize(nsys, vector<TH1D*>(ana::nJetR));
       htruthxj.resize(nsys, vector<TH1D*>(ana::nJetR));
-      hunfoldxj.resize(nsys, vector<TH1D*>(ana::nJetR));
       hxjresponse.resize(nsys, vector<TH2D*>(ana::nJetR));
 
       hrecoxj_half.resize(nsys, vector<TH1D*>(ana::nJetR));
       htruthxj_half.resize(nsys, vector<TH1D*>(ana::nJetR));
-      hunfoldxj_half.resize(nsys, vector<TH1D*>(ana::nJetR));
       hxjresponse_half.resize(nsys, vector<TH2D*>(ana::nJetR));
 
       hpurity_num.resize(nsys);
@@ -190,15 +191,20 @@ class unfolder : public treeuser {
             hrecoxj_abcd[isys][i][j] = new TH1D(Form("hrecoxj%i_%i",i,j),";reco cluster p_{T}; x_{J#gamma}"      ,nbins,0,nbins);
             htruthxj_abcd[isys][i][j] = new TH1D(Form("htruthxj%i_%i",i,j),";truth cluster p_{T}; x_{J#gamma}"      ,nbins,0,nbins);
             hclusterpt_abcd[isys][i][j] = new TH1D(Form("hclusterpt_abcd%i_%i",i,j),";p_{T}^{lead cluster};Counts",ana::nPtBins,ana::ptBins);
+            // MC-only, truth-matched (photon deltaR<0.1) subset of hclusterpt_abcd above -
+            // see unfolder.cc's fill for why: macros/puritymaker.C's leakage-fraction
+            // templates (fp[i]=hp[i]/hp[0]) need the true-signal-only ABCD ratio the method
+            // is actually defined with, not an all-reconstructed-cluster ratio. Data's own
+            // hclusterpt_abcd (unmatched, all clusters) is untouched and still correct as
+            // the genuine ABCD counts a data-driven method has to work with.
+            hclusterpt_abcd_truthmatched[isys][i][j] = new TH1D(Form("hclusterpt_abcd_truthmatched%i_%i",i,j),";p_{T}^{lead cluster};Counts",ana::nPtBins,ana::ptBins);
           }
           hrecoxj[isys][i] = new TH1D(Form("hrecoxj%i",i),";reco cluster p_{T}; x_{J#gamma}"      ,nbins,0,nbins);
           htruthxj[isys][i] = new TH1D(Form("htruthxj%i",i),";truth cluster p_{T}; x_{J#gamma}"   ,nbins,0,nbins);
-          hunfoldxj[isys][i] = new TH1D(Form("hunfoldxj%i",i),";unfold cluster p_{T}; x_{J#gamma}",nbins,0,nbins);
           jet_response2D[isys][i] = new RooUnfoldResponse(hrecoxj[isys][i], htruthxj[isys][i],Form("response_full_jetR%d",i),Form("response_%d",i));
 
           hrecoxj_half[isys][i] = new TH1D(Form("hrecoxj_half%i",i),";reco cluster p_{T}; x_{J#gamma}"      ,nbins,0,nbins);
           htruthxj_half[isys][i] = new TH1D(Form("htruthxj_half%i",i),";truth cluster p_{T}; x_{J#gamma}"   ,nbins,0,nbins);
-          hunfoldxj_half[isys][i] = new TH1D(Form("hunfoldxj_half%i",i),";unfold cluster p_{T}; x_{J#gamma}",nbins,0,nbins);
           jet_response_half2D[isys][i] = new RooUnfoldResponse(hrecoxj_half[isys][i], htruthxj_half[isys][i],Form("response_half_jetR%d",i),Form("response_half_%d",i));
         }
 
@@ -270,7 +276,6 @@ class unfolder : public treeuser {
     int count_isc = 0;
     int count_isj[ana::nJetR] = { 0 };
     int nentries = 0;
-    int niterate = 1;
     TRandom rand;
     // Data/MC vz and cluster-pT reweighting (reweight/make_vz_pt_reweight.C) - applied to
     // every isMC event in fill_matrix(), regardless of trigger or sim ("pythia"/"herwig"):
@@ -319,20 +324,16 @@ class unfolder : public treeuser {
 
     vector<vector<TH1D*>> hrecojetpt;
     vector<vector<TH1D*>> htruthjetpt;
-    vector<vector<TH1D*>> hunfoldjetpt;
     vector<vector<TH2D*>> hjetresponse;
     vector<vector<TH1D*>> hrecophopt;
     vector<vector<TH1D*>> htruthphopt;
-    vector<vector<TH1D*>> hunfoldphopt;
     vector<vector<TH2D*>> hphoresponse;
 
     vector<vector<TH1D*>> hrecojetpt_half;
     vector<vector<TH1D*>> htruthjetpt_half;
-    vector<vector<TH1D*>> hunfoldjetpt_half;
     vector<vector<TH2D*>> hjetresponse_half;
     vector<vector<TH1D*>> hrecophopt_half;
     vector<vector<TH1D*>> htruthphopt_half;
-    vector<vector<TH1D*>> hunfoldphopt_half;
     vector<vector<TH2D*>> hphoresponse_half;
 
 
@@ -343,14 +344,13 @@ class unfolder : public treeuser {
     vector<vector<vector<TH1D*>>> hrecoxj_abcd;    // [isys][ir][4] for ABCD
     vector<vector<vector<TH1D*>>> htruthxj_abcd;   // [isys][ir][4]
     vector<vector<vector<TH1D*>>> hclusterpt_abcd; // [isys][ir][4] - reco cluster pT per ABCD region, what puritymaker.C needs
+    vector<vector<vector<TH1D*>>> hclusterpt_abcd_truthmatched; // [isys][ir][4] - MC-only, truth-matched subset of the above; what puritymaker.C's leakage fractions actually need
     vector<vector<TH1D*>> hrecoxj;
     vector<vector<TH1D*>> htruthxj;
-    vector<vector<TH1D*>> hunfoldxj;
     vector<vector<TH2D*>> hxjresponse;
 
     vector<vector<TH1D*>> hrecoxj_half;
     vector<vector<TH1D*>> htruthxj_half;
-    vector<vector<TH1D*>> hunfoldxj_half;
     vector<vector<TH2D*>> hxjresponse_half;
 
     // ana::ptBinsUsed (not ana::ptBins from index 0): the reported pT bins no longer start

@@ -8,6 +8,15 @@ int pho_object::get_showershape(float showershapes[], float pt) {
   bool wetacogx  = showershapes[3] < 0.6;
   bool et1       = 0.60 < showershapes[0] && showershapes[0] < 1;
   bool e3235     = 0.80 < showershapes[6] && showershapes[6] < 1;
+  // FLAGGED, NOT FIXED: wetacogxt and wphicogxt both read showershapes[3] - by naming
+  // ("w-eta-cog" vs "w-phi-cog") wphicogxt looks like it should read a different
+  // (phi-width) index instead of duplicating the eta-width one, which would make
+  // isloose/istight double-weight the eta-width cut and never actually apply a phi-width
+  // cut. Left unchanged rather than guessed at: no comment or usage anywhere in this
+  // repo documents what showershapes[4] (or any other index) actually is, and this
+  // function's only current caller (drawing/draw_topo_iso.C, a standalone diagnostic -
+  // not used by any figure in the paper) would need whoever knows the real
+  // cluster_showershape branch layout to confirm the intended index before this changes.
   bool wetacogxt = 0.00 < showershapes[3] && showershapes[3] < 0.15 * pt;
   bool wphicogxt = 0.00 < showershapes[3] && showershapes[3] < 0.15 * pt;
   bool e1133t    = 0.40 < showershapes[5] && e1133;

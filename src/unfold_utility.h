@@ -95,7 +95,17 @@ class unfold_utility {
     // (pT,xJ) measurement needs the whole flattened vector at once because migration
     // crosses pT-bin boundaries, not just xJ ones. If a pT slice's region C is empty
     // (can't purity-correct), falls back to raw region A for that slice only.
-    static TH1D * buildFullyCorrected(TH1D * flatA, TH1D * flatC, const char * tag, string systag);
+    //
+    // ir selects which jet radius's purity curve to read (ana::getPurity/getPurityC's own
+    // ir argument - purity is not a pure photon-ID quantity independent of the jet, see
+    // ana.h's comment on getPurity, so it needs its own value per radius). Defaults to 2
+    // (R=0.4) so every existing caller that doesn't pass it - every one of them still
+    // hardcoded to R=0.4 throughout this project - keeps reading exactly the same purity
+    // curve as before this parameter was added. Callers that now run per-radius
+    // (draw_systematics.C, draw_final_result.C) must pass their own ir explicitly:
+    // omitting it silently purity-corrects with R=0.4's curve regardless of which
+    // radius's response matrix flatA/flatC actually came from.
+    static TH1D * buildFullyCorrected(TH1D * flatA, TH1D * flatC, const char * tag, string systag, int ir = 2);
 };
 
 #endif // UNFOLD_UTILITY_H

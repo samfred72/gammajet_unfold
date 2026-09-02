@@ -140,18 +140,18 @@ TH1D * unfold_utility::densityForDisplay(TH1D * h, const char * name) {
   return hd;
 }
 
-TH1D * unfold_utility::buildFullyCorrected(TH1D * flatA, TH1D * flatC, const char * tag, string systag) {
+TH1D * unfold_utility::buildFullyCorrected(TH1D * flatA, TH1D * flatC, const char * tag, string systag, int ir) {
   TH1D * flatCorrected = (TH1D*)flatA->Clone(Form("hxjcorrected_flat_%s", tag));
   flatCorrected->Reset("ICES");
   for (int ipt = 0; ipt < ana::nPtBins; ipt++) {
     float ptlow  = ana::ptBins[ipt];
     float pthigh = ana::ptBins[ipt+1];
-    float pA        = ana::getPurity(ptlow, pthigh, systag);
-    float pAErrLow  = ana::getPurityErrorLow(ptlow, pthigh, systag);
-    float pAErrHigh = ana::getPurityErrorHigh(ptlow, pthigh, systag);
-    float pC        = ana::getPurityC(ptlow, pthigh, systag);
-    float pCErrLow  = ana::getPurityCErrorLow(ptlow, pthigh, systag);
-    float pCErrHigh = ana::getPurityCErrorHigh(ptlow, pthigh, systag);
+    float pA        = ana::getPurity(ptlow, pthigh, systag, ir);
+    float pAErrLow  = ana::getPurityErrorLow(ptlow, pthigh, systag, ir);
+    float pAErrHigh = ana::getPurityErrorHigh(ptlow, pthigh, systag, ir);
+    float pC        = ana::getPurityC(ptlow, pthigh, systag, ir);
+    float pCErrLow  = ana::getPurityCErrorLow(ptlow, pthigh, systag, ir);
+    float pCErrHigh = ana::getPurityCErrorHigh(ptlow, pthigh, systag, ir);
     TH1D * A = unflattenXj(flatA, ipt, Form("htmpA_%s_pt%d", tag, ipt));
     TH1D * C = unflattenXj(flatC, ipt, Form("htmpC_%s_pt%d", tag, ipt));
     TH1D * hcorr = purityCorrect(A, C, pA, pAErrLow, pAErrHigh, pC, pCErrLow, pCErrHigh, Form("htmpcorr_%s_pt%d", tag, ipt));

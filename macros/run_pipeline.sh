@@ -27,7 +27,8 @@
 #   in systSources in draw_systematics.C) and nothing shared:
 #     -> rerun stage 2 for just that systag, then stage 3 for just that systag if it's
 #        a Data-affecting variation (jes_high/jes_low) or purity-selection-affecting
-#        variation (narrowBDT/narrowISO/threejet), then stage 4.
+#        variation (narrowBDT/narrowISO/narrowBDTbkg/narrowISObkg/wideISObkg/threejet),
+#        then stage 4.
 #
 #   Changed unfold_utility.h/.cc or drawer.h/.cc (shared helpers the drawing macros
 #   call, not the production fill_matrix() step):
@@ -52,7 +53,7 @@ else
   # Keep in sync with ana::systags (src/ana.h) - the definitive systag list - bash can't
   # read a C++ static vector<string> directly, so this is a duplicated, explicit list
   # (same convention as insitu/run_grid.sh's SYSTAGS).
-  SYSTAGS=(nominal JERhigh JERlow emscale_high emscale_low jes_high jes_low threejet narrowBDT narrowISO)
+  SYSTAGS=(nominal JERhigh JERlow emscale_high emscale_low EMRhigh EMRlow jes_high jes_low threejet narrowBDT narrowISO narrowBDTbkg narrowISObkg wideISObkg)
 fi
 echo "Mode: $MODE (systags: ${SYSTAGS[*]})"
 
@@ -71,7 +72,7 @@ bash make.sh
 # unfold_allsys.C) instead of once per systag - validated bin-for-bin identical to the
 # old per-systag-loop output. Nominal-only mode stays on the plain single-systag
 # runall_unfold.sh - it's already just one tree read, nothing to consolidate there, and
-# this is the fast-iteration path so it shouldn't pay for the other 9 systags.
+# this is the fast-iteration path so it shouldn't pay for the other 14 systags.
 echo "=== Stage 2: unfolder.cc (response matrix + region A/B/C/D) ==="
 if [[ "$MODE" == "nominal" ]]; then
   bash runall_unfold.sh nominal

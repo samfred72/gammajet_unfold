@@ -91,7 +91,7 @@ void draw_final_result(int jetRadiusIndex = 2) {
   TH2D * respMatrix2D      = d.get2d(Form("hxjresponse%i",ir), 1);
   TH1D * flatA = d.get(Form("hrecoxj%i_0",ir), 0);
   TH1D * flatC = d.get(Form("hrecoxj%i_2",ir), 0);
-  TH1D * flatCorrected = unfold_utility::buildFullyCorrected(flatA, flatC, "data", "nominal");
+  TH1D * flatCorrected = unfold_utility::buildFullyCorrected(flatA, flatC, "data", "nominal", ir);
   TH1D * flatUnfolded  = unfold_utility::unfoldOnce(respRecoTemplate, respTruthTemplate, respMatrix2D, flatCorrected, niterate, "hUnfoldedFinal");
 
   cout << "pT bin, xJ bin: nominal, stat frac, syst frac, total frac" << endl;

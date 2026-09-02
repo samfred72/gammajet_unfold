@@ -6,11 +6,18 @@ ana::ana() {
 // See ana.h's comment above the declaration - the single place to add/remove a systag.
 const vector<string> ana::systags = {
   "nominal", "JERhigh", "JERlow", "emscale_high", "emscale_low",
-  "jes_high", "jes_low", "threejet", "narrowBDT", "narrowISO"
+  "jes_high", "jes_low", "threejet", "narrowBDT", "narrowISO",
+  "EMRhigh", "EMRlow", "narrowBDTbkg", "narrowISObkg", "wideISObkg"
 };
 const vector<pair<string,string>> ana::asymmetricSystagPairs = {
-  {"JERhigh", "JERlow"}, {"emscale_high", "emscale_low"}, {"jes_high", "jes_low"}
+  {"JERhigh", "JERlow"}, {"emscale_high", "emscale_low"}, {"jes_high", "jes_low"},
+  {"EMRhigh", "EMRlow"}
 };
+// narrowISObkg/wideISObkg are a genuine two-sided variation of the same boundary (see
+// isoBinsHigh below) but are deliberately NOT listed above - unlike JER/emscale/jes/EMR,
+// they're each treated as their own independent symmetrized source (full magnitude to
+// both up and down), not sign-split against each other. See drawing/draw_systematics.C's
+// purityMembers comment for why.
 
 Bool_t ana::PassEtaCut(float eta, float vz = 0)
 {
