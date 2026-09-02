@@ -55,6 +55,16 @@ calibration study (`insitu/`).
 - After any change to a `.cc`/`.h` in `src/`, rebuild via `src/make.sh` and report the
   actual compile output, not an assumption of success.
 
+## SDCC Access
+
+- The treemaking code (upstream of everything in this repo) lives on SDCC at
+  `/sphenix/user/samfred/projects/gammajet/treemaking`.
+- To reach it: `ssh sphnxuser04` (an interactive-node login, not `sphnx` — the shell
+  alias `sphnx` in `~/.bashrc` expands to this, but Bash tool calls don't source
+  `~/.bashrc`, so invoke `ssh sphnxuser04` directly rather than `ssh sphnx`). This
+  matches the `Host sphnx*` block in `~/.ssh/config` (ProxyJump through `bnl`), so no
+  further config is needed — just don't type the bare alias.
+
 ## Build & Run
 
 - Rebuild the shared lib after source changes: `cd src && ./make.sh`.
