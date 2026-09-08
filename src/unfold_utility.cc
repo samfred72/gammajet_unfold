@@ -49,7 +49,7 @@ bool unfold_utility::purityCorrectCoeffs(float pA, float pC, float NA, float NC,
 }
 
 TH1D * unfold_utility::purityCorrect(TH1D * A, TH1D * C, float pA, float pAErrLow, float pAErrHigh,
-    float pC, float pCErrLow, float pCErrHigh, const char * name, TGraphAsymmErrors ** graphOut) {
+    float pC, float pCErrLow, float pCErrHigh, const char * name, TGraphAsymmErrors ** graphOut, bool quiet) {
   float NA = A->Integral();
   float NC = C->Integral();
   if (NC <= 0) {
@@ -60,7 +60,7 @@ TH1D * unfold_utility::purityCorrect(TH1D * A, TH1D * C, float pA, float pAErrLo
   float K = NA/NC;
   float coeffA, coeffC;
   bool useExact = purityCorrectCoeffs(pA, pC, NA, NC, coeffA, coeffC);
-  if (!useExact) {
+  if (!useExact && !quiet) {
     cout << "WARNING: " << name << " has |P_A-P_C| = " << fabs(pA-pC) << " < " << minPurityDiff
          << " - falling back to the single-purity (region-C-is-background) formula for this bin." << endl;
   }
@@ -154,7 +154,10 @@ TH1D * unfold_utility::buildFullyCorrected(TH1D * flatA, TH1D * flatC, const cha
     float pCErrHigh = ana::getPurityCErrorHigh(ptlow, pthigh, systag, ir);
     TH1D * A = unflattenXj(flatA, ipt, Form("htmpA_%s_pt%d", tag, ipt));
     TH1D * C = unflattenXj(flatC, ipt, Form("htmpC_%s_pt%d", tag, ipt));
-    TH1D * hcorr = purityCorrect(A, C, pA, pAErrLow, pAErrHigh, pC, pCErrLow, pCErrHigh, Form("htmpcorr_%s_pt%d", tag, ipt));
+    // Last bin (ipt==nPtBins-1, the 35-100 GeV migration-only buffer) has an empty
+    // region B in this data sample - see purityCorrect's quiet parameter comment.
+    bool quiet = (ipt == ana::nPtBins - 1);
+    TH1D * hcorr = purityCorrect(A, C, pA, pAErrLow, pAErrHigh, pC, pCErrLow, pCErrHigh, Form("htmpcorr_%s_pt%d", tag, ipt), nullptr, quiet);
     reflattenXj(hcorr ? hcorr : A, ipt, flatCorrected);
     delete A; delete C; if (hcorr) delete hcorr;
   }

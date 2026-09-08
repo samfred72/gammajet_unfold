@@ -1,0 +1,7 @@
+
+Processing make_closure_trees.C("Photon5","pythia",0.93,0.9,1.1,17320)...
+Setting up tree 453770
+Injected closure JES scale ("data"-half jet_pt *= 0.93)
+Photon5 entry 0/453770 (0%)	Photon5 entry 200000/453770 (44.0752%)	Photon5 entry 400000/453770 (88.1504%)	
+Wrote /home/samson72/sphnx/gammajet_unfold/insitu_closure/inputs/ClosureData_Photon5_insitu.root (41227 rows)
+Wrote /home/samson72/sphnx/gammajet_unfold/insitu_closure/inputs/ClosureSim_Photon5_insitu.root (42074 rows)

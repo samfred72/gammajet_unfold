@@ -72,8 +72,19 @@ class unfold_utility {
     // asymmetric errors, for display where the asymmetry should actually be visible.
     // Returns h=nullptr (and *graphOut=nullptr if requested) if region C has no
     // statistics in this pT bin (N_A/N_C undefined) - callers must check.
+    //
+    // quiet suppresses the "|P_A-P_C| < minPurityDiff" fallback WARNING print (not the
+    // fallback itself, which still applies). Set by callers that purity-correct
+    // ana::ptBins[ana::nPtBins-1] (the high-pT migration-only buffer bin, 35-100 GeV) -
+    // that bin's region B is empty in this data sample (see puritymaker.C's
+    // combine_hists, which then never writes a real point for it into
+    // hists/purity_<systag>.root, leaving ana::getPurity/getPurityC's default read as
+    // pA=pC=0), so the fallback fires every single call there, not just occasionally -
+    // expected and non-actionable, unlike the same warning on a genuinely-purity-bearing
+    // bin.
     static TH1D * purityCorrect(TH1D * A, TH1D * C, float pA, float pAErrLow, float pAErrHigh,
-        float pC, float pCErrLow, float pCErrHigh, const char * name, TGraphAsymmErrors ** graphOut = nullptr);
+        float pC, float pCErrLow, float pCErrHigh, const char * name, TGraphAsymmErrors ** graphOut = nullptr,
+        bool quiet = false);
 
     // The background piece subtracted off region A by purityCorrect above (Bkg = A -
     // signal), for display. Stat-only error propagation from A/C bin errors at fixed

@@ -332,10 +332,16 @@ vector<TH1D*> insitu_utility::purityCorrectByPtBin(const vector<TH1D*> & hA, con
     const char * prefix) {
   vector<TH1D*> h(nBins);
   for (int ipt = 0; ipt < nBins; ipt++) {
+    // ipt indexes directly into ana::ptBins (callers passing nBins=ana::nPtBins loop
+    // the full pT range; callers passing nBins=ana::nPtBinsUsed never reach nPtBins-1
+    // at all, so this comparison is a no-op there). Last bin (ipt==nPtBins-1, the
+    // 35-100 GeV migration-only buffer) has an empty region B in this data sample -
+    // see unfold_utility::purityCorrect's quiet parameter comment.
+    bool quiet = (ipt == ana::nPtBins - 1);
     TH1D * hcorr = unfold_utility::purityCorrect(hA[ipt], hC[ipt],
         purity[ipt], purityErrLow[ipt], purityErrHigh[ipt],
         purityC[ipt], purityCErrLow[ipt], purityCErrHigh[ipt],
-        Form("%s_pt%d", prefix, ipt));
+        Form("%s_pt%d", prefix, ipt), nullptr, quiet);
     h[ipt] = hcorr ? hcorr : (TH1D*)hA[ipt]->Clone(Form("%s_pt%d", prefix, ipt));
   }
   return h;
