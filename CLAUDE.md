@@ -65,6 +65,54 @@ calibration study (`insitu/`).
   matches the `Host sphnx*` block in `~/.ssh/config` (ProxyJump through `bnl`), so no
   further config is needed — just don't type the bare alias.
 
+## Local RooUnfold Patch
+
+- `/home/samson72/RooUnfold` (installed to `/home/samson72/root/lib/libRooUnfold.so`, the
+  copy actually loaded at runtime - `/home/samson72/RooUnfold/libRooUnfold.so` is a build
+  artifact, not itself on ROOT's library search path) has a local, uncommitted source
+  patch in `src/RooUnfoldBayes.cxx`'s `getCovariance()`. Confirmed via a live backtrace
+  (custom `SetErrorHandler` + `gSystem->StackTrace()`) during a gammajet_unfold session:
+  when a response has fakes and `handleFakes=true` (this project's `unfold_utility.cc`
+  always passes it), `setup()` increments `_nc` by one to add a synthetic truth-side
+  "fakes" bookkeeping bin - but `getCovariance()`'s `_dosys`-gated "covariance due to
+  unfolding matrix" term (only reached via `IncludeSystematics(...)`, which this project's
+  `unfold_utility::unfoldOnce` does NOT call, so this bug is dormant unless you explicitly
+  enable it) then reads `Eres(j, i)` for `i` up to the new (incremented) `_nc-1` - one
+  column past the response matrix's own `Eresponse()`, which was never grown for the
+  synthetic bin since there's no real response-matrix error to report there. ROOT's
+  bounds-checked `TMatrixT::operator()` prints "Request column(N) outside matrix range of
+  0 - N" and returns a fallback value instead of crashing, silently poisoning that
+  covariance into NaN. Patched to treat the synthetic fakes bin's contribution as zero
+  variance (`i < Eres.GetNcols() ? Eres(j,i) : 0.0`) instead of reading out of bounds -
+  see the "LOCAL PATCH (gammajet_unfold...)" comment at that line in RooUnfoldBayes.cxx.
+- A second, independent local patch: `RooUnfoldTH1Helpers.cxx`'s `h2meNorm<TH1,TH2>` -
+  the function `RooUnfoldResponse::Eresponse()` calls to get the response matrix's error
+  - was a byte-for-byte copy of `h2mNorm` (the CONTENT accessor) just above it: both
+  called `GetBinContent()`, neither ever called `GetBinError()`. Confirmed against the
+  `RooFitHist` specialization of the same function (`RooUnfoldFitHelpers.cxx`), which
+  correctly uses `binError(...)` and is commented "sets Matrix to errors of bins" -
+  proving the TH1/TH2 version was a copy-paste-and-forgot-to-change bug, not deliberate.
+  Verified directly against a real response matrix: `Eresponse()` was returning the same
+  values as `Mresponse()` (normalized migration probability, e.g. ~0.05) instead of any
+  actual uncertainty, so `getCovariance()`'s response-matrix-statistics term
+  (`IncludeSystematics(...)`-gated, same as above) was squaring migration probabilities
+  and using that as the per-element variance - inflating that whole covariance term by
+  (content/error)^2, a factor of ~2800x per element on the matrix checked. This is what
+  made that term look absurdly large (e.g. ~219 analytic vs ~100 combined-toy at one
+  bin) when first tried, well beyond what the toy bootstrap's own response-matrix-toy
+  term ever found. Fixed by changing `GetBinContent()` to `GetBinError()` in that
+  function - after the fix, the same bin's analytic error with systematics (~103) lines
+  up with the toy bootstrap's combined estimate (~100) as expected.
+- Neither patch is part of gammajet_unfold's own git history (RooUnfold is a separate
+  checkout/build outside this repo) and there was already one other pre-existing local,
+  uncommitted RooUnfold patch (a `verbose()>=1` gate on the "additional truth bin" print
+  in `RooUnfoldBayes.cxx`'s `setup()`, presumably from an earlier session) - `git diff` in
+  `/home/samson72/RooUnfold` is the actual record of all three. After any further edit
+  there, rebuild with `cd /home/samson72/RooUnfold && make` (uses `ROOTSYS`/`root-config`,
+  both already set up), then `cp libRooUnfold.so /home/samson72/root/lib/libRooUnfold.so`
+  to actually deploy it - the build's own output `.so` is not on ROOT's load path by
+  itself.
+
 ## Build & Run
 
 - Rebuild the shared lib after source changes: `cd src && ./make.sh`.

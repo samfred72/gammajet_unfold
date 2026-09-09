@@ -28,10 +28,22 @@ class unfold_utility {
     // but leaves the Truth/inefficiency accounting fixed to the templates - so toying only
     // `matrix` isolates the migration-probability fluctuation from also re-randomizing the
     // separate fakes/efficiency estimate.
-    static TH1D * unfoldOnce(TH1D * respRecoTemplate, TH1D * respTruthTemplate, TH2D * matrix, TH1D * flatMeasured, int niter, const char * name);
+    //
+    // includeSystematics (default true, matching every existing caller's expectations)
+    // enables RooUnfoldBayes's response-matrix-statistics covariance term (see
+    // CLAUDE.md's "Local RooUnfold Patch" section) - real, but expensive: it makes every
+    // single call build and multiply a large covariance matrix (~3s/call measured on this
+    // project's binning, vs a few ms without it), regardless of whether the caller ever
+    // reads the resulting GetBinError(). A toy bootstrap loop only ever reads
+    // GetBinContent() from each toy's result (the error on any ONE toy draw is
+    // meaningless - the toy ENSEMBLE's spread is the point), so it should pass false
+    // here; only pay for this on the one "real" (nominal) unfold whose error actually
+    // gets used. See draw_toy_vs_analytic.C's toy loops for the pattern.
+    static TH1D * unfoldOnce(TH1D * respRecoTemplate, TH1D * respTruthTemplate, TH2D * matrix, TH1D * flatMeasured, int niter, const char * name, bool includeSystematics = true);
 
-    // Unfold flatMeasured through an already-built response.
-    static TH1D * unfoldOnce(RooUnfoldResponse * response, TH1D * flatMeasured, int niter, const char * name);
+    // Unfold flatMeasured through an already-built response. See the other overload's
+    // comment for includeSystematics.
+    static TH1D * unfoldOnce(RooUnfoldResponse * response, TH1D * flatMeasured, int niter, const char * name, bool includeSystematics = true);
 
     // Below this |P_A-P_C|, region C's own purity can't be disentangled from region
     // A's (the two regions have too similar a composition), and
@@ -116,7 +128,15 @@ class unfold_utility {
     // (draw_systematics.C, draw_final_result.C) must pass their own ir explicitly:
     // omitting it silently purity-corrects with R=0.4's curve regardless of which
     // radius's response matrix flatA/flatC actually came from.
-    static TH1D * buildFullyCorrected(TH1D * flatA, TH1D * flatC, const char * tag, string systag, int ir = 2);
+    //
+    // quietAll forces purityCorrect's quiet=true (suppress the |P_A-P_C|<minPurityDiff
+    // fallback WARNING) for every pT slice, not just the last one - for callers that run
+    // this many times with the same fixed purity curve (a per-toy bootstrap loop, e.g.
+    // draw_toy_vs_analytic.C's data-side toys), where the warning would otherwise print
+    // identically on every single toy (the |P_A-P_C| check depends only on the fixed
+    // ana::getPurity/getPurityC curve, never on the toyed A/C counts, so if it fires once
+    // it fires every time). Defaults to false so all other callers keep today's behavior.
+    static TH1D * buildFullyCorrected(TH1D * flatA, TH1D * flatC, const char * tag, string systag, int ir = 2, bool quietAll = false);
 };
 
 #endif // UNFOLD_UTILITY_H

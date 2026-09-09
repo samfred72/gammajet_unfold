@@ -146,7 +146,10 @@ void toy_resp_iterations(string systag = "nominal") {
   int keepEvery = std::max(1, nToys/nSampleOverlay);
   for (int itoy = 0; itoy < nToys; itoy++) {
     TH2D * toyMat = poissonToyMatrix(respMatrix2D, Form("hToyMat_%d", itoy));
-    TH1D * hToy = unfold_utility::unfoldOnce(respRecoTemplate, respTruthTemplate, toyMat, flatMeasured, niterPrimary, Form("hUnfoldToy_%d", itoy));
+    // includeSystematics=false: only GetBinContent() is read below, so skip the
+    // (expensive - see unfold_utility.h's includeSystematics comment) response-matrix-
+    // statistics covariance calculation whose result would just be discarded per toy.
+    TH1D * hToy = unfold_utility::unfoldOnce(respRecoTemplate, respTruthTemplate, toyMat, flatMeasured, niterPrimary, Form("hUnfoldToy_%d", itoy), false);
     for (int b = 0; b <= nFlatBins+1; b++) {
       double v = hToy->GetBinContent(b);
       sum[b] += v;
@@ -263,7 +266,8 @@ void toy_resp_iterations(string systag = "nominal") {
     vector<double> s(nFlatBins+2, 0), s2(nFlatBins+2, 0);
     for (int itoy = 0; itoy < nToysScan; itoy++) {
       TH2D * toyMat = poissonToyMatrix(respMatrix2D, Form("hToyScan_%d_%d", iter, itoy));
-      TH1D * hToy = unfold_utility::unfoldOnce(respRecoTemplate, respTruthTemplate, toyMat, flatMeasured, iter, Form("hUnfoldToyScan_%d_%d", iter, itoy));
+      // includeSystematics=false - see the primary toy loop's comment above.
+      TH1D * hToy = unfold_utility::unfoldOnce(respRecoTemplate, respTruthTemplate, toyMat, flatMeasured, iter, Form("hUnfoldToyScan_%d_%d", iter, itoy), false);
       for (int b = 0; b <= nFlatBins+1; b++) {
         double v = hToy->GetBinContent(b);
         s[b] += v; s2[b] += v*v;

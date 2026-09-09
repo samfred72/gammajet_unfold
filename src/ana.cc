@@ -149,6 +149,29 @@ string ana::purityFilename(const string & systag) {
   return string(Form("/home/samson72/sphnx/gammajet_unfold/hists/purity_%s.root", systag.c_str()));
 }
 
+// getPurity/getPurityC and their ErrorLow/ErrorHigh siblings below used to
+// TFile::Open() the same purity_<systag>.root fresh on every single call (and never
+// `delete f` after Close() - Close() alone doesn't free the TFile object, only the OS
+// file handle, so every call also leaked one small TFile object). Calling these 6
+// functions 9 times each (once per pT bin) is negligible at the couple-of-calls-per-
+// macro-run rate they were designed for, but a toy bootstrap loop that re-derives the
+// full purity-corrected spectrum on every toy (draw_toy_vs_analytic.C's data-side toys,
+// via unfold_utility::buildFullyCorrected) calls this 9*6=54 times PER TOY - 540,000
+// file-opens (plus 540,000 leaked TFile objects) over a 10,000-toy run, which is real
+// I/O and allocation overhead dominating the macro's runtime. The purity value for a
+// given (systag, ir) never changes between toys (it only depends on the fixed purity
+// curve, not the toyed A/C counts), so cache the open file per systag instead of
+// reopening it - correctness is unaffected, every caller just gets the same file back.
+static TFile * cachedPurityFile(const string & systag) {
+  static map<string, TFile*> cache;
+  string fname = ana::purityFilename(systag);
+  auto it = cache.find(fname);
+  if (it != cache.end() && it->second && !it->second->IsZombie()) return it->second;
+  TFile * f = TFile::Open(fname.c_str());
+  cache[fname] = f;
+  return f;
+}
+
 // low/high are expected to be the edges of one ana::ptBins bin (that's how every caller
 // invokes this), so (low+high)/2 lands on the bin center and findPtBin recovers the bin
 // index directly - this reads the actual puritymaker.C point/error for that bin rather
@@ -158,99 +181,86 @@ string ana::purityFilename(const string & systag) {
 // ana::rnames[ir] subdirectory (see puritymaker.C) - Get() reaches into that
 // subdirectory via a "<rname>/objname" path instead of opening a radius-suffixed file.
 float ana::getPurity(float low, float high, string systag, int ir) {
-  TFile * f = TFile::Open(purityFilename(systag).c_str());
+  TFile * f = cachedPurityFile(systag);
   TGraphAsymmErrors * oh = (TGraphAsymmErrors*)f->Get(Form("%s/combined", rnames[ir]));
   int ipt = findPtBin((low+high)/2.0);
   if (ipt < 0) {
-    f->Close();
     cout << "WARNING: ana::getPurity - (low+high)/2 = " << (low+high)/2.0
          << " doesn't fall within any ana::ptBins bin. Returning 0." << endl;
     return 0;
   }
   double x, y;
   oh->GetPoint(ipt, x, y);
-  f->Close();
   return y;
 }
 float ana::getPurity(float val, string systag, int ir) {
-  TFile * f = TFile::Open(purityFilename(systag).c_str());
+  TFile * f = cachedPurityFile(systag);
   TF1 * func = (TF1*)f->Get(Form("%s/func", rnames[ir]));
   float ret = func->Eval(val);
-  f->Close();
   return ret;
 }
 // puritymaker.C's bootstrap errors are asymmetric (16th/84th percentile around the
 // median) - keep them that way rather than collapsing to one symmetric number.
 float ana::getPurityErrorLow(float low, float high, string systag, int ir) {
-  TFile * f = TFile::Open(purityFilename(systag).c_str());
+  TFile * f = cachedPurityFile(systag);
   TGraphAsymmErrors * oh = (TGraphAsymmErrors*)f->Get(Form("%s/combined", rnames[ir]));
   int ipt = findPtBin((low+high)/2.0);
   if (ipt < 0) {
-    f->Close();
     cout << "WARNING: ana::getPurityErrorLow - (low+high)/2 = " << (low+high)/2.0
          << " doesn't fall within any ana::ptBins bin. Returning 0." << endl;
     return 0;
   }
   float err = oh->GetErrorYlow(ipt);
-  f->Close();
   return err;
 }
 float ana::getPurityErrorHigh(float low, float high, string systag, int ir) {
-  TFile * f = TFile::Open(purityFilename(systag).c_str());
+  TFile * f = cachedPurityFile(systag);
   TGraphAsymmErrors * oh = (TGraphAsymmErrors*)f->Get(Form("%s/combined", rnames[ir]));
   int ipt = findPtBin((low+high)/2.0);
   if (ipt < 0) {
-    f->Close();
     cout << "WARNING: ana::getPurityErrorHigh - (low+high)/2 = " << (low+high)/2.0
          << " doesn't fall within any ana::ptBins bin. Returning 0." << endl;
     return 0;
   }
   float err = oh->GetErrorYhigh(ipt);
-  f->Close();
   return err;
 }
 // Region-C analogues of getPurity/getPurityErrorLow/getPurityErrorHigh above - same
 // puritymaker.C bootstrap, read from the "combined_C" graph instead of "combined".
 float ana::getPurityC(float low, float high, string systag, int ir) {
-  TFile * f = TFile::Open(purityFilename(systag).c_str());
+  TFile * f = cachedPurityFile(systag);
   TGraphAsymmErrors * oh = (TGraphAsymmErrors*)f->Get(Form("%s/combined_C", rnames[ir]));
   int ipt = findPtBin((low+high)/2.0);
   if (ipt < 0) {
-    f->Close();
     cout << "WARNING: ana::getPurityC - (low+high)/2 = " << (low+high)/2.0
          << " doesn't fall within any ana::ptBins bin. Returning 0." << endl;
     return 0;
   }
   double x, y;
   oh->GetPoint(ipt, x, y);
-  f->Close();
   return y;
 }
 float ana::getPurityCErrorLow(float low, float high, string systag, int ir) {
-  TFile * f = TFile::Open(purityFilename(systag).c_str());
+  TFile * f = cachedPurityFile(systag);
   TGraphAsymmErrors * oh = (TGraphAsymmErrors*)f->Get(Form("%s/combined_C", rnames[ir]));
   int ipt = findPtBin((low+high)/2.0);
   if (ipt < 0) {
-    f->Close();
     cout << "WARNING: ana::getPurityCErrorLow - (low+high)/2 = " << (low+high)/2.0
          << " doesn't fall within any ana::ptBins bin. Returning 0." << endl;
     return 0;
   }
   float err = oh->GetErrorYlow(ipt);
-  f->Close();
   return err;
 }
 float ana::getPurityCErrorHigh(float low, float high, string systag, int ir) {
-  TFile * f = TFile::Open(purityFilename(systag).c_str());
+  TFile * f = cachedPurityFile(systag);
   TGraphAsymmErrors * oh = (TGraphAsymmErrors*)f->Get(Form("%s/combined_C", rnames[ir]));
   int ipt = findPtBin((low+high)/2.0);
   if (ipt < 0) {
-    f->Close();
     cout << "WARNING: ana::getPurityCErrorHigh - (low+high)/2 = " << (low+high)/2.0
          << " doesn't fall within any ana::ptBins bin. Returning 0." << endl;
     return 0;
   }
   float err = oh->GetErrorYhigh(ipt);
-  f->Close();
   return err;
 }
