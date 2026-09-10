@@ -46,9 +46,9 @@ done
 for systag in "${SYSTAGS[@]}"; do
   echo "=== systag=$systag ==="
   root -b -l -q "grid_insitu.C(\"$systag\")"
-  root -b -l -q "grid_insitu_shapechi2.C(\"$systag\")"
-  root -b -l -q "grid_insitu_unfolded.C(\"$systag\")"
-  root -b -l -q "grid_insitu_unfolded_shapechi2.C(\"$systag\")"
+  #root -b -l -q "grid_insitu_shapechi2.C(\"$systag\")"
+  #root -b -l -q "grid_insitu_unfolded.C(\"$systag\")"
+  #root -b -l -q "grid_insitu_unfolded_shapechi2.C(\"$systag\")"
   # Fifth method (mean chi2) and its shape-chi2 counterpart: Data Region A (raw) vs.
   # Pythia8 Jet12_long Region A (raw) - requires
   # insitu/inputs/Jet12_long_pythia_<systag>_insitu.root, produced by running Jet12_long
@@ -58,7 +58,18 @@ for systag in "${SYSTAGS[@]}"; do
   # pads 3 and 6 can show it alongside the other four methods. (The legacy "Jet12_full"
   # cross-check that used to run as a nominal-only one-off here has been retired - see
   # src/treeuser.h/grid_insitu_jet12.C.)
-  root -b -l -q "grid_insitu_jet12.C(\"$systag\")"
-  root -b -l -q "grid_insitu_jet12_shapechi2.C(\"$systag\")"
-  root -b -l -q "draw_grid_chi2.C(\"$systag\")"
+  #root -b -l -q "grid_insitu_jet12.C(\"$systag\")"
+  #root -b -l -q "grid_insitu_jet12_shapechi2.C(\"$systag\")"
+  #root -b -l -q "draw_grid_chi2.C(\"$systag\")"
 done
+
+# draw_jes_summary.C combines grid_insitu.C's purity-corrected p_a across every systag
+# above into the final per-radius stat+syst total and, when this was the full sweep (all
+# of ana::systags, not a --systag-restricted subset), rewrites src/ana.h's
+# jesNominal/jesTotalErrLow/jesTotalErrHigh in place - see that macro's own guard, which
+# skips the ana.h update (with a warning) instead of baking in an incomplete systematic
+# if any systag/radius combination above didn't produce a result. Only run it here, once,
+# after the systag loop finishes - it reads every systag's output file itself, it doesn't
+# take one as an argument. It prints its own clear message on whether ana.h was actually
+# touched, so nothing further to check here.
+root -b -l -q "draw_jes_summary.C"

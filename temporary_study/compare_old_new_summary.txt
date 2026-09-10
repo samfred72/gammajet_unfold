@@ -1,0 +1,68 @@
+=== Pythia8 #gamma+jet MC: Inclusive (ana::ptBins[0]-ptBins[nPtBins] = 13-100 GeV) ===
+case                               N_pass    sum(weight) <xJ> +/- err
+1. Everything old                  575368   3827676300.4 0.8882 +/- 0.0016
+2. New BDT + new iso only          485581   3162402777.6 0.8916 +/- 0.0019
+3. New JES+JER only                579131   3917876988.0 0.9069 +/- 0.0016
+4. With pixel-saturation only       577019   3919910201.8 0.8932 +/- 0.0017
+5. Everything new                  489778   3300184485.5 0.9192 +/- 0.0019
+6. Everything new, purity-corr. (MC=case 5)       489778   3300184485.5 0.9192 +/- 0.0019
+
+=== Pythia8 #gamma+jet MC: Per reported pT bin (ana::ptBinsUsed) ===
+-- 10 < p_{T}^{gamma} < 11 GeV --
+case                               N_pass    sum(weight) <xJ> +/- err
+1. Everything old                   19075   1181502343.9 0.9626 +/- 0.0041
+2. New BDT + new iso only           16274   1015703762.5 0.9626 +/- 0.0044
+3. New JES+JER only                 19702   1234360625.0 0.9798 +/- 0.0040
+4. With pixel-saturation only        20239   1262898395.4 0.9655 +/- 0.0040
+5. Everything new                   17986   1129261951.2 0.9860 +/- 0.0043
+6. Everything new, purity-corr. (MC=case 5)        17986   1129261951.2 0.9860 +/- 0.0043
+-- 11 < p_{T}^{gamma} < 12 GeV --
+case                               N_pass    sum(weight) <xJ> +/- err
+1. Everything old                   40734    904737197.8 0.8896 +/- 0.0038
+2. New BDT + new iso only           33064    764109302.2 0.8905 +/- 0.0043
+3. New JES+JER only                 41383    922415838.8 0.9130 +/- 0.0039
+4. With pixel-saturation only        42887    886601214.3 0.8881 +/- 0.0037
+5. Everything new                   35798    757902929.7 0.9164 +/- 0.0042
+6. Everything new, purity-corr. (MC=case 5)        35798    757902929.7 0.9164 +/- 0.0042
+-- 12 < p_{T}^{gamma} < 13 GeV --
+case                               N_pass    sum(weight) <xJ> +/- err
+1. Everything old                   62039    536762626.0 0.8713 +/- 0.0028
+2. New BDT + new iso only           49296    433515132.1 0.8723 +/- 0.0031
+3. New JES+JER only                 63094    548528897.3 0.8874 +/- 0.0028
+4. With pixel-saturation only        63780    532392115.3 0.8752 +/- 0.0026
+5. Everything new                   51832    435514276.9 0.8943 +/- 0.0030
+6. Everything new, purity-corr. (MC=case 5)        51832    435514276.9 0.8943 +/- 0.0030
+-- 13 < p_{T}^{gamma} < 15 GeV --
+case                               N_pass    sum(weight) <xJ> +/- err
+1. Everything old                  105305    639538465.4 0.8146 +/- 0.0011
+2. New BDT + new iso only           82514    509161703.9 0.8168 +/- 0.0012
+3. New JES+JER only                105811    641817305.2 0.8317 +/- 0.0011
+4. With pixel-saturation only       105002    633262312.5 0.8181 +/- 0.0011
+5. Everything new                   81955    501047100.6 0.8391 +/- 0.0013
+6. Everything new, purity-corr. (MC=case 5)        81955    501047100.6 0.8391 +/- 0.0013
+-- 15 < p_{T}^{gamma} < 20 GeV --
+case                               N_pass    sum(weight) <xJ> +/- err
+1. Everything old                   82763    412550427.0 0.8148 +/- 0.0011
+2. New BDT + new iso only           61969    316759708.0 0.8188 +/- 0.0013
+3. New JES+JER only                 83322    415166339.5 0.8270 +/- 0.0011
+4. With pixel-saturation only        81905    396113712.8 0.8227 +/- 0.0011
+5. Everything new                   61388    301866889.9 0.8400 +/- 0.0013
+6. Everything new, purity-corr. (MC=case 5)        61388    301866889.9 0.8400 +/- 0.0013
+-- 20 < p_{T}^{gamma} < 25 GeV --
+case                               N_pass    sum(weight) <xJ> +/- err
+1. Everything old                  108061     57637652.3 0.7879 +/- 0.0023
+2. New BDT + new iso only           93177     46609847.8 0.7930 +/- 0.0026
+3. New JES+JER only                108156     57741064.1 0.7993 +/- 0.0022
+4. With pixel-saturation only       127852     51558701.1 0.8017 +/- 0.0024
+5. Everything new                  111008     41740922.5 0.8193 +/- 0.0026
+6. Everything new, purity-corr. (MC=case 5)       111008     41740922.5 0.8193 +/- 0.0026
+-- 25 < p_{T}^{gamma} < 35 GeV --
+case                               N_pass    sum(weight) <xJ> +/- err
+1. Everything old                  151249      9157341.4 0.7954 +/- 0.0014
+2. New BDT + new iso only          141846      8498524.4 0.7993 +/- 0.0014
+3. New JES+JER only                151493      9171787.3 0.8067 +/- 0.0013
+4. With pixel-saturation only       130137      7314629.7 0.8180 +/- 0.0011
+5. Everything new                  123862      6895310.0 0.8338 +/- 0.0010
+6. Everything new, purity-corr. (MC=case 5)       123862      6895310.0 0.8338 +/- 0.0010
+
+Note: case 6's N_pass/sum(weight) are the purity-corrected effective yield (Region A minus the Region-C-derived background estimate), not a raw event count - for MC it's identical to case 5 by construction; for Data, its Inclusive row above sums only the 3 reported pT bins, not the full 13-100 GeV range (purity is only measured per ana::ptBinsUsed bin).

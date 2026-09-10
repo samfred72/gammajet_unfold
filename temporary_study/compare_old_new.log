@@ -1,0 +1,55 @@
+
+Processing compare_old_new.C...
+Processing /home/samson72/sphnx/gammajet_unfold/temporary_study/gammajet_pythia_Photon5.root (339362 entries, MC)
+  entry 0/339362 (0%)
+Processing /home/samson72/sphnx/gammajet_unfold/temporary_study/gammajet_pythia_Photon10.root (6546966 entries, MC)
+  entry 0/6546966 (0%)
+  entry 2000000/6546966 (30.5485%)
+  entry 4000000/6546966 (61.097%)
+  entry 6000000/6546966 (91.6455%)
+Processing /home/samson72/sphnx/gammajet_unfold/temporary_study/gammajet_pythia_Photon20.root (7375543 entries, MC)
+  entry 0/7375543 (0%)
+  entry 2000000/7375543 (27.1166%)
+  entry 4000000/7375543 (54.2333%)
+  entry 6000000/7375543 (81.3499%)
+=== Pythia8 #gamma+jet MC: Inclusive (ana::ptBins[0]-ptBins[nPtBins] = 13-100 GeV) ===
+case                               N_pass    sum(weight) <xJ> +/- err
+1. Everything old                  339273    838096809.5 0.8141 +/- 0.0009
+2. New BDT + new iso only          289248    659355910.5 0.8166 +/- 0.0010
+3. New JES+JER only                338548    831031482.7 0.8332 +/- 0.0008
+4. With pixel-saturation only       336079    814917501.6 0.8199 +/- 0.0009
+5. Everything new                  285329    629256134.9 0.8433 +/- 0.0010
+
+=== Pythia8 #gamma+jet MC: Per reported pT bin (ana::ptBinsUsed) ===
+-- 15 < p_{T}^{gamma} < 20 GeV --
+case                               N_pass    sum(weight) <xJ> +/- err
+1. Everything old                   62084    309525577.2 0.8154 +/- 0.0013
+2. New BDT + new iso only           46487    237802809.7 0.8188 +/- 0.0015
+3. New JES+JER only                 62184    309809513.5 0.8294 +/- 0.0012
+4. With pixel-saturation only        61353    296787416.3 0.8223 +/- 0.0013
+5. Everything new                   45731    225138251.6 0.8420 +/- 0.0015
+-- 20 < p_{T}^{gamma} < 25 GeV --
+case                               N_pass    sum(weight) <xJ> +/- err
+1. Everything old                   81014     43367310.4 0.7889 +/- 0.0027
+2. New BDT + new iso only           69649     35075394.5 0.7933 +/- 0.0030
+3. New JES+JER only                 81078     43446827.3 0.8014 +/- 0.0026
+4. With pixel-saturation only        95982     38707069.5 0.8038 +/- 0.0028
+5. Everything new                   83131     31269239.4 0.8193 +/- 0.0030
+-- 25 < p_{T}^{gamma} < 35 GeV --
+case                               N_pass    sum(weight) <xJ> +/- err
+1. Everything old                  113485      6870764.6 0.7970 +/- 0.0016
+2. New BDT + new iso only          106535      6368703.4 0.8000 +/- 0.0016
+3. New JES+JER only                113709      6887645.4 0.8075 +/- 0.0015
+4. With pixel-saturation only        97526      5492528.2 0.8189 +/- 0.0013
+5. Everything new                   92921      5176667.4 0.8344 +/- 0.0012
+
+Wrote Pythia8 #gamma+jet MC summary to /home/samson72/sphnx/gammajet_unfold/temporary_study/compare_old_new_summary.txt
+Info in <TCanvas::Print>: pdf file /home/samson72/sphnx/gammajet_unfold/temporary_study/compare_old_new.pdf has been created
+Info in <TCanvas::Print>: Current canvas added to pdf file /home/samson72/sphnx/gammajet_unfold/temporary_study/compare_old_new.pdf
+Info in <TCanvas::Print>: Current canvas added to pdf file /home/samson72/sphnx/gammajet_unfold/temporary_study/compare_old_new.pdf
+Info in <TCanvas::Print>: Current canvas added to pdf file /home/samson72/sphnx/gammajet_unfold/temporary_study/compare_old_new.pdf
+Info in <TCanvas::Print>: Current canvas added to pdf file /home/samson72/sphnx/gammajet_unfold/temporary_study/compare_old_new.pdf
+Info in <TCanvas::Print>: pdf file /home/samson72/sphnx/gammajet_unfold/temporary_study/compare_old_new.pdf has been closed
+Wrote Pythia8 #gamma+jet MC plots to /home/samson72/sphnx/gammajet_unfold/temporary_study/compare_old_new.pdf
+
+Data tree not found at /home/samson72/sphnx/gammajet_unfold/temporary_study/gammajet_Data.root - skipping Data processing and MC/Data ratio plots. Re-run this macro once it's available.

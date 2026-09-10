@@ -58,6 +58,45 @@ void treeuser::treesetup() {
 }
 
 
+// Turns off deserialization (TTree::SetBranchStatus(...,0)) for branches treesetup()
+// reads into memory - or, for thirdjet_pt/thirdjet_dr, declares in this header but never
+// actually calls SetBranchAddress for at all - that src/unfolder.cc and src/unfolder.h
+// never read (verified by grepping every treeuser member name against both files; every
+// hit traced back to an actual read, not just the member's declaration - RunNumber,
+// ScaledTriggerBit, LiveTriggerBit, Scaledowns, mbd_time, the raw uncalibrated jet_pt
+// array (only jet_pt_calib is read), jet_pt_recalib, jet_pt_smear_reco/high_reco/
+// low_reco, thirdjet_pt, thirdjet_dr, and hadron_p all came up empty). Skipping these
+// branches' I/O/decompression entirely is a real win since the underlying towerntup
+// files are large.
+//
+// Opt-in (called explicitly by unfolder's constructor), NOT folded into treesetup()
+// itself - several other treeuser consumers outside the main unfolding pipeline read
+// some of these same branches for one-off checks (e.g. macros/print_truth_photon_pt25_35.C
+// and macros/diagnose_nikhil_only.C both read jet_pt_smear_reco), and each of those
+// builds its own independent treeuser and TTree, so disabling branches on one instance
+// never affects another. If unfolder.cc/.h's cuts ever grow to need one of these
+// branches, re-grep before removing it from the list below.
+void treeuser::disableBranchesUnusedByUnfolder() {
+  if (!t) return;
+  t->SetBranchStatus("RunNumber", 0);
+  t->SetBranchStatus("mbd_time", 0);
+  t->SetBranchStatus("jet_pt", 0);
+  t->SetBranchStatus("jet_pt_recalib", 0);
+  t->SetBranchStatus("thirdjet_pt", 0);
+  t->SetBranchStatus("thirdjet_dr", 0);
+  if (!isMC) {
+    t->SetBranchStatus("ScaledTriggerBit", 0);
+    t->SetBranchStatus("LiveTriggerBit", 0);
+    t->SetBranchStatus("Scaledowns", 0);
+  }
+  if (isMC) {
+    t->SetBranchStatus("jet_pt_smear_reco", 0);
+    t->SetBranchStatus("jet_pt_smear_high_reco", 0);
+    t->SetBranchStatus("jet_pt_smear_low_reco", 0);
+    t->SetBranchStatus("hadron_p", 0);
+  }
+}
+
 vector<bool> treeuser::check_keep_MC(float pt_pho, float pt_reco_pho, float pt_jet[], float pt_reco[], string trigger) {
   bool isphoton = (trigger == "Photon5" || trigger == "Photon10" || trigger == "Photon20");
   vector<bool> keep(ana::nJetR + 1); 

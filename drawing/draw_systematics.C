@@ -27,10 +27,12 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 //
 // "priorSensitivity" is a different kind of source again - it doesn't reprocess Data
 // through any different production sample or niter at all. It's read directly from
-// hists/prior_sensitivity_nominal.root, written by drawing/draw_prior_sensitivity.C -
-// run that macro (with its default "nominal" argument) before this one. See that file's
-// header for the full method (data-informed prior reweighting, following the sPHENIX
-// PPG08 dijet-xJ note and ATLAS's photon-jet xJ paper); only its "w"-variant raw unfolded
+// hists/prior_sensitivity_nominal.root (or hists/prior_sensitivity_nominal_<rname>.root
+// for ir != 2 - same per-radius convention as this file's own systematics.root/
+// systematics_R0X.root split), written by drawing/draw_prior_sensitivity.C - run that
+// macro with a MATCHING jetRadiusIndex argument (its default is also R=0.4) before this
+// one. See that file's header for the full method (data-informed prior reweighting,
+// following the sPHENIX PPG08 dijet-xJ note and ATLAS's photon-jet xJ paper); only its "w"-variant raw unfolded
 // distribution (hw_pt<N>, re-shape-normalized here the same way every other source is) is
 // used, as discussed there - sqrt(w)/w^1.5 are diagnostic only in that file and aren't
 // read here.
@@ -308,11 +310,15 @@ void draw_systematics(int jetRadiusIndex = 2) {
 
   // priorSensitivity reads its per-pT-bin unfolded "w"-variant result from here rather
   // than reprocessing anything - see the header comment and drawing/draw_prior_sensitivity.C.
-  TFile * fPriorSens = TFile::Open("/home/samson72/sphnx/gammajet_unfold/hists/prior_sensitivity_nominal.root");
+  // Must match the CURRENT radius (ir) - draw_prior_sensitivity.C's own response matrices
+  // are radius-specific, so its output file is too (ir==2 keeps the un-suffixed name).
+  string priorSensPathStr = (ir == 2) ? "/home/samson72/sphnx/gammajet_unfold/hists/prior_sensitivity_nominal.root"
+                                      : Form("/home/samson72/sphnx/gammajet_unfold/hists/prior_sensitivity_nominal_%s.root", ana::rnames[ir]);
+  TFile * fPriorSens = TFile::Open(priorSensPathStr.c_str());
   if (!fPriorSens || fPriorSens->IsZombie())
-    cout << "WARNING: couldn't open prior_sensitivity_nominal.root - run "
-         << "drawing/draw_prior_sensitivity.C(\"nominal\") first, or the priorSensitivity "
-         << "source below will be empty." << endl;
+    cout << "WARNING: couldn't open " << priorSensPathStr << " - run "
+         << "drawing/draw_prior_sensitivity.C(\"nominal\", " << ir << ") first, or the "
+         << "priorSensitivity source below will be empty." << endl;
 
   for (const string & systag : systematics) {
     bool isPriorSens = (systag == "priorSensitivity");
@@ -463,12 +469,12 @@ void draw_systematics(int jetRadiusIndex = 2) {
   vector<TH1D*> unfoldingUncUp(ana::nPtBins), unfoldingUncDown(ana::nPtBins);
   for (int ipt = ana::firstUsedPtBin; ipt < ana::firstUsedPtBin+nPtBinsUsed; ipt++) {
     // Fail loudly rather than segfaulting: fracDiff["priorSensitivity"][ipt] is only left
-    // null if hw_pt<N> is missing from prior_sensitivity_nominal.root entirely (the
+    // null if hw_pt<N> is missing from the per-radius prior_sensitivity file entirely (the
     // isPriorSens block above already warned and skipped it in that case) - most likely
-    // because drawing/draw_prior_sensitivity.C("nominal") simply hasn't been run yet.
+    // because drawing/draw_prior_sensitivity.C hasn't been run yet for this radius (ir).
     if (!fracDiff["priorSensitivity"][ipt]) {
       cout << "ERROR: fracDiff[\"priorSensitivity\"][" << ipt << "] is missing - run "
-           << "drawing/draw_prior_sensitivity.C(\"nominal\") before draw_systematics.C." << endl;
+           << "drawing/draw_prior_sensitivity.C(\"nominal\", " << ir << ") before draw_systematics.C(" << ir << ")." << endl;
       exit(1);
     }
     TH1D * hUp   = (TH1D*)fracDiff[systematics[0]][ipt]->Clone(Form("hunfolding_up_pt%d", ipt));

@@ -190,9 +190,15 @@ class ana {
     // means a bigger 1/p_a correction, i.e. Data's jet pT scaled UP more relative to
     // nominal); jes_low adds jesTotalErrHigh (a larger p_a, smaller correction) -
     // the same sign convention the old symmetric +-0.03 followed.
-    static constexpr double jesNominal[nJetR]      = {0.9066, 0.9244, 0.9354, 0.9269, 0.9281, 0.9256, 0.9469};
-    static constexpr double jesTotalErrLow[nJetR]  = {0.0216, 0.0301, 0.0221, 0.0132, 0.0132, 0.0125, 0.0187};
-    static constexpr double jesTotalErrHigh[nJetR] = {0.0285, 0.0322, 0.0254, 0.0262, 0.0208, 0.0210, 0.0239};
+    // These three arrays are generated, not hand-edited: insitu/run_grid.sh's full
+    // systag sweep ends by running insitu/draw_jes_summary.C, which rewrites these exact
+    // literals in place from its own freshly computed per-radius pa/totalLow/totalHigh -
+    // see that macro's updateAnaHeader()/completeness guard. A manual edit here survives
+    // only until the next full run_grid.sh sweep overwrites it; rebuild via src/make.sh
+    // afterward for the new numbers to reach the compiled library.
+    static constexpr double jesNominal[nJetR]      = {0.9162, 0.9266, 0.9358, 0.9310, 0.9305, 0.9279, 0.9482};
+    static constexpr double jesTotalErrLow[nJetR]  = {0.0320, 0.0307, 0.0237, 0.0164, 0.0121, 0.0120, 0.0205};
+    static constexpr double jesTotalErrHigh[nJetR] = {0.0261, 0.0324, 0.0300, 0.0218, 0.0180, 0.0194, 0.0253};
 
   private:
 };

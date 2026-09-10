@@ -60,6 +60,9 @@ class unfolder : public treeuser {
     // (and colliding within) whatever TFile/TDirectory happens to be "current" at
     // construction time - each is a free-standing object we explicitly Write() ourselves.
     unfolder(string trigger, string sim, vector<string> systags) : treeuser(trigger, sim), systags(systags) {
+      // See treeuser::disableBranchesUnusedByUnfolder()'s comment - skips I/O/
+      // decompression for branches this pipeline never reads.
+      disableBranchesUnusedByUnfolder();
       gErrorIgnoreLevel = kWarning;
       TH1::AddDirectory(kFALSE);
       // Every histogram below gets filled with the per-event vz/cluster-pT MC weight

@@ -101,6 +101,7 @@ class treeuser {
       };
     }
     void treesetup();
+    void disableBranchesUnusedByUnfolder();
     vector<bool> check_keep_MC(float pho_pt, float pt_reco_pho, float jet_pt[], float pt_reco[], string trigger);
 
     bool isMC;

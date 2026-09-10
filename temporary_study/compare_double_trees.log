@@ -1,0 +1,39 @@
+
+Processing compare_double_trees.C()...
+Processing /home/samson72/sphnx/gammajet_unfold/temporary_study/gammajet_pythia_Photon5.root (339362 entries, MC)
+  entry 0/339362 (0%)
+Processing /home/samson72/sphnx/gammajet/trees/gammajet_pythia_Photon5_double.root (579449 entries, MC)
+  entry 0/579449 (0%)
+Processing /home/samson72/sphnx/gammajet_unfold/temporary_study/gammajet_pythia_Photon10.root (6546966 entries, MC)
+  entry 0/6546966 (0%)
+  entry 2000000/6546966 (30.5485%)
+  entry 4000000/6546966 (61.097%)
+  entry 6000000/6546966 (91.6455%)
+Processing /home/samson72/sphnx/gammajet/trees/gammajet_pythia_Photon10_double.root (8823873 entries, MC)
+  entry 0/8823873 (0%)
+  entry 2000000/8823873 (22.6658%)
+  entry 4000000/8823873 (45.3316%)
+  entry 6000000/8823873 (67.9974%)
+  entry 8000000/8823873 (90.6631%)
+Processing /home/samson72/sphnx/gammajet_unfold/temporary_study/gammajet_pythia_Photon20.root (7375543 entries, MC)
+  entry 0/7375543 (0%)
+  entry 2000000/7375543 (27.1166%)
+  entry 4000000/7375543 (54.2333%)
+  entry 6000000/7375543 (81.3499%)
+Processing /home/samson72/sphnx/gammajet/trees/gammajet_pythia_Photon20_double.root (9849754 entries, MC)
+  entry 0/9849754 (0%)
+  entry 2000000/9849754 (20.3051%)
+  entry 4000000/9849754 (40.6102%)
+  entry 6000000/9849754 (60.9152%)
+  entry 8000000/9849754 (81.2203%)
+
+pT bin                  <xJ> orig <xJ> double double/orig
+15-20 GeV                  0.8420     0.8473     1.0063
+20-25 GeV                  0.8193     0.8256     1.0076
+25-35 GeV                  0.8344     0.8297     0.9945
+Info in <TCanvas::Print>: pdf file /home/samson72/sphnx/gammajet_unfold/temporary_study/compare_double_trees.pdf has been created
+Info in <TCanvas::Print>: Current canvas added to pdf file /home/samson72/sphnx/gammajet_unfold/temporary_study/compare_double_trees.pdf
+Info in <TCanvas::Print>: Current canvas added to pdf file /home/samson72/sphnx/gammajet_unfold/temporary_study/compare_double_trees.pdf
+Info in <TCanvas::Print>: Current canvas added to pdf file /home/samson72/sphnx/gammajet_unfold/temporary_study/compare_double_trees.pdf
+Info in <TCanvas::Print>: pdf file /home/samson72/sphnx/gammajet_unfold/temporary_study/compare_double_trees.pdf has been closed
+Wrote /home/samson72/sphnx/gammajet_unfold/temporary_study/compare_double_trees.pdf

@@ -1,1 +1,4 @@
 latex/
+# Local safety copy of hists/insitu output made before reverting the temporary 9-bin pT
+# expansion (see CLAUDE.md-adjacent session notes) - not meant for permanent git history.
+insitu/archive_expanded_ptbins/

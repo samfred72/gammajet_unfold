@@ -3,7 +3,10 @@
 #include <string>
 #include <vector>
 #include <set>
+#include <map>
 #include <cmath>
+#include <fstream>
+#include <sstream>
 #include "TFile.h"
 #include "TTree.h"
 #include "TGraphAsymmErrors.h"
@@ -46,6 +49,74 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 // reads no input ntuples of its own.
 const char * insitu_output_dir = "/home/samson72/sphnx/gammajet_unfold/insitu/output";
 const char * insitu_pdf_dir    = "/home/samson72/sphnx/gammajet_unfold/insitu/pdfs";
+
+// Rewrites src/ana.h's jesNominal/jesTotalErrLow/jesTotalErrHigh array literals in
+// place with this scan's freshly measured values - this is the "generate, don't
+// hand-copy" replacement for what used to be a manual transcription of this macro's
+// own console table into ana.h after every in-situ re-scan. Only touches the numeric
+// literal inside each "= {...};" - the variable name, alignment padding before "=",
+// and everything else in the file is left byte-for-byte untouched. Does NOT rebuild
+// libgammajet_unfold.so itself (see CLAUDE.md's Build & Run section on why driver-style
+// side effects like a full recompile aren't triggered automatically here) - the caller
+// (run_grid.sh) or the user still needs to run src/make.sh afterward for anything
+// linking ana::jesNominal/jesTotalErrLow/jesTotalErrHigh to see the new numbers.
+void updateAnaHeader(const float pa[ana::nJetR], const float totalLow[ana::nJetR], const float totalHigh[ana::nJetR]) {
+  const char * anaHeaderPath = "/home/samson72/sphnx/gammajet_unfold/src/ana.h";
+  ifstream fin(anaHeaderPath);
+  if (!fin) {
+    cout << "WARNING: could not open " << anaHeaderPath << " to update the JES constants - left unchanged." << endl;
+    return;
+  }
+  stringstream sbuf;
+  sbuf << fin.rdbuf();
+  string content = sbuf.str();
+  fin.close();
+
+  auto formatArray = [](const float * v) {
+    string s = "{";
+    for (int i = 0; i < ana::nJetR; i++) {
+      s += Form("%.4f", v[i]);
+      if (i+1 < ana::nJetR) s += ", ";
+    }
+    s += "}";
+    return s;
+  };
+
+  bool allFound = true;
+  auto replaceArrayLiteral = [&](const string & varName, const string & newLiteral) {
+    string declTag = "double " + varName + "[nJetR]";
+    size_t declPos = content.find(declTag);
+    if (declPos == string::npos) {
+      cout << "WARNING: could not find `" << declTag << "` in ana.h - " << varName << " not updated." << endl;
+      allFound = false;
+      return;
+    }
+    size_t eq = content.find('=', declPos);
+    size_t semi = content.find(';', eq);
+    if (eq == string::npos || semi == string::npos) {
+      cout << "WARNING: malformed declaration for " << varName << " in ana.h - not updated." << endl;
+      allFound = false;
+      return;
+    }
+    content = content.substr(0, eq+1) + " " + newLiteral + content.substr(semi);
+  };
+
+  replaceArrayLiteral("jesNominal",      formatArray(pa));
+  replaceArrayLiteral("jesTotalErrLow",  formatArray(totalLow));
+  replaceArrayLiteral("jesTotalErrHigh", formatArray(totalHigh));
+
+  if (!allFound) {
+    cout << "ana.h left unchanged due to the warning(s) above." << endl;
+    return;
+  }
+
+  ofstream fout(anaHeaderPath);
+  fout << content;
+  fout.close();
+  cout << "Updated " << anaHeaderPath << "'s jesNominal/jesTotalErrLow/jesTotalErrHigh "
+       << "with this scan's results. Run src/make.sh to rebuild before trusting anything "
+       << "downstream." << endl;
+}
 
 struct PaResult { bool ok = false; float pa = 0, errLow = 0, errHigh = 0; };
 
@@ -107,6 +178,14 @@ void draw_jes_summary() {
   // avoids re-deriving systLow/systHigh from the graphs after the fact.
   vector<float> vR, vPa, vStatLow, vStatHigh, vSystLow, vSystHigh, vTotalLow, vTotalHigh;
 
+  // Per-systag coverage count across the radius loop below - used to gate the ana.h
+  // auto-update at the end: a partial sweep (e.g. run_grid.sh --systag nominal, or a
+  // radius/systag combination that just hasn't been scanned yet) must never silently
+  // bake an underestimated systematic into ana.h, so every non-nominal systag needs a
+  // valid result at every radius, not just "some".
+  map<string,int> systagCoverage;
+  for (const string & systag : ana::systags) if (systag != "nominal") systagCoverage[systag] = 0;
+
   for (int ir = 0; ir < ana::nJetR; ir++) {
     PaResult nom = readPa("nominal", ir);
     if (!nom.ok || nom.pa <= 0) {
@@ -119,6 +198,7 @@ void draw_jes_summary() {
       if (systag == "nominal") continue;
       PaResult var = readPa(systag, ir);
       if (!var.ok) continue; // already warned in readPa()
+      systagCoverage[systag]++;
       double fracDiff = (var.pa - nom.pa)/nom.pa;
       if (asymmetricSystags.count(systag)) {
         if (fracDiff > 0) sumsqUp   += fracDiff*fracDiff;
@@ -158,6 +238,33 @@ void draw_jes_summary() {
          << "insitu/run_grid.sh first." << endl;
     fout->Close();
     return;
+  }
+
+  // Auto-update ana.h's jesNominal/jesTotalErrLow/jesTotalErrHigh iff this was a
+  // complete sweep: every radius has a nominal result AND every ana::systags entry
+  // (the full systematic set the totalLow/totalHigh above are quadrature-summed over)
+  // has a result at every radius. Anything short of that is a partial/quick-check run
+  // (e.g. run_grid_nominal.sh, or --systag) whose systLow/systHigh would understate the
+  // real systematic - report what's missing instead of overwriting a real physics
+  // constant with an incomplete one.
+  bool complete = (nOk == ana::nJetR);
+  vector<string> incompleteSystags;
+  for (auto & kv : systagCoverage) if (kv.second != ana::nJetR) incompleteSystags.push_back(kv.first);
+  complete = complete && incompleteSystags.empty();
+
+  if (complete) {
+    float paArr[ana::nJetR], totalLowArr[ana::nJetR], totalHighArr[ana::nJetR];
+    for (int i = 0; i < ana::nJetR; i++) { paArr[i] = vPa[i]; totalLowArr[i] = vTotalLow[i]; totalHighArr[i] = vTotalHigh[i]; }
+    updateAnaHeader(paArr, totalLowArr, totalHighArr);
+  } else {
+    cout << "Not updating src/ana.h: incomplete sweep (";
+    if (nOk != ana::nJetR) cout << "only " << nOk << "/" << ana::nJetR << " radii have a nominal result";
+    if (nOk != ana::nJetR && !incompleteSystags.empty()) cout << "; ";
+    if (!incompleteSystags.empty()) {
+      cout << "missing/partial systags: ";
+      for (size_t i = 0; i < incompleteSystags.size(); i++) cout << (i?", ":"") << incompleteSystags[i];
+    }
+    cout << "). Run the full insitu/run_grid.sh sweep (all systags) first." << endl;
   }
 
   // -----------------------------

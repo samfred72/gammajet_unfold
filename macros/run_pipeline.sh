@@ -97,12 +97,23 @@ fi
 
 # ---- Stage 4: drawing macros - read stages 2+3's hists/*.root, write pdfs/ + summary root files ----
 # Internal order matters here:
-#   - draw_prior_sensitivity.C writes hists/prior_sensitivity_nominal.root, which
-#     draw_systematics.C now reads (its "priorSensitivity" source) - must run first, same
-#     kind of dependency as puritymaker.C on unfolder.cc's output in stage 3. Only needs
-#     the nominal chain, so it runs in both modes (unlike draw_systematics.C itself).
-#   - draw_systematics.C writes hists/systematics.root, which draw_final_result.C reads -
-#     it errors out cleanly (with a message) if run first.
+#   - draw_prior_sensitivity.C writes hists/prior_sensitivity_nominal.root (or the
+#     per-radius hists/prior_sensitivity_nominal_<rname>.root - see that file and
+#     draw_systematics.C's own header comments), which draw_systematics.C reads (its
+#     "priorSensitivity" source) - must run first, same kind of dependency as
+#     puritymaker.C on unfolder.cc's output in stage 3. Only needs the nominal chain, so
+#     the R=0.4 call runs in both modes (unlike draw_systematics.C itself).
+#   - draw_systematics.C writes hists/systematics.root (or systematics_<rname>.root),
+#     which draw_final_result.C reads - it errors out cleanly (with a message) if run
+#     first.
+#   - draw_prior_sensitivity.C/draw_systematics.C/draw_final_result.C all take a
+#     jetRadiusIndex argument and are the ONLY stage-4 macros re-run per radius (below,
+#     full mode only - they're the ones that actually feed the reported systematic
+#     uncertainty). draw_purity_corrected.C/draw_iteration_halfclosure.C/
+#     toy_resp_iterations.C/toy_data_iterations.C/draw_refolding.C/draw_nonclosure.C have
+#     no radius parameter and are diagnostic/closure checks (plus the niter-selection
+#     scan) that don't feed the systematics chain - deliberately left at R=0.4/nominal
+#     only, not looped here.
 # toy_resp_iterations.C / toy_data_iterations.C each write their own
 # .toy_{resp,data}_chi2_data_<systag>.root and read the OTHER's if present, then invoke
 # plot_toy_chi2_combined.C as a subprocess - run both for the full four-curve comparison
@@ -118,8 +129,17 @@ root -b -l -q 'draw_refolding.C("nominal")'
 root -b -l -q 'draw_nonclosure.C()'
 root -b -l -q 'draw_prior_sensitivity.C("nominal")'
 if [[ "$MODE" != "nominal" ]]; then
-  root -b -l -q 'draw_systematics.C()'
-  root -b -l -q 'draw_final_result.C()'
+  # Keep in sync with ana::nJetR/ana::rnames (src/ana.h) - same duplication caveat as
+  # SYSTAGS above (bash can't read the C++ arrays directly).
+  RNAMES=(R02 R03 R04 R05 R06 R07 R08)
+  for ir in 0 1 2 3 4 5 6; do
+    echo "--- radius index $ir (${RNAMES[$ir]}) ---"
+    if [[ $ir -ne 2 ]]; then
+      root -b -l -q "draw_prior_sensitivity.C(\"nominal\", $ir)"
+    fi
+    root -b -l -q "draw_systematics.C($ir)"
+    root -b -l -q "draw_final_result.C($ir)"
+  done
 else
   echo "Skipping draw_systematics.C/draw_final_result.C in nominal-only mode (they need every systag's stage 2+3 output - rerun in full mode before trusting the final result)."
 fi

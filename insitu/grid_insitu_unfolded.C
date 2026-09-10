@@ -100,7 +100,14 @@ void computeUnfoldedMeans(const vector<DataEvent> & dataA, const vector<DataEven
   flatCorrected->Reset("ICES");
   for (int ipt = 0; ipt < ana::nPtBins; ipt++) unfold_utility::reflattenXj(hCorr[ipt], ipt, flatCorrected);
 
-  TH1D * flatUnfolded = unfold_utility::unfoldOnce(response, flatCorrected, niterate, "flatUnfolded_tmp");
+  // includeSystematics=false: this runs once per pa-scan point (na=insitu_utility::scanN
+  // x ana::nJetR calls total) - the expensive response-matrix-statistics covariance term
+  // (see unfold_utility.h's includeSystematics comment, ~3s/call) made the full scan take
+  // hours. GetMeanError() below still reflects the (cheap, always-on) data-statistics
+  // covariance term, just not the response-matrix contribution - acceptable here since
+  // this method is a cross-check against grid_insitu.C's plain purity-corrected fit (the
+  // one draw_jes_summary.C actually sources ana::jesNominal from), not the headline result.
+  TH1D * flatUnfolded = unfold_utility::unfoldOnce(response, flatCorrected, niterate, "flatUnfolded_tmp", false);
 
   for (int k = 0; k < nPtBinsUsed; k++) {
     int ipt = ana::firstUsedPtBin + k;

@@ -62,7 +62,11 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 //      on the comparison pages, purely as a diagnostic for whether the shift scales
 //      sensibly with reweighting strength - they don't contribute to the reported number.
 
-const int ir = 2; // nominal jet radius index (R=0.4)
+// Jet radius index - set from draw_prior_sensitivity()'s jetRadiusIndex argument (default
+// R=0.4, matching draw_systematics.C's ir/jetRadiusIndex convention); NOT a fixed constant -
+// draw_systematics.C reads this file's output per-radius and needs a matching per-radius
+// prior-sensitivity comparison, not always the R=0.4 one.
+int ir = 2;
 const int nPtBinsUsed = ana::nPtBinsUsed; // physics analysis only uses ana::ptBins[ana::firstUsedPtBin..]
 const int niterate = 2; // matches draw_purity_corrected.C / draw_final_result.C's chosen nominal iteration count
 const vector<int> iterationsToScan = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}; // for the bonus niter-dependence page
@@ -160,12 +164,18 @@ double computeChi2NDF(TH1D * hVariant, TH1D * hNominal) {
   return (ndf > 0) ? chi2/ndf : 0;
 }
 
-void draw_prior_sensitivity(string systag = "nominal") {
+void draw_prior_sensitivity(string systag = "nominal", int jetRadiusIndex = 2) {
   gStyle->SetOptStat(0);
+  ir = jetRadiusIndex;
 
   drawer d("pythia", systag);
-  string pdfPath  = Form("/home/samson72/sphnx/gammajet_unfold/pdfs/draw_prior_sensitivity_%s.pdf", systag.c_str());
-  string rootPath = Form("/home/samson72/sphnx/gammajet_unfold/hists/prior_sensitivity_%s.root", systag.c_str());
+  // ir==2 (R=0.4) keeps the original, un-suffixed filenames - draw_systematics.C's
+  // ir==2 default reads these exact paths; every other radius gets its own file, same
+  // convention as draw_systematics.C's systematics.root vs systematics_R0X.root.
+  string pdfPath  = (ir == 2) ? Form("/home/samson72/sphnx/gammajet_unfold/pdfs/draw_prior_sensitivity_%s.pdf", systag.c_str())
+                              : Form("/home/samson72/sphnx/gammajet_unfold/pdfs/draw_prior_sensitivity_%s_%s.pdf", systag.c_str(), ana::rnames[ir]);
+  string rootPath = (ir == 2) ? Form("/home/samson72/sphnx/gammajet_unfold/hists/prior_sensitivity_%s.root", systag.c_str())
+                              : Form("/home/samson72/sphnx/gammajet_unfold/hists/prior_sensitivity_%s_%s.root", systag.c_str(), ana::rnames[ir]);
 
   // Response matrix + purity-corrected Data - same construction as draw_refolding.C/
   // draw_purity_corrected.C.
@@ -177,7 +187,7 @@ void draw_prior_sensitivity(string systag = "nominal") {
 
   TH1D * flatA = d.get(Form("hrecoxj%i_0",ir), 0);
   TH1D * flatC = d.get(Form("hrecoxj%i_2",ir), 0);
-  TH1D * flatMeasured = unfold_utility::buildFullyCorrected(flatA, flatC, "data", systag);
+  TH1D * flatMeasured = unfold_utility::buildFullyCorrected(flatA, flatC, "data", systag, ir);
 
   // Step 1: the current, un-reweighted-prior nominal - not redefined by this file.
   TH1D * flatUnfoldedNominal = unfold_utility::unfoldOnce(response, flatMeasured, niterate, "hUnfoldedNominal");

@@ -201,6 +201,10 @@ void toy_data_iterations(string systag = "nominal") {
     delete hNomPt; delete hNomDisp;
     for (auto h : sampleDisp) delete h;
   }
+  // sampleToys itself (the primary ensemble's kept-aside toy results, read from via
+  // unflattenXj() above but never owned by anything past this point) is never freed
+  // otherwise - a real leak of up to nSampleOverlay histograms per run.
+  for (auto h : sampleToys) delete h;
 
   // ---- Pages (2+nPtBinsUsed)..: nominal result with toy-derived error band, per pT bin ----
   for (int ipt = ana::firstUsedPtBin; ipt < ana::firstUsedPtBin+nPtBinsUsed; ipt++) {

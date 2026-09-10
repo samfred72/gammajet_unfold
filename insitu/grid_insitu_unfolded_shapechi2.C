@@ -91,7 +91,9 @@ void computeUnfoldedMeans(const vector<DataEvent> & dataA, const vector<DataEven
   flatCorrected->Reset("ICES");
   for (int ipt = 0; ipt < ana::nPtBins; ipt++) unfold_utility::reflattenXj(hCorr[ipt], ipt, flatCorrected);
 
-  TH1D * flatUnfolded = unfold_utility::unfoldOnce(response, flatCorrected, niterate, "flatUnfolded_tmp");
+  // includeSystematics=false - see computeUnfoldedShapeChi2's identical comment below;
+  // this copy is only used for the (twice-per-radius, not per-scan-point) display page.
+  TH1D * flatUnfolded = unfold_utility::unfoldOnce(response, flatCorrected, niterate, "flatUnfolded_tmp", false);
 
   for (int k = 0; k < nPtBinsUsed; k++) {
     int ipt = ana::firstUsedPtBin + k;
@@ -128,7 +130,15 @@ float computeUnfoldedShapeChi2(const vector<DataEvent> & dataA, const vector<Dat
   flatCorrected->Reset("ICES");
   for (int ipt = 0; ipt < ana::nPtBins; ipt++) unfold_utility::reflattenXj(hCorr[ipt], ipt, flatCorrected);
 
-  TH1D * flatUnfolded = unfold_utility::unfoldOnce(response, flatCorrected, niterate, "flatUnfoldedShape_tmp");
+  // includeSystematics=false: this is the actual fit criterion below, called once per
+  // pa-scan point (na=insitu_utility::scanN x ana::nJetR calls total) - the expensive
+  // response-matrix-statistics covariance term (see unfold_utility.h's includeSystematics
+  // comment, ~3s/call) made the full scan take hours. errUnf below still reflects the
+  // (cheap, always-on) data-statistics covariance term, just not the response-matrix
+  // contribution - acceptable here since this method is a cross-check against
+  // grid_insitu.C's plain purity-corrected fit (the one draw_jes_summary.C actually
+  // sources ana::jesNominal from), not the headline result.
+  TH1D * flatUnfolded = unfold_utility::unfoldOnce(response, flatCorrected, niterate, "flatUnfoldedShape_tmp", false);
 
   float chisq = 0;
   for (int k = 0; k < nPtBinsUsed; k++) {

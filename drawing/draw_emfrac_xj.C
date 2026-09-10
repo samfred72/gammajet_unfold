@@ -27,20 +27,35 @@ R__LOAD_LIBRARY(libRooUnfold.so); // needed because we instantiate unfolder dire
 // histogram, and compares MC's x_J shape before vs. after this reweighting (with Data
 // shown alongside as the target the reweighting is meant to approach).
 //
+// Part 3 (page 5): <x_J> Data/MC ratio vs. photon p_T, one curve per ana::emfracBins slice
+// plus one for the inclusive/"Total" sample, across every ana::ptBinsUsed bin - unlike
+// Parts 1-2's single fixed bin, this scans the full reported pT range to see whether the
+// emfrac dependence seen there is pT-dependent.
+//
 // Reuses unfolder::check_pair/check_keep_MC directly (by constructing a throwaway
 // unfolder instance per sample and never calling fill_matrix/unfold/end on it) rather
 // than reimplementing the pairing/eta/dphi/xJ-floor cuts by hand, so this can't silently
 // drift from the production selection. Reconstructs the same nominal-systag reco-level
-// quantities fill_matrix() would (unfolder.cc:149-232): MC gets the always-on 2% EMR
-// smear on cluster pT and the truth-derived jet_pt_smear_truth[ir] jet pT; Data gets its
-// per-radius JES correction (ana::jesNominal[ir], no jes_high/low offset).
+// quantities fill_matrix() would (unfolder.cc:149-232) for MC: the always-on 2% EMR smear
+// on cluster pT and the truth-derived jet_pt_smear_truth[ir] jet pT. Data deliberately
+// does NOT get unfolder.cc's per-radius JES correction (ana::jesNominal[ir]) here - uses
+// raw jet_pt_calib[ir] directly, on explicit request, matching
+// temporary_study/draw_xj_data_purity.C's convention rather than the production pipeline's.
 //
-// Deliberately simplified relative to the real analysis in two ways, both noted on every
-// plot: (1) raw Region A only, no purity (ABCD background) correction - this is a
-// detector/reconstruction-level question, not one where the background-subtraction
-// machinery is expected to matter; (2) R=0.4 (ir=2) only, matching this project's
-// standalone-diagnostic convention (draw_response_matrix.C, draw_refolding.C, etc. all
-// hardcode the same radius).
+// Purity correction: Data (never MC - it's signal-only pythia with no ABCD background to
+// subtract) is purity-corrected via the same two-purity background subtraction as
+// temporary_study/draw_xj_data_purity.C and insitu/grid_insitu.C - Region A
+// (findabcdBin==0) events combined with their Region C (findabcdBin==2: good iso, bad
+// bdt) siblings, via unfold_utility::purityCorrectCoeffs/purityCorrect, with purity
+// P_A/P_C (+ErrorLow/ErrorHigh) from ana::getPurity/getPurityC at systag="nominal", ir=2 -
+// i.e. the purity_nominal.root inputs, not re-derived here. Parts 1-2 purity-correct per
+// emfrac slice (assuming P_A/P_C - a function of photon p_T only - doesn't itself depend
+// on jet emfrac); Part 3 purity-corrects per (p_T bin, emfrac category) directly on the
+// exact unbinned mean, not a binned histogram mean.
+//
+// Deliberately simplified relative to the real analysis in one remaining way, noted on
+// every plot: R=0.4 (ir=2) only, matching this project's standalone-diagnostic convention
+// (draw_response_matrix.C, draw_refolding.C, etc. all hardcode the same radius).
 //
 // MC Photon5/10/20 combination uses the exact same per-sample cross-section scale
 // factors as the real pipeline (drawer::getScale(true, sample) - reads the same
@@ -51,6 +66,12 @@ R__LOAD_LIBRARY(libRooUnfold.so); // needed because we instantiate unfolder dire
 
 const int ir = 2; // R=0.4, nominal - see header comment
 const set<int> photonSampleCodes = {5, 10, 20};
+
+// The single pT bin Parts 1-2 focus on - one of ana::ptBinsUsed's 7 reported bins
+// (15-20 GeV), used on explicit request as a representative mid-range bin. Part 3 instead
+// scans every ana::ptBinsUsed bin.
+const double singleBinPtLo = ana::ptBins[5];
+const double singleBinPtHi = ana::ptBins[6];
 
 // Draws one color-matched "<varLabel> = mean" line per histogram, NDC coordinates,
 // starting at (x,yTop) and stepping down by dy per line - meant to sit directly below an
@@ -84,18 +105,22 @@ void drawMeans(const vector<TH1D*> & hMeanSrc, const vector<int> & colors,
   }
 }
 
-// One passing (paired, Region A, 13-15 GeV photon) event's emfrac, x_J, and the
-// mcWeight*crossSectionScale weight it already carries (1 for Data) - collected once per
-// sample and reused for both the coarse ana::emfracBins split (Part 1) and the fine-
-// binned reweighting derivation (Part 2), instead of looping the tree twice.
-struct EmfracEvent { float emfrac; float xj; float weight; };
+// One passing (paired, Region A or C, per check_pair) event's emfrac, x_J, photon pT, the
+// mcWeight*crossSectionScale weight it already carries (1 for Data), and which ABCD region
+// (0=A, 2=C) it landed in - collected once per sample across the full ana::ptBinsUsed
+// range and reused for Parts 1-3 (filtered/binned differently by each), instead of looping
+// the tree more than once per sample.
+struct EmfracEvent { float emfrac; float xj; float weight; float phopt; int abcdRegion; };
 
 // Loops one (trigger,sim) sample once and returns one EmfracEvent per event passing the
-// same cuts drawEmfracPage's caller used to rely on fillEmfracXj for (13-15 GeV photon,
-// Region A, R=0.4, check_pair) - see the file header comment for exactly what's
-// reconstructed and why. extraScale is the cross-section combination factor for MC
-// (drawer::getScale(true, sample)), 1 for Data.
-vector<EmfracEvent> collectEvents(string trigger, string sim, bool isMCsample, double extraScale) {
+// same cuts drawEmfracPage's caller used to rely on fillEmfracXj for (every
+// ana::ptBinsUsed-covered photon pT, R=0.4, check_pair). extraScale is the cross-section
+// combination factor for MC (drawer::getScale(true, sample)), 1 for Data. includeRegionC
+// additionally keeps Region C (findabcdBin==2) events alongside Region A - only ever
+// passed true for Data, which needs its Region C sibling to purity-correct; MC is
+// signal-only pythia with no ABCD background to subtract, so it's Region A only.
+vector<EmfracEvent> collectEvents(string trigger, string sim, bool isMCsample, double extraScale,
+    bool includeRegionC = false) {
   // A brace-init-list literal passed directly as this constructor's vector<string>
   // argument (e.g. unfolder uf(trigger, sim, {"nominal"});) crashes Cling at parse time
   // (reproduced and isolated in-session) - pass a pre-built vector instead.
@@ -132,24 +157,29 @@ vector<EmfracEvent> collectEvents(string trigger, string sim, bool isMCsample, d
         uf.cluster_bdt_scores[9],
         pho_object::get_showershape(uf.cluster_showershape, recoClusterPt));
 
-    float recoJetPt = isMCsample ? uf.jet_pt_smear_truth[ir]
-                                  : uf.jet_pt_calib[ir] / ana::jesNominal[ir];
+    // No JES correction applied to Data here (on explicit request) - raw jet_pt_calib[ir],
+    // not divided by ana::jesNominal[ir] as unfolder.cc's fill_matrix() does.
+    float recoJetPt = isMCsample ? uf.jet_pt_smear_truth[ir] : uf.jet_pt_calib[ir];
     jet_object maxjet(recoJetPt, uf.jet_e[ir], uf.jet_eta[ir], uf.jet_phi[ir],
         uf.jet_emfrac[ir], 0, 0, uf.jet_time[ir]);
 
     if (!uf.check_pair(maxjet, ir, maxpho, true)) continue;
-    // ana::ptBins[0..1) = 13-15 GeV, the migration-only buffer bin below the lowest
-    // reported physics bin (ana.h:90-95) - used here on explicit request.
-    if (maxpho.pt < ana::ptBins[0] || maxpho.pt >= ana::ptBins[1]) continue;
-    if (ana::findabcdBin(maxpho.iso4, maxpho.bdt, 0) != 0) continue; // Region A only - see header comment
+    // Every ana::ptBinsUsed-covered photon pT, not just Parts 1-2's single bin -
+    // filterPtRange narrows this down for them; Part 3 uses the full range directly.
+    if (maxpho.pt < ana::ptBinsUsed[0] || maxpho.pt >= ana::ptBinsUsed[ana::nPtBinsUsed]) continue;
 
-    events.push_back({maxjet.emfrac, (float)(maxjet.pt / maxpho.pt), mcWeight * (float)extraScale});
+    int iabcd = ana::findabcdBin(maxpho.iso4, maxpho.bdt, 0);
+    if (iabcd != 0 && !(includeRegionC && iabcd == 2)) continue;
+
+    events.push_back({maxjet.emfrac, (float)(maxjet.pt / maxpho.pt), mcWeight * (float)extraScale,
+        maxpho.pt, iabcd});
   }
   return events;
 }
 
 // Combined Photon5+10+20 pythia sample, each cross-section-scaled via
-// drawer::getScale(true, sample) - the same combination drawer::combineMC uses.
+// drawer::getScale(true, sample) - the same combination drawer::combineMC uses. Region A
+// only (see collectEvents' includeRegionC comment).
 vector<EmfracEvent> collectMCPhotonEvents() {
   drawer dScale; // only used for its scalemap accessor (getScale) - opens hists/*.root itself
   vector<EmfracEvent> all;
@@ -160,8 +190,38 @@ vector<EmfracEvent> collectMCPhotonEvents() {
   return all;
 }
 
+vector<EmfracEvent> filterPtRange(const vector<EmfracEvent> & events, double ptlo, double pthi) {
+  vector<EmfracEvent> out;
+  for (const EmfracEvent & ev : events)
+    if (ev.phopt >= ptlo && ev.phopt < pthi) out.push_back(ev);
+  return out;
+}
+
+void splitByRegion(const vector<EmfracEvent> & events, vector<EmfracEvent> & regionA, vector<EmfracEvent> & regionC) {
+  for (const EmfracEvent & ev : events) (ev.abcdRegion == 0 ? regionA : regionC).push_back(ev);
+}
+
+// Purity-corrects hA using its Region C sibling hC via the same two-purity method as
+// temporary_study/draw_xj_data_purity.C (unfold_utility::purityCorrect, ana::getPurity/
+// getPurityC at systag="nominal", this file's own ir). Falls back to raw Region A (hA
+// itself has no statistics-cross-normalization problem, so the fallback just skips
+// subtracting anything) if Region C has no statistics in [ptlo,pthi) -
+// unfold_utility::purityCorrect already prints a WARNING in that case.
+TH1D * purityCorrectHist(TH1D * hA, TH1D * hC, double ptlo, double pthi, const char * name) {
+  float pA        = ana::getPurity(ptlo, pthi, "nominal", ir);
+  float pAErrLow  = ana::getPurityErrorLow(ptlo, pthi, "nominal", ir);
+  float pAErrHigh = ana::getPurityErrorHigh(ptlo, pthi, "nominal", ir);
+  float pC        = ana::getPurityC(ptlo, pthi, "nominal", ir);
+  float pCErrLow  = ana::getPurityCErrorLow(ptlo, pthi, "nominal", ir);
+  float pCErrHigh = ana::getPurityCErrorHigh(ptlo, pthi, "nominal", ir);
+  TH1D * hcorr = unfold_utility::purityCorrect(hA, hC, pA, pAErrLow, pAErrHigh, pC, pCErrLow, pCErrHigh, name);
+  if (!hcorr) return (TH1D*)hA->Clone(name);
+  return hcorr;
+}
+
 // --- Part 1: x_J split by the coarse ana::emfracBins, one page per sample ---
 
+// MC (Region A only, raw - no background to subtract).
 vector<TH1D*> binByEmfracCoarse(const vector<EmfracEvent> & events, const char * tag) {
   vector<TH1D*> h(3);
   for (int i = 0; i < 3; i++)
@@ -172,6 +232,30 @@ vector<TH1D*> binByEmfracCoarse(const vector<EmfracEvent> & events, const char *
     h[iemfrac]->Fill(ev.xj, ev.weight);
   }
   return h;
+}
+
+// Data-only purity-corrected counterpart: bins Region A and Region C events separately by
+// the same coarse emfrac slice, then purity-corrects each slice via purityCorrectHist -
+// i.e. this assumes P_A/P_C (a function of photon p_T only, ana::getPurity/getPurityC)
+// doesn't itself depend on jet emfrac, only that the emfrac split further partitions each
+// region's own events.
+vector<TH1D*> binByEmfracCoarsePurityCorrected(const vector<EmfracEvent> & dataEventsInBin, const char * tag) {
+  vector<TH1D*> hA(3), hC(3), hCorr(3);
+  for (int i = 0; i < 3; i++) {
+    hA[i] = new TH1D(Form("hEmfracXjA_%s_%d", tag, i), "", ana::nUnfoldXjBins, ana::unfoldXjBins);
+    hC[i] = new TH1D(Form("hEmfracXjC_%s_%d", tag, i), "", ana::nUnfoldXjBins, ana::unfoldXjBins);
+  }
+  for (const EmfracEvent & ev : dataEventsInBin) {
+    int iemfrac = ana::findEmfracBin(ev.emfrac);
+    if (iemfrac < 0) continue;
+    (ev.abcdRegion == 0 ? hA : hC)[iemfrac]->Fill(ev.xj, ev.weight);
+  }
+  for (int i = 0; i < 3; i++) {
+    hCorr[i] = purityCorrectHist(hA[i], hC[i], singleBinPtLo, singleBinPtHi, Form("hEmfracXjCorr_%s_%d", tag, i));
+    delete hA[i];
+    delete hC[i];
+  }
+  return hCorr;
 }
 
 // One shape-normalized, bin-width-divided x_J overlay page, one curve per coarse emfrac
@@ -238,15 +322,20 @@ TH1D * fillFineEmfracHist(const vector<EmfracEvent> & events, const char * name)
   return h;
 }
 
-// Page 3: Data's and MC's own shape-normalized emfrac distributions (top) and their
-// per-bin ratio (bottom) - the ratio IS the reweighting factor w(emfrac) applied in
-// Part 2 below, drawn here so it can be inspected on its own before trusting what it does
-// to x_J.
+// Page 3: Data's (purity-corrected) and MC's own shape-normalized emfrac distributions
+// (top) and their per-bin ratio (bottom) - the ratio IS the reweighting factor w(emfrac)
+// applied in Part 2 below, drawn here so it can be inspected on its own before trusting
+// what it does to x_J. dataEventsInBin must already carry both Region A and Region C
+// events (collectEvents' includeRegionC=true) in the single pT bin Parts 1-2 focus on.
 TH1D * drawEmfracRatioPage(TCanvas * c, const char * pdfPath,
-    const vector<EmfracEvent> & dataEvents, const vector<EmfracEvent> & mcEvents,
+    const vector<EmfracEvent> & dataEventsInBin, const vector<EmfracEvent> & mcEventsInBin,
     const vector<string> & extraFeatures) {
-  TH1D * hDataRaw = fillFineEmfracHist(dataEvents, "hEmfracDataRaw");
-  TH1D * hMCRaw = fillFineEmfracHist(mcEvents, "hEmfracMCRaw");
+  vector<EmfracEvent> dataA, dataC;
+  splitByRegion(dataEventsInBin, dataA, dataC);
+  TH1D * hDataRawA = fillFineEmfracHist(dataA, "hEmfracDataRegionA");
+  TH1D * hDataRawC = fillFineEmfracHist(dataC, "hEmfracDataRegionC");
+  TH1D * hDataRaw = purityCorrectHist(hDataRawA, hDataRawC, singleBinPtLo, singleBinPtHi, "hEmfracDataRaw");
+  TH1D * hMCRaw = fillFineEmfracHist(mcEventsInBin, "hEmfracMCRaw");
 
   TH1D * hData = (TH1D*)hDataRaw->Clone("hEmfracDataNorm");
   TH1D * hMC = (TH1D*)hMCRaw->Clone("hEmfracMCNorm");
@@ -311,7 +400,7 @@ TH1D * drawEmfracRatioPage(TCanvas * c, const char * pdfPath,
   TLegend * leg = new TLegend(.18, .65, .5, .85);
   leg->SetBorderSize(0);
   leg->SetFillStyle(0);
-  leg->AddEntry(hData, "p+p Run24 Data", "lep");
+  leg->AddEntry(hData, "p+p Run24 Data (purity-corr.)", "lep");
   leg->AddEntry(hMC, "Pythia8 #gamma+jet MC", "lep");
   leg->Draw();
   vector<TH1D*> hMeanSrc = {hDataRaw, hMCRaw};
@@ -346,24 +435,31 @@ TH1D * drawEmfracRatioPage(TCanvas * c, const char * pdfPath,
 }
 
 // Page 4: MC's x_J shape before vs. after applying w(emfrac) as an extra per-event
-// weight on top of its existing mcWeight*crossSectionScale, with Data alongside as the
-// reference the reweighting is meant to approach.
+// weight on top of its existing mcWeight*crossSectionScale, with purity-corrected Data
+// alongside as the reference the reweighting is meant to approach.
 void drawReweightedXjPage(TCanvas * c, const char * pdfPath, TH1D * hRatio,
-    const vector<EmfracEvent> & dataEvents, const vector<EmfracEvent> & mcEvents,
+    const vector<EmfracEvent> & dataEventsInBin, const vector<EmfracEvent> & mcEventsInBin,
     const vector<string> & extraFeatures) {
-  TH1D * hData = new TH1D("hXjData", "", ana::nUnfoldXjBins, ana::unfoldXjBins);
+  vector<EmfracEvent> dataA, dataC;
+  splitByRegion(dataEventsInBin, dataA, dataC);
+  TH1D * hDataA = new TH1D("hXjDataA", "", ana::nUnfoldXjBins, ana::unfoldXjBins);
+  TH1D * hDataC = new TH1D("hXjDataC", "", ana::nUnfoldXjBins, ana::unfoldXjBins);
+  for (const EmfracEvent & ev : dataA) hDataA->Fill(ev.xj, ev.weight);
+  for (const EmfracEvent & ev : dataC) hDataC->Fill(ev.xj, ev.weight);
+  TH1D * hData = purityCorrectHist(hDataA, hDataC, singleBinPtLo, singleBinPtHi, "hXjData");
+  delete hDataA;
+  delete hDataC;
+
   TH1D * hMCBefore = new TH1D("hXjMCBefore", "", ana::nUnfoldXjBins, ana::unfoldXjBins);
   TH1D * hMCAfter = new TH1D("hXjMCAfter", "", ana::nUnfoldXjBins, ana::unfoldXjBins);
-
-  for (const EmfracEvent & ev : dataEvents) hData->Fill(ev.xj, ev.weight);
-  for (const EmfracEvent & ev : mcEvents) {
+  for (const EmfracEvent & ev : mcEventsInBin) {
     hMCBefore->Fill(ev.xj, ev.weight);
     double w = hRatio->GetBinContent(hRatio->FindBin(ev.emfrac));
     hMCAfter->Fill(ev.xj, ev.weight * w);
   }
 
   vector<TH1D*> hRaw = {hData, hMCBefore, hMCAfter};
-  vector<string> labels = {"p+p Run24 Data", "Pythia8 MC, before emfrac reweight", "Pythia8 MC, after emfrac reweight"};
+  vector<string> labels = {"p+p Run24 Data (purity-corr.)", "Pythia8 MC, before emfrac reweight", "Pythia8 MC, after emfrac reweight"};
   vector<int> colors = {kBlack, kRed + 1, kAzure + 2};
   vector<int> markers = {20, 21, 22};
 
@@ -410,40 +506,201 @@ void drawReweightedXjPage(TCanvas * c, const char * pdfPath, TH1D * hRatio,
   c->SaveAs(pdfPath);
 }
 
+// --- Part 3: <x_J> Data(purity-corr.)/MC ratio vs. photon p_T, by emfrac category ---
+
+// Exact unbinned weighted mean/error accumulator - same as
+// temporary_study/draw_xj_data_purity.C's identical Accum. Needed for the same reason:
+// purity-correcting the sums directly (rather than a filled-then-corrected histogram's
+// TH1::GetMean()) gives the exact, not a binned-approximation, mean.
+struct Accum {
+  double sumw = 0, sumw2 = 0, sumwx = 0, sumwx2 = 0;
+  Long64_t n = 0;
+  void fill(double x, double w) {
+    sumw += w; sumw2 += w * w; sumwx += w * x; sumwx2 += w * x * x; n++;
+  }
+  double mean() const { return sumw > 0 ? sumwx / sumw : 0; }
+  double meanErr() const {
+    if (sumw <= 0 || n < 2) return 0;
+    double var = sumwx2 / sumw - mean() * mean();
+    if (var < 0) var = 0;
+    double neff = sumw2 > 0 ? sumw * sumw / sumw2 : n;
+    return std::sqrt(var / neff);
+  }
+};
+
+const int nEmfracCategories = 4; // ana::emfracBins' 3 slices + "Total" (all emfrac), index 3
+
+// Page 5: <x_J> Data(purity-corrected)/MC ratio vs. photon p_T, one curve per
+// ana::emfracBins slice plus one for the inclusive "Total" sample, across every
+// ana::ptBinsUsed bin - unlike Parts 1-2's single 15-20 GeV bin. Data's mean is the
+// two-purity-corrected exact unbinned mean (purityCorrectCoeffs applied directly to the
+// Accum sums, mirroring temporary_study/draw_xj_data_purity.C's accCorr construction
+// exactly - not a TH1::GetMean() on a purity-corrected histogram); MC stays raw Region A
+// signal, same as everywhere else in this file. Points with no valid purity-corrected
+// Data mean (Region C empty and Region A also empty) or no MC statistics in that
+// (p_T,emfrac) slice are simply omitted rather than plotted as a misleading 0.
+void drawMeanXjVsPtPage(TCanvas * c, const char * pdfPath, const vector<EmfracEvent> & dataEvents,
+    const vector<EmfracEvent> & mcEvents, const vector<string> & extraFeatures) {
+  vector<vector<Accum>> accDataA(ana::nPtBinsUsed, vector<Accum>(nEmfracCategories));
+  vector<vector<Accum>> accDataC(ana::nPtBinsUsed, vector<Accum>(nEmfracCategories));
+  vector<vector<Accum>> accMC(ana::nPtBinsUsed, vector<Accum>(nEmfracCategories));
+
+  auto fillAcc = [&](const vector<EmfracEvent> & events, vector<vector<Accum>> & acc, bool wantRegionC) {
+    for (const EmfracEvent & ev : events) {
+      if ((ev.abcdRegion == 2) != wantRegionC) continue;
+      int ipt = ana::findPtBin(ev.phopt);
+      int iused = ipt - ana::firstUsedPtBin;
+      if (iused < 0 || iused >= ana::nPtBinsUsed) continue;
+      int iemfrac = ana::findEmfracBin(ev.emfrac);
+      if (iemfrac < 0) continue;
+      acc[iused][iemfrac].fill(ev.xj, ev.weight);
+      acc[iused][3].fill(ev.xj, ev.weight); // Total (all emfrac)
+    }
+  };
+  fillAcc(dataEvents, accDataA, false);
+  fillAcc(dataEvents, accDataC, true);
+  fillAcc(mcEvents, accMC, false);
+
+  const int colors[nEmfracCategories] = {kBlue + 1, kGreen + 2, kRed + 1, kBlack};
+  const int markers[nEmfracCategories] = {20, 21, 22, 23};
+  const vector<string> labels = {
+      Form("%.1f < emfrac < %.1f", ana::emfracBins[0], ana::emfracBins[1]),
+      Form("%.1f < emfrac < %.1f", ana::emfracBins[1], ana::emfracBins[2]),
+      Form("%.1f < emfrac < %.1f", ana::emfracBins[2], ana::emfracBins[3]),
+      "Total (all emfrac)",
+  };
+
+  vector<TGraphErrors*> g(nEmfracCategories);
+  for (int cat = 0; cat < nEmfracCategories; cat++) {
+    g[cat] = new TGraphErrors();
+    g[cat]->SetName(Form("gMeanXjRatio_%d", cat));
+    int ipoint = 0;
+    for (int ip = 0; ip < ana::nPtBinsUsed; ip++) {
+      double ptlo = ana::ptBinsUsed[ip], pthi = ana::ptBinsUsed[ip + 1];
+      // Small per-category horizontal offset so the 4 series don't sit exactly on top of
+      // each other at each pT bin's center.
+      double ptx = 0.5 * (ptlo + pthi) + (cat - 1.5) * 0.06 * (pthi - ptlo);
+
+      float pA = ana::getPurity(ptlo, pthi, "nominal", ir);
+      float pC = ana::getPurityC(ptlo, pthi, "nominal", ir);
+      double NA = accDataA[ip][cat].sumw, NC = accDataC[ip][cat].sumw;
+      float coeffA, coeffC;
+      unfold_utility::purityCorrectCoeffs(pA, pC, NA, NC, coeffA, coeffC);
+      double Ncorr = coeffA * NA - coeffC * NC;
+      if (Ncorr <= 0) continue;
+
+      // Mirrors temporary_study/draw_xj_data_purity.C's accCorr construction exactly -
+      // effective-N == Ncorr, not a separate sum-of-squared-weights.
+      Accum accCorr;
+      accCorr.sumw   = Ncorr;
+      accCorr.sumw2  = Ncorr;
+      accCorr.sumwx  = coeffA * accDataA[ip][cat].sumwx  - coeffC * accDataC[ip][cat].sumwx;
+      accCorr.sumwx2 = coeffA * accDataA[ip][cat].sumwx2 - coeffC * accDataC[ip][cat].sumwx2;
+      accCorr.n      = accDataA[ip][cat].n + accDataC[ip][cat].n;
+      double meanDataCorr = accCorr.mean();
+      double meanDataCorrErr = accCorr.meanErr();
+      if (meanDataCorr == 0) continue;
+
+      if (accMC[ip][cat].sumw <= 0) continue;
+      double meanMC = accMC[ip][cat].mean();
+      double meanMCErr = accMC[ip][cat].meanErr();
+      if (meanMC == 0) continue;
+
+      double ratio = meanDataCorr / meanMC;
+      double relErrData = meanDataCorrErr / meanDataCorr;
+      double relErrMC = meanMCErr / meanMC;
+      double ratioErr = fabs(ratio) * std::sqrt(relErrData * relErrData + relErrMC * relErrMC);
+
+      g[cat]->SetPoint(ipoint, ptx, ratio);
+      g[cat]->SetPointError(ipoint, 0, ratioErr);
+      ipoint++;
+    }
+  }
+
+  c->Clear();
+  c->cd();
+  gPad->SetTicks(1, 1);
+  gPad->SetLeftMargin(.15);
+  gPad->SetBottomMargin(.13);
+
+  TH1D * hFrame = new TH1D("hFrameMeanXjRatio",
+      ";p_{T}^{#gamma} [GeV];#LTx_{J#gamma}#GT Data(purity-corr.) / MC",
+      ana::nPtBinsUsed, ana::ptBinsUsed);
+  hFrame->SetStats(0);
+  hFrame->GetYaxis()->SetRangeUser(0.84, 1.3);
+  hFrame->Draw("axis");
+
+  TLine * line = new TLine(ana::ptBinsUsed[0], 1, ana::ptBinsUsed[ana::nPtBinsUsed], 1);
+  line->SetLineStyle(9);
+  line->Draw("same");
+
+  TLegend * leg = new TLegend(.5, .65, .85, .88);
+  leg->SetBorderSize(0);
+  leg->SetFillStyle(0);
+  for (int cat = 0; cat < nEmfracCategories; cat++) {
+    g[cat]->SetLineColor(colors[cat]);
+    g[cat]->SetMarkerColor(colors[cat]);
+    g[cat]->SetMarkerStyle(markers[cat]);
+    g[cat]->SetLineWidth(2);
+    g[cat]->Draw("p same");
+    leg->AddEntry(g[cat], labels[cat].c_str(), "lep");
+  }
+  leg->Draw();
+
+  drawer d;
+  d.drawAll({}, extraFeatures, .18, .85, 16, gPad->GetWh() * 0.8);
+
+  c->SaveAs(pdfPath);
+}
+
 void draw_emfrac_xj() {
   gStyle->SetOptStat(0);
   TH1::AddDirectory(kFALSE);
   const char * pdfPath = "/home/samson72/sphnx/gammajet_unfold/pdfs/draw_emfrac_xj.pdf";
 
   vector<string> commonFeatures = {
-      Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV", ana::ptBins[0], ana::ptBins[1]),
+      Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV", singleBinPtLo, singleBinPtHi),
       Form("Jet R=%.1f", ana::JetRs[ir]),
-      "Region A (no purity correction)",
+  };
+  vector<string> dataFeatures = commonFeatures;
+  dataFeatures.push_back("Data: purity-corrected (two-purity method)");
+  vector<string> mcFeatures = commonFeatures;
+  mcFeatures.push_back("MC: Region A only (signal, no background)");
+  vector<string> ratioFeatures = {
+      Form("Jet R=%.1f", ana::JetRs[ir]),
+      "Data: purity-corrected (two-purity method)",
   };
 
   TCanvas * c = new TCanvas("c", "", 700, 700);
   c->SaveAs(Form("%s[", pdfPath));
 
-  cout << "Collecting Data:" << endl;
-  vector<EmfracEvent> dataEvents = collectEvents("Data", "pythia", false, 1.0);
-  cout << "Collecting MC Photon (Photon5+10+20, pythia):" << endl;
+  cout << "Collecting Data (Region A + Region C, full p_{T} range):" << endl;
+  vector<EmfracEvent> dataEvents = collectEvents("Data", "pythia", false, 1.0, true);
+  cout << "Collecting MC Photon (Photon5+10+20, pythia, Region A, full p_{T} range):" << endl;
   vector<EmfracEvent> mcEvents = collectMCPhotonEvents();
 
+  vector<EmfracEvent> dataEventsInBin = filterPtRange(dataEvents, singleBinPtLo, singleBinPtHi);
+  vector<EmfracEvent> mcEventsInBin = filterPtRange(mcEvents, singleBinPtLo, singleBinPtHi);
+
   // --- Part 1: x_J split by the coarse ana::emfracBins ---
-  cout << "Page 1 (Data, coarse emfrac split):" << endl;
-  vector<TH1D*> hData = binByEmfracCoarse(dataEvents, "data");
-  drawEmfracPage(c, pdfPath, hData, {"p+p Run24 Data"}, commonFeatures);
+  cout << "Page 1 (Data, coarse emfrac split, purity-corrected):" << endl;
+  vector<TH1D*> hData = binByEmfracCoarsePurityCorrected(dataEventsInBin, "data");
+  drawEmfracPage(c, pdfPath, hData, {"p+p Run24 Data (purity-corr.)"}, dataFeatures);
 
   cout << "Page 2 (MC, coarse emfrac split):" << endl;
-  vector<TH1D*> hMC = binByEmfracCoarse(mcEvents, "mc");
-  drawEmfracPage(c, pdfPath, hMC, {"Pythia8 #gamma+jet MC"}, commonFeatures);
+  vector<TH1D*> hMC = binByEmfracCoarse(mcEventsInBin, "mc");
+  drawEmfracPage(c, pdfPath, hMC, {"Pythia8 #gamma+jet MC"}, mcFeatures);
 
   // --- Part 2: derive w(emfrac) = normalized Data / normalized MC, reweight MC, compare ---
   cout << "Page 3 (Data vs MC emfrac distributions + ratio = reweighting factor):" << endl;
-  TH1D * hRatio = drawEmfracRatioPage(c, pdfPath, dataEvents, mcEvents, commonFeatures);
+  TH1D * hRatio = drawEmfracRatioPage(c, pdfPath, dataEventsInBin, mcEventsInBin, commonFeatures);
 
   cout << "Page 4 (MC x_J before vs after emfrac reweighting):" << endl;
-  drawReweightedXjPage(c, pdfPath, hRatio, dataEvents, mcEvents, commonFeatures);
+  drawReweightedXjPage(c, pdfPath, hRatio, dataEventsInBin, mcEventsInBin, commonFeatures);
+
+  // --- Part 3: <x_J> Data/MC ratio vs pT, by emfrac category ---
+  cout << "Page 5 (<x_J> Data(purity-corr.)/MC ratio vs p_T, by emfrac category):" << endl;
+  drawMeanXjVsPtPage(c, pdfPath, dataEvents, mcEvents, ratioFeatures);
 
   c->SaveAs(Form("%s]", pdfPath));
   cout << "Wrote " << pdfPath << endl;
