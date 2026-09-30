@@ -308,7 +308,10 @@ void puritymaker(string systag = "nominal") {
   lu->AddEntry(odUsed,  "P_{A} (region A)");
   lu->AddEntry(odCUsed, "P_{C} (region C)");
   lu->Draw();
-  d.drawAll({"p+p Run24 Data"},{Form("systag: %s",systag.c_str()),Form("Jet R=%.1f",ana::JetRs[ir]),"paired clusters","leakage correction applied"},.18,.3,16,700);
+  // label block in the empty band on the right (pT > ~25 GeV, purity ~0.45-0.72),
+  // between P_C (<= ~0.4) and P_A (>= ~0.77); at (.18,.3) it ran through the
+  // 15-25 GeV P_C points
+  d.drawAll({"p+p Run24 Data"},{Form("systag: %s",systag.c_str()),Form("Jet R=%.1f",ana::JetRs[ir]),"paired clusters","leakage correction applied"},.55,.6,16,700);
   cu->SaveAs(purityPdfPath.c_str());
 
   c->cd();
