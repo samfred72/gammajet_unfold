@@ -560,15 +560,18 @@ void draw_systematics(int jetRadiusIndex = 2) {
     pads[ipt] = new TPad(Form("psum_%d",ipt),"",0,y1,1,y2);
     pads[ipt]->Draw();
   }
-  for (int ipt = ana::firstUsedPtBin; ipt < ana::firstUsedPtBin+nPtBinsUsed; ipt++) {
-    // idisplay: 0-based position among the nPtBinsUsed stacked pads (pads[]/"last panel"
+  // One summary panel (every systematic plus the totals, for pT bin ipt) in the
+  // current pad. standalone = a single-panel page of its own (the talk version,
+  // written separately below); otherwise one of the stacked panels on this page.
+  auto drawSummaryPanel = [&](int ipt, bool standalone) {
+    // idisplay: 0-based position among the nPtBinsUsed stacked pads ("last panel"
     // checks need this), separate from ipt, the real ana::ptBins index (fracDiff[]/
     // totalUncUp[]/totalUncDown[]/ana::ptBins[] all still need the real index).
     int idisplay = ipt - ana::firstUsedPtBin;
-    pads[idisplay]->cd();
-    pads[idisplay]->SetLeftMargin(.15);
-    pads[idisplay]->SetBottomMargin(idisplay == nPtBinsUsed-1 ? 0.2 : 0.02);
-    pads[idisplay]->SetTopMargin(0.05);
+    // a standalone panel always gets the x axis, like the bottom stacked panel
+    bool xaxis = standalone || idisplay == nPtBinsUsed-1;
+    // keeps the standalone page's clones from replacing the stacked page's by name
+    const char * sfx = standalone ? "_single" : "";
     gPad->SetTicks(1,1);
 
     double ymax = 0.05; // headroom floor so a near-flat set of curves isn't over-zoomed
@@ -585,26 +588,32 @@ void draw_systematics(int jetRadiusIndex = 2) {
     ymax = std::max(ymax, totalUncUp[ipt]->GetMaximum());
     ymax = std::max(ymax, totalUncDown[ipt]->GetMaximum());
 
-    TH1D * frame = (TH1D*)fracDiff[systematics[0]][ipt]->Clone(Form("hsumframe_pt%d",ipt));
+    TH1D * frame = (TH1D*)fracDiff[systematics[0]][ipt]->Clone(Form("hsumframe_pt%d%s",ipt,sfx));
     frame->Reset("ICES");
     frame->SetLineColor(kWhite);
     frame->GetYaxis()->SetRangeUser(-1.3, 1.3);
     frame->GetYaxis()->SetTitle("(Var.-Nom.)/Nom.");
-    frame->GetYaxis()->SetTitleSize(0.08);
-    frame->GetYaxis()->SetTitleOffset(0.8);
-    frame->GetYaxis()->SetLabelSize(0.07);
-    frame->GetXaxis()->SetTitle(idisplay == nPtBinsUsed-1 ? "x_{J#gamma}" : "");
-    frame->GetXaxis()->SetLabelSize(idisplay == nPtBinsUsed-1 ? 0.07 : 0);
-    frame->GetXaxis()->SetTitleSize(0.08);
+    // stacked panels are ~1/3 of the canvas tall, so their text sizes (a fraction of
+    // pad height) are larger to come out the same on paper
+    frame->GetYaxis()->SetTitleSize(standalone ? 0.05 : 0.08);
+    frame->GetYaxis()->SetTitleOffset(standalone ? 1.3 : 0.8);
+    frame->GetYaxis()->SetLabelSize(standalone ? 0.045 : 0.07);
+    frame->GetXaxis()->SetTitle(xaxis ? "x_{J#gamma}" : "");
+    frame->GetXaxis()->SetLabelSize(xaxis ? (standalone ? 0.045 : 0.07) : 0);
+    frame->GetXaxis()->SetTitleSize(standalone ? 0.05 : 0.08);
     frame->Draw("p");
 
     TLine * zero = new TLine(ana::unfoldXjBins[0],0,ana::unfoldXjBins[ana::nUnfoldXjBins],0);
     zero->SetLineStyle(9);
     zero->Draw("same");
 
-    TLegend * ls = new TLegend(.4,.65,.68,.93);
+    // standalone: two columns in the top-left corner, where every curve stays below
+    // ~0.5 for xJ < ~1.2 (the high-xJ bins, which reach the axis limits, are on the right)
+    TLegend * ls = standalone ? new TLegend(.17,.72,.62,.93) : new TLegend(.4,.65,.68,.93);
     ls->SetLineWidth(0);
-    ls->SetTextSize(0.05);
+    ls->SetFillStyle(0);
+    ls->SetTextSize(standalone ? 0.035 : 0.05);
+    if (standalone) ls->SetNColumns(2);
     for (const DisplayGroup & g : displayGroups) {
       bool firstMember = true;
       for (const string & systag : g.members) {
@@ -612,7 +621,7 @@ void draw_systematics(int jetRadiusIndex = 2) {
         // still gets Write()'d to the ROOT file above with those errors intact - only the
         // plotted copy is stripped, since a per-bin ratio of two already-unfolded results
         // isn't an independent measurement and error bars here would overstate that.
-        TH1D * hf = (TH1D*)fracDiff[systag][ipt]->Clone(Form("hfracdiff_%s_pt%d_disp", systag.c_str(), ipt));
+        TH1D * hf = (TH1D*)fracDiff[systag][ipt]->Clone(Form("hfracdiff_%s_pt%d_disp%s", systag.c_str(), ipt, sfx));
         for (int b = 1; b <= hf->GetNbinsX(); b++) hf->SetBinError(b, 0);
         hf->SetLineColor(g.color);
         hf->SetLineWidth(1);
@@ -620,7 +629,7 @@ void draw_systematics(int jetRadiusIndex = 2) {
         if (firstMember) { ls->AddEntry(hf, g.label.c_str(), "l"); firstMember = false; }
 
         if (g.symmetric) {
-          TH1D * hfNeg = (TH1D*)hf->Clone(Form("hfracdiff_%s_pt%d_disp_neg", systag.c_str(), ipt));
+          TH1D * hfNeg = (TH1D*)hf->Clone(Form("hfracdiff_%s_pt%d_disp_neg%s", systag.c_str(), ipt, sfx));
           hfNeg->Scale(-1);
           hfNeg->Draw("hist same");
         }
@@ -629,14 +638,14 @@ void draw_systematics(int jetRadiusIndex = 2) {
     // Purity: a single combined symmetric magnitude (not a single systag's real
     // fracDiff), drawn the same curve-plus-negation way as any other symmetric
     // DisplayGroup member above, rather than through that generic loop directly.
-    TH1D * hPurityDisp = (TH1D*)purityUnc[ipt]->Clone(Form("hpurity_pt%d_disp", ipt));
+    TH1D * hPurityDisp = (TH1D*)purityUnc[ipt]->Clone(Form("hpurity_pt%d_disp%s", ipt, sfx));
     for (int b = 1; b <= hPurityDisp->GetNbinsX(); b++) hPurityDisp->SetBinError(b, 0);
     hPurityDisp->SetLineColor(colorPurity);
     hPurityDisp->SetLineWidth(1);
     hPurityDisp->Draw("hist same");
     ls->AddEntry(hPurityDisp, "Purity", "l");
 
-    TH1D * hPurityDispNeg = (TH1D*)hPurityDisp->Clone(Form("hpurity_pt%d_disp_neg", ipt));
+    TH1D * hPurityDispNeg = (TH1D*)hPurityDisp->Clone(Form("hpurity_pt%d_disp_neg%s", ipt, sfx));
     hPurityDispNeg->Scale(-1);
     hPurityDispNeg->Draw("hist same");
 
@@ -644,14 +653,14 @@ void draw_systematics(int jetRadiusIndex = 2) {
     // and down (niterLow+priorSensitivity) are independent magnitudes, not mirror images
     // of each other, so each is its own histogram; "down" negated only for display, to
     // draw on the same signed axis as the fracDiff curves above.
-    TH1D * hUnfoldingUpDisp = (TH1D*)unfoldingUncUp[ipt]->Clone(Form("hunfolding_up_pt%d_disp", ipt));
+    TH1D * hUnfoldingUpDisp = (TH1D*)unfoldingUncUp[ipt]->Clone(Form("hunfolding_up_pt%d_disp%s", ipt, sfx));
     for (int b = 1; b <= hUnfoldingUpDisp->GetNbinsX(); b++) hUnfoldingUpDisp->SetBinError(b, 0);
     hUnfoldingUpDisp->SetLineColor(colorUnfolding);
     hUnfoldingUpDisp->SetLineWidth(1);
     hUnfoldingUpDisp->Draw("hist same");
     ls->AddEntry(hUnfoldingUpDisp, "Unfolding", "l");
 
-    TH1D * hUnfoldingDownDisp = (TH1D*)unfoldingUncDown[ipt]->Clone(Form("hunfolding_down_pt%d_disp", ipt));
+    TH1D * hUnfoldingDownDisp = (TH1D*)unfoldingUncDown[ipt]->Clone(Form("hunfolding_down_pt%d_disp%s", ipt, sfx));
     for (int b = 1; b <= hUnfoldingDownDisp->GetNbinsX(); b++) hUnfoldingDownDisp->SetBinError(b, 0);
     hUnfoldingDownDisp->Scale(-1);
     hUnfoldingDownDisp->SetLineColor(colorUnfolding);
@@ -661,13 +670,13 @@ void draw_systematics(int jetRadiusIndex = 2) {
     // Asymmetric total: up and down are independent magnitudes now (not mirror images of
     // each other), so each is its own histogram - "down" negated only for display, to
     // draw on the same signed axis as the fracDiff curves above.
-    TH1D * hTotalUpDisp = (TH1D*)totalUncUp[ipt]->Clone(Form("hquadsum_up_pt%d_disp", ipt));
+    TH1D * hTotalUpDisp = (TH1D*)totalUncUp[ipt]->Clone(Form("hquadsum_up_pt%d_disp%s", ipt, sfx));
     for (int b = 1; b <= hTotalUpDisp->GetNbinsX(); b++) hTotalUpDisp->SetBinError(b, 0);
     hTotalUpDisp->SetLineColor(kBlack);
     hTotalUpDisp->SetLineWidth(2);
     hTotalUpDisp->SetLineStyle(2);
 
-    TH1D * hTotalDownDisp = (TH1D*)totalUncDown[ipt]->Clone(Form("hquadsum_down_pt%d_disp", ipt));
+    TH1D * hTotalDownDisp = (TH1D*)totalUncDown[ipt]->Clone(Form("hquadsum_down_pt%d_disp%s", ipt, sfx));
     for (int b = 1; b <= hTotalDownDisp->GetNbinsX(); b++) hTotalDownDisp->SetBinError(b, 0);
     hTotalDownDisp->Scale(-1);
     hTotalDownDisp->SetLineColor(kBlack);
@@ -679,13 +688,43 @@ void draw_systematics(int jetRadiusIndex = 2) {
     ls->AddEntry(hTotalUpDisp, "Total (asym. quad. sum)", "l");
     ls->Draw();
 
+    if (standalone) {
+      // bottom-left corner, below every curve for xJ < ~1.1 (down to about -0.55 there)
+      dLabel.drawAll({"p+p Run24 Data"},
+                     {Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV",ana::ptBins[ipt],ana::ptBins[ipt+1]),
+                      Form("Jet R=%.1f",ana::JetRs[ir])}, .19, .33, 18, 600);
+      return;
+    }
     TLatex * t = new TLatex(.18,.85,Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV",ana::ptBins[ipt],ana::ptBins[ipt+1]));
     t->SetNDC();
     t->SetTextFont(43);
     t->SetTextSize(16);
     t->Draw();
+  };
+  for (int ipt = ana::firstUsedPtBin; ipt < ana::firstUsedPtBin+nPtBinsUsed; ipt++) {
+    int idisplay = ipt - ana::firstUsedPtBin;
+    pads[idisplay]->cd();
+    pads[idisplay]->SetLeftMargin(.15);
+    pads[idisplay]->SetBottomMargin(idisplay == nPtBinsUsed-1 ? 0.2 : 0.02);
+    pads[idisplay]->SetTopMargin(0.05);
+    drawSummaryPanel(ipt, false);
   }
   c->SaveAs(pdfPath);
+
+  // Talk version: the same summary panel for the 20-25 GeV bin alone, on its own
+  // canvas and PDF (slide "Total systematic uncertainty" of the COMPS III deck).
+  {
+    const int iptSingle = ana::findPtBin(22.5);
+    TCanvas * cs = new TCanvas("csingle","",800,600);
+    cs->SetLeftMargin(.15);
+    cs->SetRightMargin(.05);
+    cs->SetTopMargin(.05);
+    cs->SetBottomMargin(.12);
+    drawSummaryPanel(iptSingle, true);
+    cs->SaveAs(Form("/home/samson72/sphnx/gammajet_unfold/pdfs/syst_total_%s_pt%.0f_%.0f.pdf", ana::rnames[ir],
+                    ana::ptBins[iptSingle], ana::ptBins[iptSingle+1]));
+    c->cd();
+  }
 
   c->SaveAs(Form("%s]", pdfPath));
   fout->Close();
