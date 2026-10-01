@@ -90,7 +90,7 @@ void draw_abcd_2d(double ptLow = ana::ptBinsUsed[0], double ptHigh = ana::ptBins
   region(isoB,   bdtC, isoMax, bdtChi, "D");
 
   // white panel for the label block, inside region D (upper right of it)
-  TBox * panel = new TBox(7.4, bdtChi - 0.191, isoMax - 0.25, bdtChi - 0.015);
+  TBox * panel = new TBox(7.15, bdtChi - 0.232, isoMax - 0.25, bdtChi - 0.015);
   panel->SetFillColor(kWhite);
   panel->SetFillStyle(1001);  // TBox defaults to hollow
   panel->SetLineWidth(0);
@@ -104,7 +104,7 @@ void draw_abcd_2d(double ptLow = ana::ptBinsUsed[0], double ptHigh = ana::ptBins
   d.drawAll({"p+p Run24 Data"},
             {Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV", ptLow, ptHigh),
              Form("|#eta^{#gamma}| < %.1f, leading cluster", ana::photonEtaCut)},
-            .58, .588, 18, 700);
+            .567, .574, 18, 700);
   c->RedrawAxis();
 
   const char * out = "/home/samson72/sphnx/gammajet_unfold/pdfs/abcd_2d_data.pdf";
