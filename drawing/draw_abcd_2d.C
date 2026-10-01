@@ -35,7 +35,7 @@ void draw_abcd_2d(double ptLow = ana::ptBinsUsed[0], double ptHigh = ana::ptBins
 
   const double isoMin = -2, isoMax = 15;
   TH2D * h = new TH2D("habcd", ";#it{E}_{T}^{iso} (#it{R}=0.4) [GeV];Photon ID BDT score",
-                      68, isoMin, isoMax, 50, 0, 1);  // 0.25 GeV x 0.02
+                      136, isoMin, isoMax, 100, 0, 1);  // 0.125 GeV x 0.01
   Long64_t n = t->GetEntries();
   for (Long64_t e = 0; e < n; e++) {
     t->GetEntry(e);
@@ -95,6 +95,11 @@ void draw_abcd_2d(double ptLow = ana::ptBinsUsed[0], double ptHigh = ana::ptBins
   panel->SetFillStyle(1001);  // TBox defaults to hollow
   panel->SetLineWidth(0);
   panel->Draw();
+  TBox * frame = (TBox*)panel->Clone();  // a filled TBox draws no outline: add one
+  frame->SetFillStyle(0);
+  frame->SetLineColor(kBlack);
+  frame->SetLineWidth(2);
+  frame->Draw();
   drawer d;
   d.drawAll({"p+p Run24 Data"},
             {Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV", ptLow, ptHigh),
