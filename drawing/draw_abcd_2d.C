@@ -8,14 +8,16 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 //
 // Selection: the leading cluster as unfolder.cc builds maxpho (iso = iso_topo_04 =
 // cluster_showershape[11], bdt = cluster_bdt_scores[9]), |vz| < ana::vzcut,
-// |eta| < ana::photonEtaCut, and pT in the reported range ana::ptBinsUsed. Clusters
+// |eta| < ana::photonEtaCut, and ptLow <= pT < ptHigh (default: the first reported pT
+// bin, 15-20 GeV). Clusters
 // without a computed topo isolation (iso <= -999, the PhotonClusterBuilder sentinel) are
 // skipped, as ana::findabcdBin does. No jet pairing is required here (that needs the
 // jet calibration chain), so this is the photon selection only; the region boundaries
 // are read straight from ana.h (nominal bin 0), not hard-coded.
 //
 // Output: pdfs/abcd_2d_data.pdf
-void draw_abcd_2d(bool showProgress = false) {
+void draw_abcd_2d(double ptLow = ana::ptBinsUsed[0], double ptHigh = ana::ptBinsUsed[1],
+                  bool showProgress = false) {
   gStyle->SetOptStat(0);
   gStyle->SetPalette(kBird);
 
@@ -33,8 +35,7 @@ void draw_abcd_2d(bool showProgress = false) {
 
   const double isoMin = -2, isoMax = 15;
   TH2D * h = new TH2D("habcd", ";#it{E}_{T}^{iso} (#it{R}=0.4) [GeV];Photon ID BDT score",
-                      34, isoMin, isoMax, 25, 0, 1);  // 0.5 GeV x 0.04: smooth enough at high iso
-  const double ptLow = ana::ptBinsUsed[0], ptHigh = ana::ptBinsUsed[ana::nPtBinsUsed];
+                      68, isoMin, isoMax, 50, 0, 1);  // 0.25 GeV x 0.02
   Long64_t n = t->GetEntries();
   for (Long64_t e = 0; e < n; e++) {
     t->GetEntry(e);
@@ -88,8 +89,8 @@ void draw_abcd_2d(bool showProgress = false) {
   region(isoMin, bdtC, isoA, bdtChi, "C");
   region(isoB,   bdtC, isoMax, bdtChi, "D");
 
-  // white panel for the label block, in the B-D gap (part of no region)
-  TBox * panel = new TBox(7.4, bdtChi + 0.012, isoMax - 0.25, bdtA - 0.012);
+  // white panel for the label block, inside region D (upper right of it)
+  TBox * panel = new TBox(7.4, bdtChi - 0.191, isoMax - 0.25, bdtChi - 0.015);
   panel->SetFillColor(kWhite);
   panel->SetFillStyle(1001);  // TBox defaults to hollow
   panel->SetLineWidth(0);
@@ -98,7 +99,7 @@ void draw_abcd_2d(bool showProgress = false) {
   d.drawAll({"p+p Run24 Data"},
             {Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV", ptLow, ptHigh),
              Form("|#eta^{#gamma}| < %.1f, leading cluster", ana::photonEtaCut)},
-            .58, .755, 18, 700);
+            .58, .588, 18, 700);
   c->RedrawAxis();
 
   const char * out = "/home/samson72/sphnx/gammajet_unfold/pdfs/abcd_2d_data.pdf";
