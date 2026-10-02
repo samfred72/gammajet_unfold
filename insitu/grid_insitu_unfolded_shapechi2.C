@@ -213,7 +213,7 @@ void drawJESPage(TCanvas * c, const char * pdfPath, const char * label, int ir,
   l1->Draw();
   insitu_utility::drawSPhenixLabel({label}, {
       Form("Jet R=%.1f", ana::JetRs[ir]),
-      Form("|#eta^{#gamma}|<%.1f, |#eta^{jet}|<%.1f", ana::etacut, ana::etacut-ana::JetRs[ir]),
+      Form("|#eta^{#gamma}|<%.1f, |#eta^{jet}|<%.1f", ana::photonEtaCut, ana::etacut-ana::JetRs[ir]),
       Form("#Delta#phi>%.0f#pi/%.0f", ana::oppnum, ana::oppden)
     }, .18, .85, 16, p1->GetWh()/1.5);
 
@@ -304,7 +304,7 @@ void drawXjPage(TCanvas * c, const char * pdfPath, const char * label, int ir, f
   insitu_utility::drawSPhenixLabel({label, Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV", ptlow, pthigh)}, {
       Form("Jet R=%.1f", ana::JetRs[ir]),
       Form("p_{T}^{jet} > %.0f GeV", ana::jet_calib_pt_cut[ir]),
-      Form("|#eta^{#gamma}|<%.1f, |#eta^{jet}|<%.1f", ana::etacut, ana::etacut-ana::JetRs[ir]),
+      Form("|#eta^{#gamma}|<%.1f, |#eta^{jet}|<%.1f", ana::photonEtaCut, ana::etacut-ana::JetRs[ir]),
       Form("#Delta#phi>%.0f#pi/%.0f", ana::oppnum, ana::oppden)
     }, .18, .85, 16, gPad->GetWh());
 

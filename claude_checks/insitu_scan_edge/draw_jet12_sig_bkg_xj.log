@@ -1,0 +1,50 @@
+
+Processing draw_jet12_sig_bkg_xj.C...
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet8_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet20_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet30_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet50_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet60_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet80_pythia_nominal_unfolding.root does not exist
+
+===== R = 0.2 =====
+pT bin     Neff SA  Neff BA  Neff SC  Neff BC |   <S_A>   <B_A>   <S_C>   <B_C>     <C> |    P_A    P_C |      bias    dpa/pa
+ 15-20        1797      567      438     1922 |   0.740   0.770   0.738   0.766   0.761 |  0.605  0.146 | +0.003+-0.010   +0.4%
+          mean errors: S_A 0.006  B_A 0.012  S_C 0.012  B_C 0.006
+          KS(B_A,B_C)=0.669  KS(S_A,B_A)=0.026   MC signal fraction in A (Jet12 only, not physical): 0.766
+ 20-25         353       96      110      273 |   0.673   0.759   0.687   0.726   0.714 |  0.773  0.290 | +0.011+-0.012   +1.6%
+          mean errors: S_A 0.014  B_A 0.033  S_C 0.025  B_C 0.016
+          KS(B_A,B_C)=0.437  KS(S_A,B_A)=0.040   MC signal fraction in A (Jet12 only, not physical): 0.795
+ 25-35          81       19       28       40 |   0.680   0.841   0.679   0.757   0.723 |  0.771  0.244 | +0.027+-0.025   +4.0%
+          mean errors: S_A 0.030  B_A 0.063  S_C 0.046  B_C 0.041
+          KS(B_A,B_C)=0.924  KS(S_A,B_A)=0.189   MC signal fraction in A (Jet12 only, not physical): 0.809
+
+===== R = 0.3 =====
+pT bin     Neff SA  Neff BA  Neff SC  Neff BC |   <S_A>   <B_A>   <S_C>   <B_C>     <C> |    P_A    P_C |      bias    dpa/pa
+ 15-20        1941      596      473     2039 |   0.795   0.850   0.792   0.829   0.822 |  0.615  0.149 | +0.014+-0.010   +1.8%
+          mean errors: S_A 0.006  B_A 0.012  S_C 0.011  B_C 0.006
+          KS(B_A,B_C)=0.133  KS(S_A,B_A)=0.000   MC signal fraction in A (Jet12 only, not physical): 0.772
+ 20-25         355       93      109      273 |   0.745   0.876   0.758   0.816   0.798 |  0.784  0.302 | +0.019+-0.011   +2.5%
+          mean errors: S_A 0.014  B_A 0.032  S_C 0.024  B_C 0.016
+          KS(B_A,B_C)=0.030  KS(S_A,B_A)=0.000   MC signal fraction in A (Jet12 only, not physical): 0.801
+ 25-35          81       22       28       36 |   0.751   0.861   0.770   0.890   0.835 |  0.771  0.254 | -0.010+-0.023   -1.3%
+          mean errors: S_A 0.029  B_A 0.056  S_C 0.054  B_C 0.041
+          KS(B_A,B_C)=0.987  KS(S_A,B_A)=0.413   MC signal fraction in A (Jet12 only, not physical): 0.799
+
+===== R = 0.4 =====
+pT bin     Neff SA  Neff BA  Neff SC  Neff BC |   <S_A>   <B_A>   <S_C>   <B_C>     <C> |    P_A    P_C |      bias    dpa/pa
+ 15-20        1919      584      462     1989 |   0.837   0.906   0.842   0.892   0.883 |  0.620  0.149 | +0.010+-0.010   +1.2%
+          mean errors: S_A 0.006  B_A 0.013  S_C 0.012  B_C 0.007
+          KS(B_A,B_C)=0.953  KS(S_A,B_A)=0.000   MC signal fraction in A (Jet12 only, not physical): 0.772
+ 20-25         331       89      104      253 |   0.803   0.912   0.816   0.875   0.856 |  0.783  0.303 | +0.011+-0.012   +1.4%
+          mean errors: S_A 0.015  B_A 0.033  S_C 0.024  B_C 0.017
+          KS(B_A,B_C)=0.345  KS(S_A,B_A)=0.008   MC signal fraction in A (Jet12 only, not physical): 0.795
+ 25-35          76       17       23       34 |   0.803   0.946   0.882   0.937   0.915 |  0.809  0.266 | +0.002+-0.022   +0.3%
+          mean errors: S_A 0.031  B_A 0.075  S_C 0.055  B_C 0.040
+          KS(B_A,B_C)=0.887  KS(S_A,B_A)=0.288   MC signal fraction in A (Jet12 only, not physical): 0.835
+Info in <TCanvas::Print>: pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/insitu_scan_edge/pdfs/draw_jet12_sig_bkg_xj.pdf has been created
+Info in <TCanvas::Print>: Current canvas added to pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/insitu_scan_edge/pdfs/draw_jet12_sig_bkg_xj.pdf
+Info in <TCanvas::Print>: Current canvas added to pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/insitu_scan_edge/pdfs/draw_jet12_sig_bkg_xj.pdf
+Info in <TCanvas::Print>: Current canvas added to pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/insitu_scan_edge/pdfs/draw_jet12_sig_bkg_xj.pdf
+Info in <TCanvas::Print>: Current canvas added to pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/insitu_scan_edge/pdfs/draw_jet12_sig_bkg_xj.pdf
+Info in <TCanvas::Print>: pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/insitu_scan_edge/pdfs/draw_jet12_sig_bkg_xj.pdf has been closed

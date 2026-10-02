@@ -6,6 +6,8 @@
 #   bash run_pipeline.sh nominal  # fast path: nominal only (compile+unfold+purity+draw)
 #                                 # - use this while iterating on a code change, then run
 #                                 # the full version before trusting/reporting results.
+#   bash run_pipeline.sh draw     # stage 4 only (all radii), on existing stage 2+3 output -
+#                                 # used by run_full_pipeline.sh after its unfold/in-situ loop.
 #
 # ---------------------------------------------------------------------------------
 # WHICH STAGE TO RERUN, BY WHAT YOU CHANGED
@@ -47,6 +49,10 @@ set -e
 cd "$(dirname "$0")"
 
 MODE=${1:-full}
+if [[ "$MODE" != "full" && "$MODE" != "nominal" && "$MODE" != "draw" ]]; then
+  echo "Usage: $0 [full|nominal|draw]" >&2
+  exit 1
+fi
 if [[ "$MODE" == "nominal" ]]; then
   SYSTAGS=(nominal)
 else
@@ -62,6 +68,7 @@ echo "Mode: $MODE (systags: ${SYSTAGS[*]})"
 # jet_object/treeuser/drawer/unfold_utility). Drawing macros under drawing/ are NOT
 # compiled here - they're plain ROOT macros, picked up fresh (Cling JIT) on every run,
 # so editing them never requires this step.
+if [[ "$MODE" != "draw" ]]; then
 echo "=== Stage 1: compiling libgammajet_unfold.so ==="
 bash make.sh
 
@@ -119,6 +126,8 @@ fi
 # plot_toy_chi2_combined.C as a subprocess - run both for the full four-curve comparison
 # (running only one still produces a valid partial plot, just not this script's problem
 # to special-case).
+fi # end of stages 1-3 (skipped in draw mode)
+
 echo "=== Stage 4: drawing macros ==="
 cd ../drawing
 root -b -l -q 'draw_purity_corrected.C("nominal")'

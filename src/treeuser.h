@@ -20,19 +20,19 @@ class treeuser {
     treeuser(string trigger, string sim = "pythia") {
       this->trigger = trigger;
       this->sim = sim;
-      // Raw trees are large, pre-existing input data - read from the original gammajet
-      // project rather than duplicating them here.
+      // Raw trees are large input data - kept in this repo's trees/ directory
+      // (gitignored, not committed).
       // "Jet12_long" is a separate production at the generic
-      // gammajet/trees/gammajet_<sim>_<trigger>.root path (no special-case branch
+      // gammajet_unfold/trees/gammajet_<sim>_<trigger>.root path (no special-case branch
       // needed below) with no truth-level jet-pT cut, following the (0,100) "wide
       // open" threshmap/threshmap_high/reco_threshmap_high convention below rather
       // than "Jet12"'s narrow pT-hat-slice window. (A legacy "Jet12_full" sample - a
       // 10x-higher-statistics copy of the same Jet12 towerntup production, kept
-      // outside gammajet/trees in a sibling project - used to have a special-case
+      // outside the trees directory in a sibling project - used to have a special-case
       // path here too, but has been retired in favor of Jet12_long.)
       f = (trigger == "Data" ?
-          TFile::Open(Form("/home/samson72/sphnx/gammajet/trees/gammajet_%s.root",trigger.c_str()),"read") :
-          TFile::Open(Form("/home/samson72/sphnx/gammajet/trees/gammajet_%s_%s.root",sim.c_str(),trigger.c_str()),"read")
+          TFile::Open(Form("/home/samson72/sphnx/gammajet_unfold/trees/gammajet_%s.root",trigger.c_str()),"read") :
+          TFile::Open(Form("/home/samson72/sphnx/gammajet_unfold/trees/gammajet_%s_%s.root",sim.c_str(),trigger.c_str()),"read")
           );
       t = (TTree*)f->Get("towerntup");
       isMC = (trigger != "Data");
@@ -154,9 +154,10 @@ class treeuser {
     Float_t         jet_emfrac[nJetR];
     Float_t         jet_time[nJetR]; 
 
-    Bool_t          hasthirdjet[nJetR];
+    // Highest-pT in-time jet outside the photon cone other than the leading recoil jet:
+    // jet_pt_calib for Data, nominal jet_pt_smear_truth for MC (treemaking from Oct 2026;
+    // older trees store the raw pT here). Feeds the threejet veto in unfolder.cc.
     Float_t         thirdjet_pt[nJetR];
-    Float_t         thirdjet_dr[nJetR];
 
     Float_t         hadron_p[nJetR];
 
@@ -203,9 +204,7 @@ class treeuser {
     TBranch        *b_jet_emfrac;   //!
     TBranch        *b_jet_time;   //!
     
-    TBranch        *b_hasthirdjet;   //!
     TBranch        *b_thirdjet_pt;   //!
-    TBranch        *b_thirdjet_dr;   //!
 
     TBranch        *b_hadron_p;   //!
 

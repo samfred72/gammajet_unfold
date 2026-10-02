@@ -1,0 +1,75 @@
+diff --git a/treemaking/src/CaloAna.cc b/treemaking/src/CaloAna.cc
+index d107dd5..15d2976 100644
+--- a/treemaking/src/CaloAna.cc
++++ b/treemaking/src/CaloAna.cc
+@@ -118,6 +118,14 @@ void CaloAna::InitTree(){
+   //towerntuple->Branch("jet_ihfrac",  m_jet_ihfrac  , "jet_ihfrac[7]/F");
+   //towerntuple->Branch("jet_ohfrac",  m_jet_ohfrac  , "jet_ohfrac[7]/F");
+   towerntuple->Branch("jet_time",    m_jet_time    , "jet_time[7]/F");
++  if (!isMC) {
++    towerntuple->Branch("jet_nt_pt",       m_jet_nt_pt      , "jet_nt_pt[7]/F");
++    towerntuple->Branch("jet_nt_pt_calib", m_jet_nt_pt_calib, "jet_nt_pt_calib[7]/F");
++    towerntuple->Branch("jet_nt_eta",      m_jet_nt_eta     , "jet_nt_eta[7]/F");
++    towerntuple->Branch("jet_nt_phi",      m_jet_nt_phi     , "jet_nt_phi[7]/F");
++    towerntuple->Branch("jet_nt_emfrac",   m_jet_nt_emfrac  , "jet_nt_emfrac[7]/F");
++    towerntuple->Branch("jet_nt_time",     m_jet_nt_time    , "jet_nt_time[7]/F");
++  }
+   towerntuple->Branch("thirdjet_pt", m_3jet_pt     , "thirdjet_pt[7]/F");
+   towerntuple->Branch("thirdjet_dr", m_3jet_dr     , "thirdjet_dr[7]/F");
+   if (isMC) {
+@@ -350,6 +358,7 @@ int CaloAna::process_towers(PHCompositeNode* topNode)
+ 
+     // for third jet systematics
+     float maxjetpt = 0;
++    float maxjetpt_nt = 0; // leading jet with no timing window (jet_nt_* branches, data only)
+     float thirdjetpt = 0;
+     float thirdjeteta = 0;
+     float thirdjetphi = 0;
+@@ -430,6 +439,15 @@ int CaloAna::process_towers(PHCompositeNode* topNode)
+       }
+       if (jet_time_count > 0) jet_time = (jet_time / jet_time_count)*17.6;
+       else jet_time = -999;
++      if (!isMC && pt > maxjetpt_nt) {
++        maxjetpt_nt = pt;
++        m_jet_nt_pt      [ir] = pt;
++        m_jet_nt_pt_calib[ir] = pt_calib;
++        m_jet_nt_eta     [ir] = eta;
++        m_jet_nt_phi     [ir] = phi;
++        m_jet_nt_emfrac  [ir] = emcal_calo_e/(emcal_calo_e + ihcal_calo_e + ohcal_calo_e);
++        m_jet_nt_time    [ir] = jet_time;
++      }
+       if (!isMC && (m_mbd_time - jet_time > 4 || m_mbd_time - jet_time < 0)) continue;
+       if (pt < maxjetpt) continue;
+       thirdjetpt = maxjetpt;
+@@ -525,6 +543,12 @@ void CaloAna::Clear() {
+     //m_jet_ihfrac  [ir] = 0;
+     //m_jet_ohfrac  [ir] = 0;
+     m_jet_time    [ir] = 0;
++    m_jet_nt_pt      [ir] = 0;
++    m_jet_nt_pt_calib[ir] = 0;
++    m_jet_nt_eta     [ir] = 0;
++    m_jet_nt_phi     [ir] = 0;
++    m_jet_nt_emfrac  [ir] = 0;
++    m_jet_nt_time    [ir] = 0;
+   }
+   if (isMC) {
+ 
+diff --git a/treemaking/src/CaloAna.h b/treemaking/src/CaloAna.h
+index 92d7203..e5199f7 100644
+--- a/treemaking/src/CaloAna.h
++++ b/treemaking/src/CaloAna.h
+@@ -326,6 +326,14 @@ class CaloAna : public SubsysReco
+   Float_t m_jet_ihfrac       [m_nRadii];
+   Float_t m_jet_ohfrac       [m_nRadii];
+   Float_t m_jet_time         [m_nRadii];
++  // Leading jet (after the same pT/dR selection) with NO t_MBD - t_jet window, data only -
++  // lets the window's efficiency be measured and the window be varied downstream.
++  Float_t m_jet_nt_pt        [m_nRadii];
++  Float_t m_jet_nt_pt_calib  [m_nRadii];
++  Float_t m_jet_nt_eta       [m_nRadii];
++  Float_t m_jet_nt_phi       [m_nRadii];
++  Float_t m_jet_nt_emfrac    [m_nRadii];
++  Float_t m_jet_nt_time      [m_nRadii];
+   Float_t m_3jet_pt          [m_nRadii];
+   Float_t m_3jet_dr          [m_nRadii];
+ 

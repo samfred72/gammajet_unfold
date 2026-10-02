@@ -63,13 +63,15 @@ for systag in "${SYSTAGS[@]}"; do
   #root -b -l -q "draw_grid_chi2.C(\"$systag\")"
 done
 
-# draw_jes_summary.C combines grid_insitu.C's purity-corrected p_a across every systag
-# above into the final per-radius stat+syst total and, when this was the full sweep (all
-# of ana::systags, not a --systag-restricted subset), rewrites src/ana.h's
-# jesNominal/jesTotalErrLow/jesTotalErrHigh in place - see that macro's own guard, which
-# skips the ana.h update (with a warning) instead of baking in an incomplete systematic
-# if any systag/radius combination above didn't produce a result. Only run it here, once,
-# after the systag loop finishes - it reads every systag's output file itself, it doesn't
-# take one as an argument. It prints its own clear message on whether ana.h was actually
-# touched, so nothing further to check here.
+# draw_jes_summary.C collects grid_insitu.C's purity-corrected p_a for every systag above
+# and, when this was the full sweep (all of ana::systags, not a --systag-restricted
+# subset), rewrites src/ana.h's jesNominal, jesStatErrLow/High (the nominal fit's
+# statistical error, used by jes_high/jes_low) and the per-systag jesBySystag table that
+# unfolder.cc uses to correct Data in each variation with that variation's own p_a (PPG18
+# review issue 5). Its guard skips the ana.h update (with a warning) if any systag/radius
+# combination above didn't produce a result. It prints "Updated .../ana.h" when it did
+# rewrite the file - macros/run_full_pipeline.sh checks for that line. Rebuild
+# (src/make.sh) afterwards for the new constants to take effect.
 root -b -l -q "draw_jes_summary.C"
+# p_a under every variation, per radius (reads the same outputs; no scan).
+root -b -l -q "draw_jes_variations.C"

@@ -128,9 +128,9 @@ void diagnose_nikhil_only(string trigger = "Photon20", string sim = "pythia") {
                << " < lowbin(" << lowbin << ")  [xJ unfolding floor]" << endl;
           pass = false;
         }
-        if (fabs(maxpho_truth.eta) > ana::etacut) {
+        if (fabs(maxpho_truth.eta) > ana::photonEtaCut) {
           cout << "  CUT: check_pair - |photon eta| = " << fabs(maxpho_truth.eta)
-               << " > etacut(" << ana::etacut << ")" << endl;
+               << " > photonEtaCut(" << ana::photonEtaCut << ")" << endl;
           pass = false;
         }
         if (fabs(maxjet_truth.eta) > ana::etacut - ana::JetRs[ir]) {

@@ -20,7 +20,7 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 // histograms for:
 //   1. Region A (signal region) in Data - raw, no A-C background subtraction.
 //   2. Region A in "Jet12_long" (a single Pythia8 QCD-dijet-triggered MC sample, no
-//      truth-level jet-pT cut, at the standard gammajet/trees path - see
+//      truth-level jet-pT cut, at the standard gammajet_unfold/trees path - see
 //      src/treeuser.h) - also raw, no ABCD subtraction on the MC side either.
 //
 // Unlike draw_insitu_xj.C there is no purity-corrected histogram here at all - this

@@ -36,7 +36,7 @@ R__LOAD_LIBRARY(libRooUnfold.so); // needed because we instantiate unfolder dire
 // unfolder instance per sample and never calling fill_matrix/unfold/end on it) rather
 // than reimplementing the pairing/eta/dphi/xJ-floor cuts by hand, so this can't silently
 // drift from the production selection. Reconstructs the same nominal-systag reco-level
-// quantities fill_matrix() would (unfolder.cc:149-232) for MC: the always-on 2% EMR smear
+// quantities fill_matrix() would (unfolder.cc:149-232) for MC: the always-on nominal EMR smear
 // on cluster pT and the truth-derived jet_pt_smear_truth[ir] jet pT. Data deliberately
 // does NOT get unfolder.cc's per-radius JES correction (ana::jesNominal[ir]) here - uses
 // raw jet_pt_calib[ir] directly, on explicit request, matching
@@ -144,13 +144,13 @@ vector<EmfracEvent> collectEvents(string trigger, string sim, bool isMCsample, d
 
     float mcWeight = isMCsample ? rw.GetWeight(uf.vz, uf.cluster_pt) : 1.0f;
 
-    // Nominal-systag reco-level photon: MC carries the always-on 2% EMR smear
-    // (unfolder.cc's systagEmrSigmaArr nominal value - see that file's header comment);
+    // Nominal-systag reco-level photon: MC carries the always-on nominal EMR smear
+    // (ana::emResolutionSigma nominal, PPG12 prescription - see ana.h);
     // Data is used as-is. Not the same random sequence unfolder.cc itself draws (its own
     // TRandom member is private, and bit-for-bit reproducibility isn't needed for a
     // standalone diagnostic), just the same smearing recipe.
     float recoClusterPt = uf.cluster_pt;
-    if (isMCsample) recoClusterPt = rnd.Gaus(recoClusterPt, recoClusterPt * 0.02);
+    if (isMCsample) recoClusterPt += rnd.Gaus(0, ana::emResolutionSigma(uf.truth_cluster_pt) * uf.truth_cluster_pt);
 
     pho_object maxpho(recoClusterPt, uf.cluster_e, uf.cluster_eta, uf.cluster_phi,
         uf.cluster_showershape[10], uf.cluster_showershape[11], uf.cluster_time,

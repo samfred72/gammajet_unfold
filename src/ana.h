@@ -63,6 +63,30 @@ class ana {
     static Int_t findHadronBin(double value);
     static Int_t findEmfracBin(double value);
 
+    // EM-calorimeter scale/resolution systematic inputs - values and prescription taken from
+    // the PPG12 isolated-photon analysis note (sPH-ppg-2024-012, Sec. 5.1-5.2), so this
+    // analysis's EM systematics are the same as PPG12's. (PPG12's additional residual
+    // energy-scale non-linearity term is deliberately not included - this analysis keeps
+    // its own emscale_high/low + EMRhigh/low systag structure, see ana::systags.)
+    //
+    // emscaleShift: +-1.48% cluster-pT scale shift (Calorimeter Calibration Working Group),
+    // applied by unfolder.cc as emscale_high/emscale_low.
+    static constexpr float emscaleShift = 0.0148;
+    // emResolutionSigma: fractional width of the extra Gaussian smearing applied to MC
+    // cluster pT so MC's resolution matches Data's. sigma_extra(E) = sqrt(max(0,
+    // sigma_data(E)^2 - sigma_MC(E)^2)), with sigma(E)/E = sqrt(p0^2/E + p1^2/E^2 + p2^2),
+    // E in GeV, evaluated at the TRUTH cluster pT (PPG12 convention - the smearing is
+    // then drawn as N(0, sigma_extra*E_truth) and added to the reco pT). Zero for E below
+    // ~12.8 GeV (MC already wider than Data), ~1% at 15 GeV, 2% at 20 GeV, 2.4% at 36 GeV
+    // for the nominal parameters. emrVariant selects the Data-resolution parameter set:
+    // emrNominal (0.15,0.05,0.05), emrHigh = wider Data (0.13,0.08,0.08, ~6% roughly flat),
+    // emrLow = no extra smearing at all (sigma_extra = 0). MC parameters are always
+    // (0.185,0,0.040), fit to unsmeared pythia8 tight+iso prompt-photon response.
+    static constexpr int emrNominal = 0;
+    static constexpr int emrHigh    = 1;
+    static constexpr int emrLow     = -1;
+    static float    emResolutionSigma(float truthPt, int emrVariant = emrNominal);
+
     static constexpr float sPHENIX_posx = 0.6;
     static constexpr float sPHENIX_posy = 0.85;
     static constexpr float posy_diff = 0.05;
@@ -80,7 +104,14 @@ class ana {
     static constexpr double tlowcut = 0;
     static constexpr double thighcut = 4;
     static constexpr double radius = 93; 
+    // Calorimeter acceptance |eta| < 1.1: jets are required within |eta_jet| < etacut - R.
     static constexpr double etacut = 1.1;
+    // Photon acceptance |eta^gamma| < photonEtaCut, applied to reco AND truth photons
+    // (unfolder::check_pair serves both, so it also defines the particle-level fiducial
+    // region). 0.7, as in PPG12 (sPH-CONF-JET-2025-02, |eta^gamma| < 0.7): at |eta| > 0.7
+    // the R = 0.4 isolation cone leaves the EMCal acceptance and the purity becomes
+    // eta-dependent (PPG18 review issue 10, decided Sep 28 2026 - see claude_checks/purity/).
+    static constexpr double photonEtaCut = 0.7;
     static constexpr double etamin = -etacut;
     static constexpr double etamax = etacut;
     static constexpr double cluster_pt_cut = 10;
@@ -179,26 +210,61 @@ class ana {
     static constexpr double jet_pt_cut[nJetR] = {3,3,3,3,3,3,3};
     //static constexpr double jet_calib_pt_cut[nJetR] = {3,3,3,3,3,3,3};
     static constexpr double jet_calib_pt_cut[nJetR] = {5,5,5,5,5,5,5};
+    // threejet systematic: veto the event if the third jet (treeuser::thirdjet_pt, in the
+    // same pT definition as the recoil jet) is above this. Reco only, any eta and any dR
+    // from the leading jet; no truth-level veto, so the unfolded observable is unchanged.
+    static constexpr double thirdJetPtCut = 5;
 
-    // In-situ JES calibration, one value per jet radius (insitu/grid_insitu.C's
-    // purity-corrected best-fit p_a, full 7-radius scan - replaces the old single
-    // R=0.4-derived 0.9446 that used to be reused across every radius in
-    // unfolder.cc's fill_matrix()). jesTotalErrLow/High are that same scan's own
-    // total (stat+syst combined in quadrature) asymmetric uncertainty on p_a, used
-    // directly as the jes_high/jes_low systematic shift - replacing the old flat,
-    // unsourced +-0.03 placeholder. jes_high subtracts jesTotalErrLow (a smaller p_a
-    // means a bigger 1/p_a correction, i.e. Data's jet pT scaled UP more relative to
-    // nominal); jes_low adds jesTotalErrHigh (a larger p_a, smaller correction) -
-    // the same sign convention the old symmetric +-0.03 followed.
-    // These three arrays are generated, not hand-edited: insitu/run_grid.sh's full
-    // systag sweep ends by running insitu/draw_jes_summary.C, which rewrites these exact
-    // literals in place from its own freshly computed per-radius pa/totalLow/totalHigh -
-    // see that macro's updateAnaHeader()/completeness guard. A manual edit here survives
-    // only until the next full run_grid.sh sweep overwrites it; rebuild via src/make.sh
-    // afterward for the new numbers to reach the compiled library.
-    static constexpr double jesNominal[nJetR]      = {0.9162, 0.9266, 0.9358, 0.9310, 0.9305, 0.9279, 0.9482};
-    static constexpr double jesTotalErrLow[nJetR]  = {0.0320, 0.0307, 0.0237, 0.0164, 0.0121, 0.0120, 0.0205};
-    static constexpr double jesTotalErrHigh[nJetR] = {0.0261, 0.0324, 0.0300, 0.0218, 0.0180, 0.0194, 0.0253};
+    // In-situ JES calibration (insitu/grid_insitu.C's purity-corrected best-fit p_a), one
+    // value per jet radius. Data jet pT is divided by p_a in unfolder.cc's fill_matrix().
+    //
+    // Each systematic variation is propagated ONCE, coherently (PPG18 review issue 5,
+    // Sep 28 2026): every systag that has its own in-situ scan (JER, EM scale, EMR,
+    // threejet, the ABCD-boundary variations) corrects Data with the p_a ITS OWN scan
+    // extracted - jesBySystag below - so the variation's effect on the jet energy scale
+    // is carried inside that variation's own systematic. jesStatErrLow/High are only the
+    // nominal fit's statistical (Delta chi2 = 1) uncertainty; jes_high/jes_low shift the
+    // nominal p_a by exactly that, so the JES systematic no longer re-counts the other
+    // variations. (Previously jes_high/jes_low used a "total" uncertainty that already
+    // contained every other systag's in-situ shift in quadrature, while those systags were
+    // also unfolded with the NOMINAL p_a and entered the total as their own sources - so
+    // each one was counted twice, once directly and once inside JES.)
+    // jes_high subtracts jesStatErrLow (a smaller p_a means a bigger 1/p_a correction,
+    // i.e. Data's jet pT scaled UP more relative to nominal); jes_low adds jesStatErrHigh.
+    //
+    // Everything from here to "END jesBySystag" is generated, not hand-edited:
+    // insitu/run_grid.sh's full systag sweep ends by running insitu/draw_jes_summary.C,
+    // which rewrites these literals from the scan outputs (see its updateAnaHeader() and
+    // completeness guard). Rebuild via src/make.sh afterward for the numbers to reach the
+    // compiled library. jesSystagNames must list exactly ana::systags, in order;
+    // jesForSystag() below looks entries up by name and warns on a mismatch.
+    static constexpr double jesNominal[nJetR]      = {0.9034, 0.9158, 0.9265, 0.9259, 0.9292, 0.9295, 0.9519};
+    static constexpr double jesStatErrLow[nJetR]   = {0.0050, 0.0114, 0.0058, 0.0069, 0.0077, 0.0080, 0.0087};
+    static constexpr double jesStatErrHigh[nJetR]  = {0.0105, 0.0070, 0.0091, 0.0086, 0.0073, 0.0080, 0.0086};
+    // BEGIN jesBySystag
+    static constexpr int nJesSystags = 15;
+    static constexpr const char * jesSystagNames[nJesSystags] = {"nominal", "JERhigh", "JERlow", "emscale_high", "emscale_low", "jes_high", "jes_low", "threejet", "narrowBDT", "narrowISO", "EMRhigh", "EMRlow", "narrowBDTbkg", "narrowISObkg", "wideISObkg"};
+    static constexpr double jesBySystag[nJesSystags][nJetR] = {
+      {0.9034, 0.9158, 0.9265, 0.9259, 0.9292, 0.9295, 0.9519}, // nominal
+      {0.8860, 0.9033, 0.9217, 0.9194, 0.9266, 0.9265, 0.9489}, // JERhigh
+      {0.9145, 0.9244, 0.9322, 0.9308, 0.9336, 0.9327, 0.9539}, // JERlow
+      {0.9091, 0.9180, 0.9321, 0.9310, 0.9343, 0.9344, 0.9566}, // emscale_high
+      {0.9034, 0.9038, 0.9226, 0.9215, 0.9243, 0.9245, 0.9478}, // emscale_low
+      {0.9034, 0.9158, 0.9265, 0.9258, 0.9294, 0.9291, 0.9514}, // jes_high
+      {0.9034, 0.9158, 0.9265, 0.9266, 0.9295, 0.9298, 0.9519}, // jes_low
+      {0.8000, 0.8686, 0.8964, 0.9157, 0.9213, 0.9231, 0.9568}, // threejet
+      {0.9034, 0.9180, 0.9322, 0.9297, 0.9272, 0.9289, 0.9506}, // narrowBDT
+      {0.8946, 0.9033, 0.9200, 0.9182, 0.9218, 0.9256, 0.9424}, // narrowISO
+      {0.9145, 0.9262, 0.9419, 0.9396, 0.9440, 0.9430, 0.9649}, // EMRhigh
+      {0.9034, 0.9158, 0.9265, 0.9258, 0.9272, 0.9287, 0.9514}, // EMRlow
+      {0.9091, 0.9180, 0.9303, 0.9310, 0.9348, 0.9361, 0.9536}, // narrowBDTbkg
+      {0.9034, 0.9098, 0.9265, 0.9252, 0.9272, 0.9280, 0.9510}, // narrowISObkg
+      {0.9077, 0.9158, 0.9265, 0.9266, 0.9295, 0.9297, 0.9512}, // wideISObkg
+    };
+    // END jesBySystag
+    // p_a for a given systag and radius from jesBySystag; falls back to jesNominal[ir]
+    // (with a warning) if the systag has no entry.
+    static double   jesForSystag(const string & systag, int ir);
 
   private:
 };

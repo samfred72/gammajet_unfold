@@ -27,7 +27,7 @@ void draw_iso_vs_run_noerr(Long64_t maxEntries = -1) {
   drawer d("pythia", "nominal");
   gErrorIgnoreLevel = oldErrLevel;
 
-  std::string fname = "/home/samson72/sphnx/gammajet/trees/gammajet_Data.root";
+  std::string fname = "/home/samson72/sphnx/gammajet_unfold/trees/gammajet_Data.root";
   TFile * f = TFile::Open(fname.c_str(), "read");
   if (!f || f->IsZombie()) { std::cout << "Could not open " << fname << std::endl; return; }
   TTree * t = (TTree*)f->Get("towerntup");

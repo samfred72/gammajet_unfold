@@ -22,7 +22,7 @@ to run, in what order, and why.
 | `latex/` | Note/paper source (gitignored). |
 
 Raw input trees (`towerntup`, one file per trigger/sim, produced upstream by the
-treemaking code) live outside this repo at `/home/samson72/sphnx/gammajet/trees/` -
+treemaking code) live in this repo's `trees/` directory (gitignored, not committed) -
 see `src/treeuser.h` for the exact filename convention. The treemaking code itself
 lives on SDCC (`ssh sphnxuser04`, see `CLAUDE.md`'s SDCC Access section) at
 `/sphenix/user/samfred/projects/gammajet/treemaking`, now its own git repo

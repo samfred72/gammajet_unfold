@@ -1,6 +1,6 @@
 // Compares the reco-level xJgamma shape between the plain gammajet_pythia_Photon{5,10,20}
 // MC trees and the gammajet_pythia_Photon{5,10,20}_double trees, both in
-// /home/samson72/sphnx/gammajet/trees/, one page per reported photon-pT bin
+// /home/samson72/sphnx/gammajet_unfold/trees/, one page per reported photon-pT bin
 // (ana::ptBinsUsed, the 3 "main" bins: 15-20, 20-25, 25-35 GeV).
 //
 // Both sets of trees have the standard (non-temporary_study) branch layout - confirmed by
@@ -206,9 +206,9 @@ void compare_double_trees(Long64_t maxEntriesPerFile = -1) {
   }
 
   for (const std::string & trigger : {"Photon5", "Photon10", "Photon20"}) {
-    processFile("/home/samson72/sphnx/gammajet/trees/gammajet_pythia_" + trigger + ".root",
+    processFile("/home/samson72/sphnx/gammajet_unfold/trees/gammajet_pythia_" + trigger + ".root",
         trigger, hxjOrig, accOrig, rw, maxEntriesPerFile);
-    processFile("/home/samson72/sphnx/gammajet/trees/gammajet_pythia_" + trigger + "_double.root",
+    processFile("/home/samson72/sphnx/gammajet_unfold/trees/gammajet_pythia_" + trigger + "_double.root",
         trigger, hxjDouble, accDouble, rw, maxEntriesPerFile);
   }
 

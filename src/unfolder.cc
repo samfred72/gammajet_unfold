@@ -20,7 +20,7 @@ bool unfolder::check_pair(jet_object jet, int ir, pho_object pho, bool isreco, f
   if (ptbin == -1) return false;
   if (val < lowbin*floorScale) return false;
   //if (iabcd != 0) return false;
-  if (fabs(pho.eta) > ana::etacut) return false;
+  if (fabs(pho.eta) > ana::photonEtaCut) return false;
   if (fabs(jet.eta) > ana::etacut - ana::JetRs[ir]) return false;
   if (dphi < ana::oppcut) return false;
 
@@ -53,9 +53,9 @@ void unfolder::fill_matrix() {
   vector<int> systagAbcdBinArr(nsys);
   vector<bool> systagThreejetVetoArr(nsys);
   vector<float> systagEmscaleShiftArr(nsys);
-  vector<float> systagEmrSigmaArr(nsys);
+  vector<int> systagEmrVariantArr(nsys);
   // jesCorrectionArr[isys][ir]: per-(systag,radius), unlike the other arrays above -
-  // see the JES comment below, where the per-radius jesNominal/jesTotalErrLow/High
+  // see the JES comment below, where the per-radius jesNominal/jesStatErrLow/High/jesBySystag
   // tables live (ana.h).
   vector<vector<float>> jesCorrectionArr(nsys, vector<float>(ana::nJetR));
   for (int isys = 0; isys < nsys; isys++) {
@@ -64,38 +64,46 @@ void unfolder::fill_matrix() {
                               (systag == "narrowBDTbkg") ? 3 : (systag == "narrowISObkg") ? 4 :
                               (systag == "wideISObkg") ? 5 : 0;
     systagThreejetVetoArr[isys] = (systag == "threejet");
-    // emscale_high/emscale_low shift the EM-calorimeter energy scale by +-1.1%: applied in
+    // emscale_high/emscale_low shift the EM-calorimeter energy scale by +-ana::emscaleShift (1.48%, from the
+    // PPG12 note - see ana.h): applied in
     // full to the (entirely-EM) photon cluster, and to only the EM-fraction portion of the
     // jet (the non-EM/hadronic portion of jet_pt_smear_truth[ir] is left untouched). MC-only, same
     // convention as JERhigh/JERlow above - jet_pt_smear_truth[ir] has no Data equivalent, so Data
     // always falls back to its nominal reco pT regardless of systag.
-    systagEmscaleShiftArr[isys] = (systag == "emscale_high") ? 0.011 :
-                                   (systag == "emscale_low")  ? -0.011 : 0.0;
+    systagEmscaleShiftArr[isys] = (systag == "emscale_high") ?  ana::emscaleShift :
+                                   (systag == "emscale_low")  ? -ana::emscaleShift : 0.0;
     // EMRhigh/EMRlow: electromagnetic (cluster) resolution systematic. Nominal smears
-    // MC's cluster pT by a Gaussian of width 2% (matching Data's EM resolution); the
-    // high/low variants widen/narrow that smearing to 6%/0%, independent of the
-    // emscale_high/emscale_low mean-scale shift above. MC-only, same convention as
+    // MC's cluster pT by the truth-pT-dependent extra Gaussian ana::emResolutionSigma
+    // (~1% at 15 GeV, 2% at 20 GeV, 2.4% at 36 GeV) that matches MC's resolution to
+    // Data's; the high/low variants swap in a wider Data resolution (~6%, roughly flat)
+    // or no extra smearing at all (0%) - all from the PPG12 note, see ana.h. Independent
+    // of the emscale_high/emscale_low mean-scale shift above. MC-only, same convention as
     // JERhigh/JERlow/emscale_high/emscale_low - Data has no smeared-high/low variant of
     // itself, so Data always falls back to its unsmeared reco cluster pT regardless of
     // systag (see recoClusterPt below).
-    systagEmrSigmaArr[isys] = (systag == "EMRhigh") ? 0.06 :
-                               (systag == "EMRlow")  ? 0.0  : 0.02;
+    systagEmrVariantArr[isys] = (systag == "EMRhigh") ? ana::emrHigh :
+                                 (systag == "EMRlow")  ? ana::emrLow  : ana::emrNominal;
     // JES: Data's reconstructed jet pT has a residual calibration gap relative to MC (found
     // via the in-situ jet-photon pT-balance study - see insitu/), corrected per jet radius
-    // by dividing by ana::jesNominal[ir] (grid_insitu.C's purity-corrected best-fit p_a,
-    // nominal systag, one value per radius from the full 7-radius scan - see ana.h).
-    // jes_high/jes_low vary that correction factor by the scan's own per-radius total
-    // (stat+syst) asymmetric uncertainty (ana::jesTotalErrLow/High) instead of the old
-    // flat, unsourced +-0.03 placeholder that was reused across every radius. Data-only -
-    // this corrects a gap specific to real Data's calibration, so MC (already on-scale by
-    // construction) is untouched regardless of systag, the reverse convention from
-    // JERhigh/JERlow/emscale_high/emscale_low above. Applied to recoJetPt (and everything
-    // downstream: unfold response matrices, purity histograms, pairing) below, but
-    // deliberately NOT to insitu_jet_pt - see rawJetPt.
+    // by dividing by the in-situ p_a (grid_insitu.C's purity-corrected best fit, one value
+    // per radius from the full 7-radius scan - see ana.h). Data-only: MC is on-scale by
+    // construction and is untouched regardless of systag.
+    //
+    // Each variation is propagated once, coherently (PPG18 review issue 5): a systag with
+    // its own in-situ scan (JER, emscale, EMR, threejet, the ABCD-boundary variations)
+    // corrects Data with the p_a ITS OWN scan found (ana::jesForSystag), so e.g. JERhigh
+    // is unfolded with both the JERhigh response and the JES the JERhigh MC reference
+    // implies - its effect on the jet scale lives inside the JERhigh systematic. jes_high/
+    // jes_low vary the nominal p_a by the nominal fit's statistical uncertainty only
+    // (ana::jesStatErrLow/High), so they no longer also contain every other systag's
+    // in-situ shift. Applied to recoJetPt (and everything downstream: unfold response
+    // matrices, purity histograms, pairing) below, but deliberately NOT to insitu_jet_pt -
+    // see rawJetPt.
     for (int ir = 0; ir < ana::nJetR; ir++) {
-      jesCorrectionArr[isys][ir] = ana::jesNominal[ir] +
-          ((systag == "jes_high") ? -ana::jesTotalErrLow[ir] :
-           (systag == "jes_low")  ?  ana::jesTotalErrHigh[ir] : 0.0);
+      jesCorrectionArr[isys][ir] =
+          (systag == "jes_high") ? ana::jesNominal[ir] - ana::jesStatErrLow[ir] :
+          (systag == "jes_low")  ? ana::jesNominal[ir] + ana::jesStatErrHigh[ir] :
+          ana::jesForSystag(systag, ir);
     }
   }
 
@@ -107,7 +115,7 @@ void unfolder::fill_matrix() {
   for (Long64_t e = 0; e < nentries; e++) {
     t->GetEntry(e);
     bool use_half = rand.Integer(2) % 2;
-    if (e % 1000 == 0)
+    if (showProgress && e % 1000 == 0)
       std::cout << "entry " << e << "/" << nentries
         << " (" << (float)e/nentries*100. << "%)\t\r" << std::flush;
 
@@ -141,13 +149,14 @@ void unfolder::fill_matrix() {
       int systagAbcdBin = systagAbcdBinArr[isys];
       bool systagThreejetVeto = systagThreejetVetoArr[isys];
       float systagEmscaleShift = systagEmscaleShiftArr[isys];
-      float systagEmrSigma = systagEmrSigmaArr[isys];
+      int systagEmrVariant = systagEmrVariantArr[isys];
 
       // -----------------------
       // Leading photon & isolation
       // -----------------------
       float recoClusterPt = isMC ? cluster_pt * (1.0 + systagEmscaleShift) : cluster_pt;
-      recoClusterPt = isMC ? rand.Gaus(recoClusterPt, recoClusterPt*systagEmrSigma) : cluster_pt;
+      // Additive smear N(0, sigma_extra(E_truth)*E_truth), PPG12 convention (ana.h).
+      recoClusterPt = isMC ? recoClusterPt + rand.Gaus(0, ana::emResolutionSigma(truth_cluster_pt, systagEmrVariant)*truth_cluster_pt) : cluster_pt;
       pho_object maxpho = pho_object(
           recoClusterPt,
           cluster_e,
@@ -179,8 +188,8 @@ void unfolder::fill_matrix() {
       vector<bool> ispaired(ana::nJetR, false);
       vector<bool> ispaired_truth(ana::nJetR, false);
       // Looser than ispaired: tests the xJ floor against rawJetPt (not jesCorrection-
-      // boosted recoJetPt) at floorScale=0.95, so the in-situ tree keeps every event a
-      // grid_insitu.C scan point down to pa=0.95 could still scale above the floor -
+      // boosted recoJetPt) at floorScale=insitu_utility::scanLow, so the in-situ tree keeps every event a
+      // grid_insitu.C scan point down to pa=scanLow could still scale above the floor -
       // see the in-situ test tree fill below and check_pair's testPt/floorScale params.
       vector<bool> ispairedInsitu(ana::nJetR, false);
 
@@ -282,10 +291,18 @@ void unfolder::fill_matrix() {
         if (maxpho.pt >= ana::ptBins[0] && maxpho.pt < ana::ptBins[ana::nPtBins]) {
           ispairedInsitu[ir] = check_pair(maxjet[ir], ir, maxpho, 1, rawJetPt, insitu_utility::scanLow);
         }
-        // threejet: reco-only veto (no truth-level third-jet branch exists) - applied on
-        // top of the nominal pairing requirement, before it feeds the ABCD fills below.
-        if (systagThreejetVeto) ispaired[ir] = ispaired[ir] && !hasthirdjet[ir];
-        if (systagThreejetVeto) ispairedInsitu[ir] = ispairedInsitu[ir] && !hasthirdjet[ir];
+        // threejet: veto events whose third jet has pT > ana::thirdJetPtCut, applied on top
+        // of the nominal pairing requirement, before it feeds the ABCD fills below. The
+        // third jet is put in the same pT definition as the recoil jet: Data gets the
+        // same in-situ correction (jesCorrectionArr), MC is the nominal smeared pT (no
+        // JER/emscale variation - this systag has neither). Reco only by design: a truth
+        // veto would unfold to a different observable (xJ without a third jet).
+        if (systagThreejetVeto) {
+          float thirdJetPt = isMC ? thirdjet_pt[ir] : thirdjet_pt[ir] / jesCorrectionArr[isys][ir];
+          bool hasThirdJet = thirdJetPt > ana::thirdJetPtCut;
+          ispaired[ir] = ispaired[ir] && !hasThirdJet;
+          ispairedInsitu[ir] = ispairedInsitu[ir] && !hasThirdJet;
+        }
         if (maxpho_truth.pt >= ana::ptBins[0] && maxpho_truth.pt < ana::ptBins[ana::nPtBins] && maxjet_truth[ir].pt > ana::jet_calib_pt_cut[ir]) {
           ispaired_truth[ir] = check_pair(maxjet_truth[ir], ir, maxpho_truth,1);
         }
@@ -479,7 +496,7 @@ void unfolder::fill_matrix() {
             int iabcd = ana::findabcdBin(maxpho.iso4, maxpho.bdt, 0);
             cout << "Event " << ndraw + 1 << " reco failed because: ";
             if (iabcd != 0) cout << endl << "abcd cut: BDT: " << maxpho.bdt << " ISO: " << maxpho.iso4;
-            if (fabs(maxpho.eta) >= ana::etacut) cout << endl << "photon eta: " << fabs(maxpho.eta);
+            if (fabs(maxpho.eta) >= ana::photonEtaCut) cout << endl << "photon eta: " << fabs(maxpho.eta);
             if (fabs(maxjet[ir].eta) >= ana::etacut - ana::JetRs[ir]) cout << endl << "jet eta: " << fabs(maxjet[ir].eta);
             if (dphi <= ana::oppcut) cout << endl << "dphi: " << dphi;
             if (maxpho.pt <= ana::ptBins[0]) cout << endl << "cluster pt: " << maxpho.pt;
@@ -492,7 +509,7 @@ void unfolder::fill_matrix() {
             int iabcd = ana::findabcdBin(maxpho_truth.iso4, maxpho_truth.bdt, 0);
             cout << "Event " << ndraw + 1 << " truth failed because: ";
             if (iabcd != 0) cout << endl << "abcd cut: BDT: " << maxpho_truth.bdt << " ISO: " << maxpho_truth.iso4;
-            if (fabs(maxpho_truth.eta) >= ana::etacut) cout << endl << "photon eta: " << fabs(maxpho_truth.eta);
+            if (fabs(maxpho_truth.eta) >= ana::photonEtaCut) cout << endl << "photon eta: " << fabs(maxpho_truth.eta);
             if (fabs(maxjet_truth[ir].eta) >= ana::etacut - ana::JetRs[ir]) cout << endl << "jet eta: " << fabs(maxjet_truth[ir].eta);
             if (dphi <= ana::oppcut) cout << endl << "dphi: " << dphi;
             if (maxpho_truth.pt <= ana::ptBins[0]) cout << endl << "cluster pt: " << maxpho_truth.pt;

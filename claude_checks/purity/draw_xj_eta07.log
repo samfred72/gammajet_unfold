@@ -1,0 +1,28 @@
+
+Processing draw_xj_eta07.C...
+0.583621 0.606439 0.628961
+0.653909 0.677258 0.699227
+0.745414 0.789859 0.827478
+0.765799 0.856964 0.919766
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet8_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet20_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet30_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet50_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet60_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet80_pythia_nominal_unfolding.root does not exist
+check 15-20: A 2721 vs 2713, C 2046 vs 2038
+check 20-25: A 475 vs 474, C 298 vs 298
+check 25-35: A 80 vs 80, C 57 vs 57
+
+R = 0.4, reco level. Binned <xJ> (errors x1000).
+pT        | selection                  | N_A       N_C       P_A (P_C) | <A>       <corr>   
+ 15-20    | |eta| < 1.1 (nominal)      | 3523      3272      0.620 (0.149) | 0.878( 5) 0.852(11)
+ 15-20    | |eta| < 0.7                | 2713      2038      0.677 (0.167) | 0.882( 6) 0.858(11)
+ 20-25    | |eta| < 1.1 (nominal)      | 618       449       0.783 (0.303) | 0.842(11) 0.823(19)
+ 20-25    | |eta| < 0.7                | 474       298       0.790 (0.297) | 0.845(13) 0.830(21)
+ 25-35    | |eta| < 1.1 (nominal)      | 104       94        0.809 (0.266) | 0.850(25) 0.822(39)
+ 25-35    | |eta| < 0.7                | 80        57        0.857 (0.316) | 0.838(30) 0.814(42)
+Info in <TCanvas::Print>: pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/purity/pdfs/draw_xj_eta07.pdf has been created
+Info in <TCanvas::Print>: Current canvas added to pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/purity/pdfs/draw_xj_eta07.pdf
+Info in <TCanvas::Print>: Current canvas added to pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/purity/pdfs/draw_xj_eta07.pdf
+Info in <TCanvas::Print>: pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/purity/pdfs/draw_xj_eta07.pdf has been closed

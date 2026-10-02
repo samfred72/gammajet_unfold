@@ -235,7 +235,7 @@ void draw_insitu_xj() {
 
   insitu_utility::drawSPhenixLabel({"p+p Run24 Data"}, {
       Form("Jet R=%.1f", ana::JetRs[ir]),
-      Form("|#eta^{#gamma}|<%.1f, |#eta^{jet}|<%.1f", ana::etacut, ana::etacut-ana::JetRs[ir]),
+      Form("|#eta^{#gamma}|<%.1f, |#eta^{jet}|<%.1f", ana::photonEtaCut, ana::etacut-ana::JetRs[ir]),
       Form("#Delta#phi>%.0f#pi/%.0f", ana::oppnum, ana::oppden)
     }, .18, .85, 16, gPad->GetWh());
 

@@ -31,7 +31,7 @@ void treeuser::treesetup() {
   t->SetBranchAddress("jet_emfrac", jet_emfrac, &b_jet_emfrac);
   t->SetBranchAddress("jet_time", jet_time, &b_jet_time);
   
-  t->SetBranchAddress("hasthirdjet", hasthirdjet, &b_hasthirdjet);
+  t->SetBranchAddress("thirdjet_pt", thirdjet_pt, &b_thirdjet_pt);
 
   if (isMC) {   
     t->SetBranchAddress("truth_cluster_pt" , &truth_cluster_pt , &b_truth_cluster_pt );
@@ -59,13 +59,13 @@ void treeuser::treesetup() {
 
 
 // Turns off deserialization (TTree::SetBranchStatus(...,0)) for branches treesetup()
-// reads into memory - or, for thirdjet_pt/thirdjet_dr, declares in this header but never
-// actually calls SetBranchAddress for at all - that src/unfolder.cc and src/unfolder.h
+// reads into memory - or, for hasthirdjet/thirdjet_eta/thirdjet_phi/thirdjet_dr, never
+// calls SetBranchAddress for at all - that src/unfolder.cc and src/unfolder.h
 // never read (verified by grepping every treeuser member name against both files; every
 // hit traced back to an actual read, not just the member's declaration - RunNumber,
 // ScaledTriggerBit, LiveTriggerBit, Scaledowns, mbd_time, the raw uncalibrated jet_pt
 // array (only jet_pt_calib is read), jet_pt_recalib, jet_pt_smear_reco/high_reco/
-// low_reco, thirdjet_pt, thirdjet_dr, and hadron_p all came up empty). Skipping these
+// low_reco, hasthirdjet, thirdjet_eta/phi/dr, and hadron_p all came up empty). Skipping these
 // branches' I/O/decompression entirely is a real win since the underlying towerntup
 // files are large.
 //
@@ -82,8 +82,10 @@ void treeuser::disableBranchesUnusedByUnfolder() {
   t->SetBranchStatus("mbd_time", 0);
   t->SetBranchStatus("jet_pt", 0);
   t->SetBranchStatus("jet_pt_recalib", 0);
-  t->SetBranchStatus("thirdjet_pt", 0);
-  t->SetBranchStatus("thirdjet_dr", 0);
+  // Third-jet branches differ between tree versions (thirdjet_dr before Oct 2026,
+  // thirdjet_eta/phi after) - only disable the ones this tree actually has.
+  for (const char *b : {"hasthirdjet", "thirdjet_eta", "thirdjet_phi", "thirdjet_dr"})
+    if (t->GetBranch(b)) t->SetBranchStatus(b, 0);
   if (!isMC) {
     t->SetBranchStatus("ScaledTriggerBit", 0);
     t->SetBranchStatus("LiveTriggerBit", 0);

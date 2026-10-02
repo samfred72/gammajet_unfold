@@ -1,0 +1,77 @@
+
+Processing insitu_eta07.C...
+/home/samson72/sphnx/gammajet_unfold/trees/gammajet_Data.root done
+/home/samson72/sphnx/gammajet_unfold/trees/gammajet_pythia_Photon5.root done
+/home/samson72/sphnx/gammajet_unfold/trees/gammajet_pythia_Photon10.root done
+/home/samson72/sphnx/gammajet_unfold/trees/gammajet_pythia_Photon20.root done
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet8_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet20_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet30_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet50_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet60_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet80_pythia_nominal_unfolding.root does not exist
+
+Validation (nominal selection) vs committed insitu inputs:
+  R=0.2  data A 4272 (4272)  C 3919 (3919) | MC ref <xJ> 0.7515 0.7024 0.7113 (0.7509 0.7031 0.7134)
+  R=0.3  data A 4526 (4526)  C 4043 (4043) | MC ref <xJ> 0.8061 0.7677 0.7801 (0.8060 0.7695 0.7820)
+  R=0.4  data A 4281 (4281)  C 3848 (3848) | MC ref <xJ> 0.8537 0.8224 0.8315 (0.8533 0.8225 0.8326)
+  R=0.5  data A 3837 (3837)  C 3438 (3438) | MC ref <xJ> 0.8954 0.8680 0.8751 (0.8960 0.8680 0.8760)
+  R=0.6  data A 3257 (3257)  C 2925 (2925) | MC ref <xJ> 0.9347 0.9065 0.9109 (0.9351 0.9072 0.9107)
+  R=0.7  data A 2606 (2606)  C 2321 (2321) | MC ref <xJ> 0.9692 0.9364 0.9396 (0.9694 0.9388 0.9408)
+  R=0.8  data A 1942 (1942)  C 1717 (1717) | MC ref <xJ> 1.0022 0.9692 0.9684 (1.0029 0.9705 0.9676)
+0.58189 0.603485 0.625661
+0.627563 0.653064 0.67631
+0.744773 0.78749 0.823876
+0.699333 0.810977 0.889148
+0.584286 0.606344 0.628245
+0.644933 0.669329 0.691865
+0.755677 0.797469 0.833067
+0.706118 0.815876 0.892329
+0.583621 0.606439 0.628961
+0.653909 0.677258 0.699227
+0.745414 0.789859 0.827478
+0.765799 0.856964 0.919766
+0.590739 0.615228 0.638949
+0.667201 0.690404 0.713141
+0.73561 0.783095 0.823483
+0.697642 0.815597 0.896749
+0.600468 0.625457 0.649305
+0.662534 0.688856 0.713148
+0.74013 0.790776 0.833083
+0.820409 0.901436 0.95459
+0.609533 0.637628 0.66374
+0.669682 0.697362 0.72428
+0.765512 0.81675 0.858818
+0.829363 0.909351 0.959903
+0.597839 0.629902 0.660798
+0.674582 0.706493 0.734485
+0.702049 0.774305 0.831354
+0.815882 0.911443 0.967856
+
+In-situ p_a (purity-corrected chi2, Delta chi2 = 1 errors). 'range' = production window [0.90, 1.00].
+R    | |eta^gamma| < 1.1 (nominal)        | |eta^gamma| < 0.7                  | shift (full)
+0.2  | 0.886 -0.007 +0.000 (chi2  14.4) [range 0.900] | 0.903 -0.006 +0.010 (chi2   8.2) [range 0.903] | +0.018   (ana.h jesNominal 0.9000)
+0.3  | 0.903 -0.005 +0.007 (chi2   3.1) [range 0.903] | 0.916 -0.011 +0.007 (chi2   2.3) [range 0.916] | +0.012   (ana.h jesNominal 0.9033)
+0.4  | 0.922 -0.007 +0.007 (chi2   0.2) [range 0.922] | 0.926 -0.007 +0.008 (chi2   0.6) [range 0.926] | +0.004   (ana.h jesNominal 0.9223)
+0.5  | 0.919 -0.008 +0.006 (chi2   0.7) [range 0.919] | 0.926 -0.007 +0.009 (chi2   1.1) [range 0.926] | +0.007   (ana.h jesNominal 0.9191)
+0.6  | 0.921 -0.007 +0.006 (chi2   0.1) [range 0.921] | 0.929 -0.007 +0.007 (chi2   0.5) [range 0.929] | +0.009   (ana.h jesNominal 0.9203)
+0.7  | 0.919 -0.007 +0.008 (chi2   3.8) [range 0.919] | 0.930 -0.008 +0.008 (chi2   0.9) [range 0.930] | +0.011   (ana.h jesNominal 0.9186)
+0.8  | 0.942 -0.009 +0.007 (chi2   2.1) [range 0.942] | 0.952 -0.009 +0.009 (chi2   0.7) [range 0.952] | +0.010   (ana.h jesNominal 0.9417)
+
+Purities P_A (nominal -> |eta|<0.7):
+  R=0.2  0.605->0.653  0.773->0.787  0.771->0.811
+  R=0.3  0.615->0.669  0.784->0.797  0.771->0.816
+  R=0.4  0.620->0.677  0.783->0.790  0.809->0.857
+  R=0.5  0.632->0.690  0.779->0.783  0.767->0.816
+  R=0.6  0.634->0.689  0.777->0.791  0.864->0.901
+  R=0.7  0.634->0.697  0.796->0.817  0.844->0.909
+  R=0.8  0.637->0.706  0.758->0.774  0.816->0.911
+MC reference <xJ> (nominal -> |eta|<0.7):
+  R=0.2  0.7515->0.7514  0.7024->0.7031  0.7113->0.7116
+  R=0.3  0.8061->0.8065  0.7677->0.7687  0.7801->0.7808
+  R=0.4  0.8537->0.8547  0.8224->0.8251  0.8315->0.8318
+  R=0.5  0.8954->0.8952  0.8680->0.8686  0.8751->0.8754
+  R=0.6  0.9347->0.9358  0.9065->0.9065  0.9109->0.9111
+  R=0.7  0.9692->0.9703  0.9364->0.9373  0.9396->0.9397
+  R=0.8  1.0022->1.0011  0.9692->0.9706  0.9684->0.9688
+Info in <TCanvas::Print>: pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/purity/pdfs/insitu_eta07.pdf has been created

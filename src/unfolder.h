@@ -42,9 +42,10 @@ class unfolder : public treeuser {
     // smearing is applied to MC to match Data's resolution, not something Data itself has;
     // silently falls back to nominal JES-corrected reco jet pT/cluster pT for Data
     // regardless of systag), "jes_high", "jes_low" (the reverse - Data-only, varying the
-    // per-radius correction (ana::jesNominal[ir]) by that same radius's own total
-    // stat+syst uncertainty from the in-situ scan (ana::jesTotalErrLow/High[ir]) - see
-    // src/ana.h; MC is already on-scale and falls back to nominal regardless of systag),
+    // per-radius correction (ana::jesNominal[ir]) by the nominal in-situ fit's statistical
+    // uncertainty (ana::jesStatErrLow/High[ir]) - every other systag instead corrects Data
+    // with its own in-situ p_a (ana::jesForSystag), see src/ana.h and unfolder.cc; MC is
+    // already on-scale and falls back to nominal regardless of systag),
     // "threejet", "narrowBDT",
     // "narrowISO", "narrowBDTbkg", "narrowISObkg", "wideISObkg" (the last five each shift
     // one ABCD sideband boundary - narrowBDT/narrowISO on the signal-side cut, the other
@@ -262,6 +263,10 @@ class unfolder : public treeuser {
     bool check_match(pho_object p1, pho_object p2);
     bool check_match(jet_object j1, jet_object j2);
     void set_dodraw(bool draw) {dodraw = draw; }
+    // Per-event progress line (every 1000 entries). Off for batch/pipeline runs, where it
+    // only bloats the logs (and has previously been mistaken for a slowdown).
+    void set_progress(bool show) {showProgress = show; }
+    bool showProgress = true;
 
     template <typename T>
       float findmaxpt(const vector<T>& objs)

@@ -109,7 +109,7 @@ void draw_xj_data_purity(Long64_t maxEntries = -1) {
     hC[ip] = new TH1D(Form("hxjRegionC_pt%d", ip), "", nb, edges);
   }
 
-  std::string fname = "/home/samson72/sphnx/gammajet/trees/gammajet_Data.root";
+  std::string fname = "/home/samson72/sphnx/gammajet_unfold/trees/gammajet_Data.root";
   TFile * f = TFile::Open(fname.c_str(), "read");
   if (!f || f->IsZombie()) { std::cout << "Could not open " << fname << std::endl; return; }
   TTree * t = (TTree*)f->Get("towerntup");

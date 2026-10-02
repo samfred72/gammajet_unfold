@@ -1,0 +1,96 @@
+
+Processing purity_vs_eta.C...
+data done
+MC done
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet8_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet20_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet30_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet50_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet60_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet80_pythia_nominal_unfolding.root does not exist
+
+Validation (all |eta|): counts here vs committed hclusterpt_abcd; leakage c here vs committed
+R=0.2 15-20 data: A  3520( 3520) B   877(  877) C  3339( 3339) D  1736( 1736) | c 0.228(0.227)
+R=0.2 20-25 data: A   644(  644) B   121(  121) C   479(  479) D   261(  261) | c 0.283(0.280)
+R=0.2 25-35 data: A   108(  108) B    15(   15) C   101(  101) D    41(   41) | c 0.298(0.296)
+R=0.4 15-20 data: A  3534( 3534) B   802(  802) C  3286( 3286) D  1608( 1608) | c 0.224(0.224)
+R=0.4 20-25 data: A   619(  619) B   112(  112) C   449(  449) D   242(  242) | c 0.285(0.281)
+R=0.4 25-35 data: A   104(  104) B    13(   13) C    94(   94) D    39(   39) | c 0.300(0.297)
+0.615845 0.642236 0.667679
+0.670406 0.698505 0.725543
+0.688874 0.757482 0.812527
+0.813933 0.906258 0.96225
+0.522631 0.559357 0.593892
+0.553817 0.597208 0.636468
+0.775753 0.829702 0.87345
+0.317851 0.629633 0.831094
+0.544681 0.59057 0.632438
+0.531392 0.59466 0.65139
+0.749489 0.847539 0.916545
+0.566183 0.856052 1.0329
+0.564194 0.584794 0.605427
+0.58102 0.605599 0.62923
+0.731853 0.773807 0.810385
+0.650771 0.771302 0.859728
+0.601715 0.630718 0.658873
+0.688304 0.715776 0.742082
+0.69779 0.767242 0.82196
+0.847262 0.928652 0.976411
+0.551368 0.587436 0.621216
+0.596382 0.63684 0.673631
+0.766727 0.824479 0.870845
+0.51401 0.748132 0.891887
+0.556233 0.60342 0.646108
+0.511205 0.579803 0.640738
+0.827112 0.897721 0.949454
+0.414592 0.80402 1.04643
+0.566041 0.58735 0.608891
+0.595558 0.620805 0.644431
+0.741896 0.783984 0.819479
+0.70125 0.808851 0.88714
+
+Purity vs |eta| (bootstrap median -lo/+hi); leakage b/c/d from Photon MC in the same |eta| bin
+
+===== R = 0.2 =====  (committed purity_nominal.root, all |eta|: 0.605 0.773 0.771)
+-- 15-20 GeV --
+  0.00-0.35       A  1553 B  458 C  1024 D   792 | C/A 0.66 B/D 0.58 | b 0.023 c 0.163 d 0.008 | P_A 0.699 -0.028 +0.027  P_C 0.172
+  0.35-0.70       A  1126 B  308 C  1089 D   615 | C/A 0.97 B/D 0.50 | b 0.021 c 0.226 d 0.011 | P_A 0.597 -0.043 +0.039  P_C 0.139
+  0.70-1.10       A   841 B  111 C  1226 D   329 | C/A 1.46 B/D 0.34 | b 0.012 c 0.343 d 0.010 | P_A 0.595 -0.063 +0.057  P_C 0.140
+  all |eta|       A  3520 B  877 C  3339 D  1736 | C/A 0.95 B/D 0.51 | b 0.020 c 0.228 d 0.010 | P_A 0.606 -0.025 +0.024  P_C 0.146
+  A-weighted average of per-|eta| P_A = 0.641   vs  |eta|-integrated P_A = 0.606   (difference +0.036)
+-- 20-25 GeV --
+  0.00-0.35       A   296 B   75 C   154 D   107 | C/A 0.52 B/D 0.70 | b 0.025 c 0.203 d 0.012 | P_A 0.757 -0.069 +0.055  P_C 0.294
+  0.35-0.70       A   196 B   37 C   163 D   119 | C/A 0.83 B/D 0.31 | b 0.024 c 0.270 d 0.010 | P_A 0.830 -0.054 +0.044  P_C 0.269
+  0.70-1.10       A   152 B    9 C   162 D    35 | C/A 1.07 B/D 0.26 | b 0.009 c 0.479 d 0.010 | P_A 0.848 -0.098 +0.069  P_C 0.377
+  all |eta|       A   644 B  121 C   479 D   261 | C/A 0.74 B/D 0.46 | b 0.021 c 0.283 d 0.011 | P_A 0.774 -0.042 +0.037  P_C 0.293
+  A-weighted average of per-|eta| P_A = 0.801   vs  |eta|-integrated P_A = 0.774   (difference +0.027)
+-- 25-35 GeV --
+  0.00-0.35       A    47 B    7 C    28 D    22 | C/A 0.60 B/D 0.32 | b 0.028 c 0.248 d 0.012 | P_A 0.906 -0.092 +0.056  P_C 0.377
+  0.35-0.70       A    36 B    7 C    34 D    13 | C/A 0.94 B/D 0.54 | b 0.022 c 0.279 d 0.013 | P_A 0.630 -0.312 +0.201  P_C 0.181
+  0.70-1.10       A    25 B    1 C    39 D     6 | C/A 1.56 B/D 0.17 | b 0.008 c 0.495 d 0.008 | P_A 0.856 -0.290 +0.177  P_C 0.272
+  all |eta|       A   108 B   15 C   101 D    41 | C/A 0.94 B/D 0.37 | b 0.022 c 0.298 d 0.012 | P_A 0.771 -0.121 +0.088  P_C 0.246
+  A-weighted average of per-|eta| P_A = 0.802   vs  |eta|-integrated P_A = 0.771   (difference +0.031)
+
+===== R = 0.4 =====  (committed purity_nominal.root, all |eta|: 0.620 0.783 0.809)
+-- 15-20 GeV --
+  0.00-0.35       A  1585 B  428 C   984 D   729 | C/A 0.62 B/D 0.59 | b 0.022 c 0.158 d 0.008 | P_A 0.716 -0.027 +0.026  P_C 0.182
+  0.35-0.70       A  1136 B  274 C  1062 D   576 | C/A 0.93 B/D 0.48 | b 0.018 c 0.222 d 0.010 | P_A 0.637 -0.040 +0.037  P_C 0.151
+  0.70-1.10       A   813 B  100 C  1240 D   303 | C/A 1.53 B/D 0.33 | b 0.012 c 0.340 d 0.010 | P_A 0.580 -0.069 +0.061  P_C 0.129
+  all |eta|       A  3534 B  802 C  3286 D  1608 | C/A 0.93 B/D 0.50 | b 0.018 c 0.224 d 0.009 | P_A 0.621 -0.025 +0.024  P_C 0.149
+  A-weighted average of per-|eta| P_A = 0.659   vs  |eta|-integrated P_A = 0.621   (difference +0.038)
+-- 20-25 GeV --
+  0.00-0.35       A   293 B   71 C   146 D    98 | C/A 0.50 B/D 0.72 | b 0.025 c 0.204 d 0.011 | P_A 0.767 -0.069 +0.055  P_C 0.313
+  0.35-0.70       A   182 B   34 C   152 D   107 | C/A 0.84 B/D 0.32 | b 0.022 c 0.278 d 0.010 | P_A 0.824 -0.058 +0.046  P_C 0.273
+  0.70-1.10       A   144 B    7 C   151 D    37 | C/A 1.05 B/D 0.19 | b 0.008 c 0.469 d 0.010 | P_A 0.898 -0.071 +0.052  P_C 0.399
+  all |eta|       A   619 B  112 C   449 D   242 | C/A 0.73 B/D 0.46 | b 0.020 c 0.285 d 0.010 | P_A 0.784 -0.042 +0.035  P_C 0.307
+  A-weighted average of per-|eta| P_A = 0.814   vs  |eta|-integrated P_A = 0.784   (difference +0.030)
+-- 25-35 GeV --
+  0.00-0.35       A    44 B    6 C    24 D    20 | C/A 0.55 B/D 0.30 | b 0.028 c 0.252 d 0.012 | P_A 0.929 -0.081 +0.048  P_C 0.427
+  0.35-0.70       A    36 B    6 C    33 D    15 | C/A 0.92 B/D 0.40 | b 0.021 c 0.277 d 0.013 | P_A 0.748 -0.234 +0.144  P_C 0.224
+  0.70-1.10       A    24 B    1 C    37 D     4 | C/A 1.54 B/D 0.25 | b 0.007 c 0.494 d 0.008 | P_A 0.804 -0.389 +0.242  P_C 0.255
+  all |eta|       A   104 B   13 C    94 D    39 | C/A 0.90 B/D 0.33 | b 0.022 c 0.300 d 0.012 | P_A 0.809 -0.108 +0.078  P_C 0.269
+  A-weighted average of per-|eta| P_A = 0.837   vs  |eta|-integrated P_A = 0.809   (difference +0.029)
+Info in <TCanvas::Print>: pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/purity/pdfs/purity_vs_eta.pdf has been created
+Info in <TCanvas::Print>: Current canvas added to pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/purity/pdfs/purity_vs_eta.pdf
+Info in <TCanvas::Print>: Current canvas added to pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/purity/pdfs/purity_vs_eta.pdf
+Info in <TCanvas::Print>: pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/purity/pdfs/purity_vs_eta.pdf has been closed

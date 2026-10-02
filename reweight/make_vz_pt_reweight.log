@@ -1,0 +1,21 @@
+
+Processing make_vz_pt_reweight.C...
+
+Purity-corrected Data cluster-pT spectrum (R = 0.4 pairing):
+    13-15   GeV: N_A   5716 N_C   4703  P_A 0.587 P_C 0.115 -> signal 3357
+    15-20   GeV: N_A   3534 N_C   3286  P_A 0.620 P_C 0.149 -> signal 2193
+    20-25   GeV: N_A    619 N_C    449  P_A 0.783 P_C 0.303 -> signal 485
+    25-35   GeV: N_A    104 N_C     94  P_A 0.809 P_C 0.266 -> signal 84
+
+expo fit, all 22 1-GeV bins over 13-35 GeV: slope -0.0113 +- 0.0065 /GeV, chi2/ndf 42.0/20, w(15)=1.001 w(20)=0.946 w(35)=0.798
+cross-check, merged bins: slope -0.0002 +- 0.0060 /GeV, chi2/ndf 12.6/7, w(15)=0.998 w(35)=0.994
+previous weight (all clusters): w(15)=0.790 w(20)=0.612 w(35)=0.285
+Saved /home/samson72/sphnx/gammajet_unfold/reweight/vz_pt_reweight.root
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet8_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet20_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet30_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet50_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet60_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet80_pythia_nominal_unfolding.root does not exist
+Info in <TCanvas::Print>: pdf file /home/samson72/sphnx/gammajet_unfold/pdfs/reweight_vz.pdf has been created
+Info in <TCanvas::Print>: pdf file /home/samson72/sphnx/gammajet_unfold/pdfs/reweight_pt.pdf has been created

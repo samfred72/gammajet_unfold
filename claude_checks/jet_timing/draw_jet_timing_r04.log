@@ -1,0 +1,44 @@
+
+Processing draw_jet_timing.C...
+
+Gaussian-extrapolated fraction outside [0,4] ns (in-time hypothesis):
+  jet pT    5-   8 GeV: N=   555  mean=1.01 sigma=1.44  lost=0.261 +- 0.038
+  jet pT    8-  11 GeV: N=  1477  mean=1.16 sigma=1.28  lost=0.196 +- 0.018
+  jet pT   11-  14 GeV: N=  1839  mean=1.31 sigma=1.19  lost=0.148 +- 0.013
+  jet pT   14-  18 GeV: N=  2473  mean=1.47 sigma=1.16  lost=0.118 +- 0.010
+  jet pT   18-  24 GeV: N=  2500  mean=1.54 sigma=1.17  lost=0.112 +- 0.010
+  jet pT   24-  35 GeV: N=  1757  mean=1.76 sigma=1.03  lost=0.057 +- 0.007
+  EM frac 0.00-0.30: N=  1199  mean=2.85 sigma=1.42  lost=0.231 +- 0.025
+  EM frac 0.30-0.50: N=  2080  mean=2.04 sigma=1.15  lost=0.083 +- 0.009
+  EM frac 0.50-0.70: N=  2993  mean=1.51 sigma=0.98  lost=0.066 +- 0.005
+  EM frac 0.70-0.85: N=  2424  mean=1.19 sigma=0.92  lost=0.099 +- 0.007
+  EM frac 0.85-1.00: N=  2130  mean=1.09 sigma=0.89  lost=0.110 +- 0.008
+
+region A paired, 15-35 GeV: 4257 jets; first 0.25 ns of window: 207 jets vs 10 clusters
+fraction with dphi > 7pi/8 (region A, no dphi cut): edge(<0.5ns) 0.794 (N=630), core(1-3ns) 0.834 (N=3192), high(>3.5ns) 0.798 (N=173)
+mean xJ: edge 0.813 +- 0.012 (N=500), core 0.884 +- 0.006 (N=2661)
+KS(xJ edge vs core) = 0.000;  KS(dphi edge vs core) = 0.369
+
+p9: reco-level region-A xJ shape, reweighted/nominal (Gaussian loss model):
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet8_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet20_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet30_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet50_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet60_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet80_pythia_nominal_unfolding.root does not exist
+  15-20 GeV: [0.4-0.5] 1.130 [0.5-0.6] 1.064 [0.6-0.7] 1.035 [0.7-0.8] 0.997 [0.8-0.9] 0.981 [0.9-1.0] 0.965 [1.0-1.1] 0.962 [1.1-1.2] 0.960 [1.2-1.3] 0.954 [1.3-1.5] 0.943 [1.5-1.7] 0.912 [1.7-2.0] 0.903
+  20-25 GeV: [0.3-0.4] 1.159 [0.4-0.5] 1.083 [0.5-0.6] 1.042 [0.6-0.7] 1.011 [0.7-0.8] 0.992 [0.8-0.9] 0.989 [0.9-1.0] 0.986 [1.0-1.1] 0.977 [1.1-1.2] 0.944 [1.2-1.3] 0.930 [1.3-1.5] 0.930 [1.5-1.7] 0.930 [1.7-2.0] 0.930
+  25-35 GeV: [0.3-0.4] 1.134 [0.4-0.5] 1.064 [0.6-0.7] 1.023 [0.7-0.8] 1.007 [0.8-0.9] 0.995 [0.9-1.0] 0.966 [1.0-1.1] 0.961 [1.1-1.2] 0.961 [1.2-1.3] 0.961 [1.3-1.5] 0.961 [1.5-1.7] 0.961
+Info in <TCanvas::Print>: pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/jet_timing/pdfs/draw_jet_timing_r04.pdf has been created
+Info in <TCanvas::Print>: Current canvas added to pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/jet_timing/pdfs/draw_jet_timing_r04.pdf
+Info in <TCanvas::Print>: Current canvas added to pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/jet_timing/pdfs/draw_jet_timing_r04.pdf
+Info in <TCanvas::Print>: Current canvas added to pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/jet_timing/pdfs/draw_jet_timing_r04.pdf
+Info in <TCanvas::Print>: Current canvas added to pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/jet_timing/pdfs/draw_jet_timing_r04.pdf
+Info in <TCanvas::Print>: Current canvas added to pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/jet_timing/pdfs/draw_jet_timing_r04.pdf
+Info in <TCanvas::Print>: Current canvas added to pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/jet_timing/pdfs/draw_jet_timing_r04.pdf
+Info in <TCanvas::Print>: Current canvas added to pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/jet_timing/pdfs/draw_jet_timing_r04.pdf
+Info in <TCanvas::Print>: Current canvas added to pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/jet_timing/pdfs/draw_jet_timing_r04.pdf
+Info in <TCanvas::Print>: Current canvas added to pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/jet_timing/pdfs/draw_jet_timing_r04.pdf
+Info in <TCanvas::Print>: Current canvas added to pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/jet_timing/pdfs/draw_jet_timing_r04.pdf
+Info in <TCanvas::Print>: Current canvas added to pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/jet_timing/pdfs/draw_jet_timing_r04.pdf
+Info in <TCanvas::Print>: pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/jet_timing/pdfs/draw_jet_timing_r04.pdf has been closed

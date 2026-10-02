@@ -64,6 +64,8 @@ calibration study (`insitu/`).
   `~/.bashrc`, so invoke `ssh sphnxuser04` directly rather than `ssh sphnx`). This
   matches the `Host sphnx*` block in `~/.ssh/config` (ProxyJump through `bnl`), so no
   further config is needed — just don't type the bare alias.
+- Default directory to append relative SDCC paths to: /sphenix/user/samfred/projects, unless otherwise noted.
+- If I say "the tg directory" (or similar), that refers to /sphenix/tg/tg01/jets/samfred/.
 
 ## Local RooUnfold Patch
 

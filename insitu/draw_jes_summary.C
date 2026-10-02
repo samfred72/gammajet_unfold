@@ -31,6 +31,15 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 // a two-point pair, to ana::asymmetricSystagPairs) is the only thing needed for it to
 // show up here automatically - see src/ana.h's comment on those two members.
 //
+// What goes into src/ana.h (PPG18 review issue 5, Sep 28 2026): the nominal p_a, its
+// STATISTICAL uncertainty only (jesStatErrLow/High, used by jes_high/jes_low), and the
+// full per-systag p_a table (jesBySystag), which unfolder.cc uses to correct Data in each
+// systag with that systag's own p_a. The quadrature "syst" sum of the systag shifts below
+// is still computed and drawn as the box in the summary plot, as the spread of the
+// in-situ result under the variations - but it is no longer fed back into jes_high/
+// jes_low, because each of those variations already carries its JES effect inside its
+// own systematic source (feeding it into JES as well counted it twice).
+//
 // Scoped to grid_insitu.C's purity-corrected mean(x_J) fit specifically (not the shape-
 // chi2 or unfolded methods) - it's the most statistically robust of the four in-situ
 // methods (see the shape-chi2 spike/sawtooth investigation this session), and it's the
@@ -50,7 +59,7 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 const char * insitu_output_dir = "/home/samson72/sphnx/gammajet_unfold/insitu/output";
 const char * insitu_pdf_dir    = "/home/samson72/sphnx/gammajet_unfold/insitu/pdfs";
 
-// Rewrites src/ana.h's jesNominal/jesTotalErrLow/jesTotalErrHigh array literals in
+// Rewrites src/ana.h's jesNominal/jesStatErrLow/jesStatErrHigh/jesBySystag array literals in
 // place with this scan's freshly measured values - this is the "generate, don't
 // hand-copy" replacement for what used to be a manual transcription of this macro's
 // own console table into ana.h after every in-situ re-scan. Only touches the numeric
@@ -59,8 +68,9 @@ const char * insitu_pdf_dir    = "/home/samson72/sphnx/gammajet_unfold/insitu/pd
 // libgammajet_unfold.so itself (see CLAUDE.md's Build & Run section on why driver-style
 // side effects like a full recompile aren't triggered automatically here) - the caller
 // (run_grid.sh) or the user still needs to run src/make.sh afterward for anything
-// linking ana::jesNominal/jesTotalErrLow/jesTotalErrHigh to see the new numbers.
-void updateAnaHeader(const float pa[ana::nJetR], const float totalLow[ana::nJetR], const float totalHigh[ana::nJetR]) {
+// linking ana::jesNominal/jesStatErrLow/jesStatErrHigh/jesBySystag to see the new numbers.
+void updateAnaHeader(const float pa[ana::nJetR], const float statLow[ana::nJetR], const float statHigh[ana::nJetR],
+    const map<string, vector<float>> & paBySystag) {
   const char * anaHeaderPath = "/home/samson72/sphnx/gammajet_unfold/src/ana.h";
   ifstream fin(anaHeaderPath);
   if (!fin) {
@@ -101,9 +111,31 @@ void updateAnaHeader(const float pa[ana::nJetR], const float totalLow[ana::nJetR
     content = content.substr(0, eq+1) + " " + newLiteral + content.substr(semi);
   };
 
-  replaceArrayLiteral("jesNominal",      formatArray(pa));
-  replaceArrayLiteral("jesTotalErrLow",  formatArray(totalLow));
-  replaceArrayLiteral("jesTotalErrHigh", formatArray(totalHigh));
+  replaceArrayLiteral("jesNominal",     formatArray(pa));
+  replaceArrayLiteral("jesStatErrLow",  formatArray(statLow));
+  replaceArrayLiteral("jesStatErrHigh", formatArray(statHigh));
+
+  // Regenerate the whole jesBySystag block (between its BEGIN/END marker comments), in
+  // ana::systags order, so the table can never drift out of step with the systag list.
+  {
+    const string beginTag = "    // BEGIN jesBySystag\n", endTag = "    // END jesBySystag\n";
+    size_t b = content.find(beginTag), e = content.find(endTag);
+    if (b == string::npos || e == string::npos || e < b) {
+      cout << "WARNING: could not find the BEGIN/END jesBySystag markers in ana.h - table not updated." << endl;
+      allFound = false;
+    } else {
+      string block = beginTag;
+      block += Form("    static constexpr int nJesSystags = %d;\n", (int)ana::systags.size());
+      block += "    static constexpr const char * jesSystagNames[nJesSystags] = {";
+      for (size_t i = 0; i < ana::systags.size(); i++) block += (i ? ", \"" : "\"") + ana::systags[i] + "\"";
+      block += "};\n    static constexpr double jesBySystag[nJesSystags][nJetR] = {\n";
+      for (size_t i = 0; i < ana::systags.size(); i++) {
+        block += "      " + formatArray(paBySystag.at(ana::systags[i]).data()) + ", // " + ana::systags[i] + "\n";
+      }
+      block += "    };\n";
+      content = content.substr(0, b) + block + content.substr(e);
+    }
+  }
 
   if (!allFound) {
     cout << "ana.h left unchanged due to the warning(s) above." << endl;
@@ -113,7 +145,7 @@ void updateAnaHeader(const float pa[ana::nJetR], const float totalLow[ana::nJetR
   ofstream fout(anaHeaderPath);
   fout << content;
   fout.close();
-  cout << "Updated " << anaHeaderPath << "'s jesNominal/jesTotalErrLow/jesTotalErrHigh "
+  cout << "Updated " << anaHeaderPath << "'s jesNominal/jesStatErrLow/jesStatErrHigh/jesBySystag "
        << "with this scan's results. Run src/make.sh to rebuild before trusting anything "
        << "downstream." << endl;
 }
@@ -185,6 +217,10 @@ void draw_jes_summary() {
   // valid result at every radius, not just "some".
   map<string,int> systagCoverage;
   for (const string & systag : ana::systags) if (systag != "nominal") systagCoverage[systag] = 0;
+  // p_a per (systag, radius) for ana.h's jesBySystag - "nominal" included, so the table
+  // has one row per ana::systags entry.
+  map<string, vector<float>> paBySystag;
+  for (const string & systag : ana::systags) paBySystag[systag] = vector<float>(ana::nJetR, 0);
 
   for (int ir = 0; ir < ana::nJetR; ir++) {
     PaResult nom = readPa("nominal", ir);
@@ -193,12 +229,14 @@ void draw_jes_summary() {
       continue;
     }
 
+    paBySystag["nominal"][ir] = nom.pa;
     double sumsqUp = 0, sumsqDown = 0;
     for (const string & systag : ana::systags) {
       if (systag == "nominal") continue;
       PaResult var = readPa(systag, ir);
       if (!var.ok) continue; // already warned in readPa()
       systagCoverage[systag]++;
+      paBySystag[systag][ir] = var.pa;
       double fracDiff = (var.pa - nom.pa)/nom.pa;
       if (asymmetricSystags.count(systag)) {
         if (fracDiff > 0) sumsqUp   += fracDiff*fracDiff;
@@ -240,22 +278,21 @@ void draw_jes_summary() {
     return;
   }
 
-  // Auto-update ana.h's jesNominal/jesTotalErrLow/jesTotalErrHigh iff this was a
-  // complete sweep: every radius has a nominal result AND every ana::systags entry
-  // (the full systematic set the totalLow/totalHigh above are quadrature-summed over)
-  // has a result at every radius. Anything short of that is a partial/quick-check run
-  // (e.g. run_grid_nominal.sh, or --systag) whose systLow/systHigh would understate the
-  // real systematic - report what's missing instead of overwriting a real physics
-  // constant with an incomplete one.
+  // Auto-update ana.h's jesNominal/jesStatErrLow/jesStatErrHigh/jesBySystag iff this was a
+  // complete sweep: every radius has a nominal result AND every ana::systags entry has a
+  // result at every radius. Anything short of that is a partial/quick-check run (e.g.
+  // run_grid_nominal.sh, or --systag) that would leave holes in jesBySystag - which
+  // unfolder.cc uses to correct Data in every systag - so report what's missing instead
+  // of overwriting real physics constants with an incomplete table.
   bool complete = (nOk == ana::nJetR);
   vector<string> incompleteSystags;
   for (auto & kv : systagCoverage) if (kv.second != ana::nJetR) incompleteSystags.push_back(kv.first);
   complete = complete && incompleteSystags.empty();
 
   if (complete) {
-    float paArr[ana::nJetR], totalLowArr[ana::nJetR], totalHighArr[ana::nJetR];
-    for (int i = 0; i < ana::nJetR; i++) { paArr[i] = vPa[i]; totalLowArr[i] = vTotalLow[i]; totalHighArr[i] = vTotalHigh[i]; }
-    updateAnaHeader(paArr, totalLowArr, totalHighArr);
+    float paArr[ana::nJetR], statLowArr[ana::nJetR], statHighArr[ana::nJetR];
+    for (int i = 0; i < ana::nJetR; i++) { paArr[i] = vPa[i]; statLowArr[i] = vStatLow[i]; statHighArr[i] = vStatHigh[i]; }
+    updateAnaHeader(paArr, statLowArr, statHighArr, paBySystag);
   } else {
     cout << "Not updating src/ana.h: incomplete sweep (";
     if (nOk != ana::nJetR) cout << "only " << nOk << "/" << ana::nJetR << " radii have a nominal result";
@@ -322,8 +359,8 @@ void draw_jes_summary() {
   TLegend * leg = new TLegend(0.45, 0.72, 0.88, 0.85);
   leg->SetBorderSize(0);
   leg->SetFillStyle(0);
-  leg->AddEntry(gStat, "Stat. unc.", "lep");
-  leg->AddEntry(boxes[0], "Syst. unc.", "f");
+  leg->AddEntry(gStat, "Statistical uncertainty", "lep");
+  leg->AddEntry(boxes[0], "Systematic uncertainty", "f");
   leg->Draw();
 
   insitu_utility::drawSPhenixLabel({"p+p Run24 Data"}, {"Pythia8 #gamma+jet MC", "Purity-corrected"}, .18, .85, 16, c->GetWh());

@@ -75,7 +75,7 @@ bool closure_check_pair(jet_object & jet, int ir, pho_object & pho, float testPt
   float lowval = ana::jet_calib_pt_cut[ir]/ana::ptBins[ptbin];
   float lowbin = ana::unfoldXjBins[ana::findUnfoldXjBin(lowval)+1];
   if (val < lowbin*floorScale) return false;
-  if (fabs(pho.eta) > ana::etacut) return false;
+  if (fabs(pho.eta) > ana::photonEtaCut) return false;
   if (fabs(jet.eta) > ana::etacut - ana::JetRs[ir]) return false;
   if (dphi < ana::oppcut) return false;
   return true;
@@ -159,11 +159,11 @@ void make_closure_trees(string trigger = "Photon20", string sim = "pythia",
     // two response-matrix-training/closure-test halves.
     bool isDataHalf = rand.Integer(2) % 2;
 
-    // Nominal reco chain only (no JER/emscale/EMR systag variants) - but the 2% EM
-    // resolution smearing IS applied here even at "nominal", matching every MC systag
-    // in unfolder.cc's fill_matrix() (systagEmrSigmaArr defaults to 0.02): it's how MC's
+    // Nominal reco chain only (no JER/emscale/EMR systag variants) - but the nominal EM
+    // resolution smearing (ana::emResolutionSigma) IS applied here even at "nominal", matching
+    // every MC systag in unfolder.cc's fill_matrix() (systagEmrVariantArr defaults to nominal): it's how MC's
     // cluster-pt resolution is made to match Data's, not itself a systematic variation.
-    float recoClusterPt = rand.Gaus(tu.cluster_pt, tu.cluster_pt*0.02);
+    float recoClusterPt = tu.cluster_pt + rand.Gaus(0, ana::emResolutionSigma(tu.truth_cluster_pt)*tu.truth_cluster_pt);
     pho_object maxpho(
         recoClusterPt, tu.cluster_e, tu.cluster_eta, tu.cluster_phi,
         tu.cluster_showershape[10], tu.cluster_showershape[11], tu.cluster_time,

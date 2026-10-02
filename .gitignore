@@ -2,3 +2,9 @@ latex/
 # Local safety copy of hists/insitu output made before reverting the temporary 9-bin pT
 # expansion (see CLAUDE.md-adjacent session notes) - not meant for permanent git history.
 insitu/archive_expanded_ptbins/
+# Raw input trees (~32 GB, moved here from ~/sphnx/gammajet/trees/) - not for git.
+trees/
+# Pipeline logs (macros/run_full_pipeline.sh)
+logs/
+# TimingAna study trees copied from SDCC/tg (~2.5 GB) - originals on /sphenix/tg/tg01/jets/samfred/timingana
+claude_checks/jet_timing/timingana/

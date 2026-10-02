@@ -1,0 +1,4 @@
+
+Processing tcal_window_eff.C...
+warning: Failed to call `tcal_window_eff()` to execute the macro.
+Add this function or rename the macro. Falling back to `.L`.

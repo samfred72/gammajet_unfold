@@ -25,9 +25,11 @@ class insitu_utility {
     // (the original [0.95,1.05]/1000 granularity) as the window moves - unfolder.cc's
     // ispairedInsitu floorScale is tied directly to scanLow (see fill_matrix()), so
     // events are always kept in insitutree down to whatever scanLow is set to here.
-    static constexpr float scanLow = 0.90;
+    // Lowered from 0.90 to 0.80 (Sep 28 2026, PPG18 review issue 3): several scans (R = 0.2,
+    // threejet, JERhigh) sat at the 0.90 edge. scanN doubled with it to keep the 1e-4 step.
+    static constexpr float scanLow = 0.80;
     static constexpr float scanHigh = 1.00;
-    static constexpr int scanN = 1000;
+    static constexpr int scanN = 2000;
 
     // Reads the insitutree (pho_pt, jet_pt, abcd, ir) written by unfolder.cc, keeping
     // only events in the requested ABCD region AND the requested jet radius (the tree

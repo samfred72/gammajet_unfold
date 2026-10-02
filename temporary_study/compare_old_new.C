@@ -39,7 +39,7 @@
 // cross-section weight combining Photon5/10/20 - see truthPtWindow/sampleWeight below) are
 // skipped entirely for Data (weight 1, single file, no truth branch read at all).
 //
-// Data support: once ~/sphnx/gammajet/trees/gammajet_Data.root exists (same tree format/branch
+// Data support: once ~/sphnx/gammajet_unfold/trees/gammajet_Data.root exists (same tree format/branch
 // names as the MC files here, "towerntup"), this macro auto-detects it (gSystem::
 // AccessPathName) and additionally writes the same set of plots for Data
 // (compare_old_new_data.pdf) plus a Data/MC ratio set (compare_old_new_ratio.pdf) - see
@@ -217,8 +217,8 @@ void processFile(const std::string & trigger, bool isMC, TH1D * hxjIncl[nCases],
     std::vector<std::vector<Accum>> & accPt, Reweighter & rw, Long64_t maxEntries = -1) {
 
   std::string fname = isMC ?
-      "/home/samson72/sphnx/gammajet/trees/gammajet_pythia_" + trigger + ".root" :
-      "/home/samson72/sphnx/gammajet/trees/gammajet_Data.root";
+      "/home/samson72/sphnx/gammajet_unfold/trees/gammajet_pythia_" + trigger + ".root" :
+      "/home/samson72/sphnx/gammajet_unfold/trees/gammajet_Data.root";
   TFile * f = TFile::Open(fname.c_str(), "read");
   if (!f || f->IsZombie()) { std::cout << "Could not open " << fname << std::endl; return; }
   TTree * t = (TTree*)f->Get("towerntup");
@@ -696,7 +696,7 @@ void compare_old_new(Long64_t maxEntriesPerFile = -1) {
       "/home/samson72/sphnx/gammajet_unfold/temporary_study/compare_old_new.pdf",
       "/home/samson72/sphnx/gammajet_unfold/temporary_study/compare_old_new_summary.txt");
 
-  std::string dataFname = "/home/samson72/sphnx/gammajet/trees/gammajet_Data.root";
+  std::string dataFname = "/home/samson72/sphnx/gammajet_unfold/trees/gammajet_Data.root";
   bool haveData = !gSystem->AccessPathName(dataFname.c_str()); // AccessPathName returns 0 (false) iff the file exists
   if (haveData) {
     ResultSet dataSet = makeResultSet("Data", nb, edges);

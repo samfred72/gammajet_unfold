@@ -89,8 +89,8 @@ void processFile(const std::string & trigger, bool isMC, std::vector<TH1D*> & hx
     std::vector<Accum> & accPt, Reweighter & rw, Long64_t maxEntries = -1) {
 
   std::string fname = isMC ?
-      "/home/samson72/sphnx/gammajet/trees/gammajet_pythia_" + trigger + ".root" :
-      "/home/samson72/sphnx/gammajet/trees/gammajet_Data.root";
+      "/home/samson72/sphnx/gammajet_unfold/trees/gammajet_pythia_" + trigger + ".root" :
+      "/home/samson72/sphnx/gammajet_unfold/trees/gammajet_Data.root";
   TFile * f = TFile::Open(fname.c_str(), "read");
   if (!f || f->IsZombie()) { std::cout << "Could not open " << fname << std::endl; return; }
   TTree * t = (TTree*)f->Get("towerntup");
@@ -211,7 +211,7 @@ void draw_xj_data_mc(Long64_t maxEntriesPerFile = -1) {
   for (const std::string & trigger : {"Photon5", "Photon10", "Photon20"})
     processFile(trigger, /*isMC=*/true, hxjMC, accMC, rw, maxEntriesPerFile);
 
-  std::string dataFname = "/home/samson72/sphnx/gammajet/trees/gammajet_Data.root";
+  std::string dataFname = "/home/samson72/sphnx/gammajet_unfold/trees/gammajet_Data.root";
   bool haveData = !gSystem->AccessPathName(dataFname.c_str()); // AccessPathName returns 0 (false) iff the file exists
   if (haveData) {
     processFile("Data", /*isMC=*/false, hxjData, accData, rw, maxEntriesPerFile);

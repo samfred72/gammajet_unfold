@@ -1,0 +1,20 @@
+
+Processing draw_thirdjet_dr.C...
+data done
+MC done
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet8_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet20_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet30_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet50_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet60_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /home/samson72/sphnx/gammajet_unfold/hists/Jet80_pythia_nominal_unfolding.root does not exist
+
+  R   | vetoed fraction Data | Pythia8          | vetoed w/o recorded 3rd jet: Data  Pythia8
+  0.2 | 0.409 +- 0.009        | 0.785 +- 0.002    | 0.25  0.02
+  0.3 | 0.357 +- 0.008        | 0.777 +- 0.002    | 0.26  0.01
+  0.4 | 0.325 +- 0.008        | 0.783 +- 0.002    | 0.29  0.01
+  0.5 | 0.350 +- 0.009        | 0.782 +- 0.002    | 0.29  0.01
+  0.6 | 0.369 +- 0.010        | 0.828 +- 0.002    | 0.32  0.01
+  0.7 | 0.381 +- 0.011        | 0.784 +- 0.002    | 0.35  0.01
+  0.8 | 0.397 +- 0.013        | 0.741 +- 0.003    | 0.33  0.01
+Info in <TCanvas::Print>: pdf file /home/samson72/sphnx/gammajet_unfold/claude_checks/threejet/pdfs/draw_thirdjet_dr.pdf has been created

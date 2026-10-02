@@ -1,0 +1,25 @@
+
+Processing draw_timingana_tcal.C...
+files: 20, selected jets: 120792 of 462517
+
+tower time RMS / shifted fraction (|t| > 9 ns), E > 0.5 GeV
+  EMCal  standard  RMS  2.75  shifted 0.006  (n=199415)
+  EMCal  corrected RMS  2.71  shifted 0.003  (n=199415)
+  iHCal  standard  RMS  3.06  shifted 0.027  (n=787)
+  iHCal  corrected RMS  5.80  shifted 0.075  (n=787)
+  oHCal  standard  RMS  5.09  shifted 0.105  (n=72790)
+  oHCal  corrected RMS  5.20  shifted 0.085  (n=72790)
+
+jet time width (half 16-84%) vs pT:  pT  | t_jet std  t_jet corr | t_MBD-t_jet std  corr
+    6.0 |     2.80     2.68     1.73     1.66
+    8.0 |     2.77     2.64     1.83     1.68
+   10.0 |     2.86     2.68     2.05     1.77
+   12.0 |     3.06     2.80     2.16     1.67
+   14.0 |     3.13     2.96     2.16     1.68
+   16.5 |     3.54     3.44     2.41     1.96
+   20.0 |     3.20     2.96     1.77     1.21
+   25.0 |     3.19     3.01     1.98     1.28
+   34.0 |     3.25     2.67     1.63     1.44
+
+median t_EMCal - t_HCal vs pT (std / corr):  6: 1.27 / -0.12  8: 1.47 / 0.10  10: 1.67 / 0.33  12: 1.71 / 0.39  14: 1.88 / 0.52  16: 1.93 / 0.48  20: 2.21 / 0.61  25: 2.29 / 0.81  34: 2.64 / 0.78
+jet vs MBD time correlation (std / corr): 0.57 / 0.60

@@ -3,6 +3,18 @@ using namespace std;
 ana::ana() {
 }
 
+// See ana.h's comment above emResolutionSigma for the prescription/provenance.
+static float emSigmaOverE(float E, float p0, float p1, float p2) {
+  return sqrt(p0*p0/E + p1*p1/(E*E) + p2*p2);
+}
+float ana::emResolutionSigma(float truthPt, int emrVariant) {
+  if (emrVariant == emrLow || truthPt <= 0) return 0.0;
+  const float mc = emSigmaOverE(truthPt, 0.185, 0.0, 0.040);
+  const float data = (emrVariant == emrHigh) ? emSigmaOverE(truthPt, 0.13, 0.08, 0.08)
+                                             : emSigmaOverE(truthPt, 0.15, 0.05, 0.05);
+  return sqrt(max(0.0f, data*data - mc*mc));
+}
+
 // See ana.h's comment above the declaration - the single place to add/remove a systag.
 const vector<string> ana::systags = {
   "nominal", "JERhigh", "JERlow", "emscale_high", "emscale_low",
@@ -18,6 +30,15 @@ const vector<pair<string,string>> ana::asymmetricSystagPairs = {
 // they're each treated as their own independent symmetrized source (full magnitude to
 // both up and down), not sign-split against each other. See drawing/draw_systematics.C's
 // purityMembers comment for why.
+
+double ana::jesForSystag(const string & systag, int ir) {
+  for (int i = 0; i < nJesSystags; i++) {
+    if (systag == jesSystagNames[i]) return jesBySystag[i][ir];
+  }
+  cout << "WARNING: ana::jesForSystag - no in-situ p_a for systag \"" << systag
+       << "\" in ana.h's jesBySystag (rerun insitu/draw_jes_summary.C); using jesNominal." << endl;
+  return jesNominal[ir];
+}
 
 Bool_t ana::PassEtaCut(float eta, float vz = 0)
 {

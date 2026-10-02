@@ -27,7 +27,7 @@ bool check_pair(jet_object jet, int ir, pho_object pho) {
   float lowbin = ana::unfoldXjBins[ana::findUnfoldXjBin(lowval) + 1];
 
   if (val < lowbin) return false;
-  if (fabs(pho.eta) > ana::etacut) return false;
+  if (fabs(pho.eta) > ana::photonEtaCut) return false;
   if (fabs(jet.eta) > ana::etacut - ana::JetRs[ir]) return false;
   if (dphi < ana::oppcut) return false;
   return true;

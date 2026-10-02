@@ -22,6 +22,9 @@ void unfold_allsys(string trigger="Photon5", string sim="pythia",
 
   unfolder uf(trigger, sim, systags);
   uf.set_dodraw(dodraw);
+  // GAMMAJET_NO_PROGRESS=1 (set by macros/run_full_pipeline.sh) turns off the per-event
+  // progress line for batch runs.
+  if (gSystem->Getenv("GAMMAJET_NO_PROGRESS")) uf.set_progress(false);
   uf.fill_matrix();
   if (!dodraw) {
     uf.unfold();
