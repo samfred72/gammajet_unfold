@@ -17,7 +17,7 @@
 # run_pipeline.sh (full mode) followed by plain run_grid.sh instead.
 #
 # Usage: run_grid_nominal.sh [--mode gammajet|combined]  (passed through to run_grid.sh;
-# default gammajet). The combined mode also needs the multiJet trees in ../trees.
+# default gammajet). The combined mode also needs ../multijet/multijet_analysis_pythia.root.
 set -e
 cd "$(dirname "$0")"
 

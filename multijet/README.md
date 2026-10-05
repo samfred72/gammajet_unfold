@@ -40,20 +40,14 @@ from the previous pass's spectra.
 
 The selection, weights and histogram content are unchanged.
 
-## Known differences with `../insitu` (combined mode)
+## Used by `../insitu` (combined mode)
 
-1. **Event selection.** `analysis.cc` additionally requires:
-   - Data trigger bit 22;
-   - sub and subsub pT < 30 GeV;
-   - its own timing cut (|t_lead| < 6, |t_lead − Δt| < 3);
-   - MC reweighting in leading pT and z-vertex.
+`insitu/grid_insitu.C("<systag>","combined")` reads this analysis's output,
+`multijet_analysis_pythia.root` (per-radius trees `ttree_data_r<R>` and
+`ttree_Jet*_r<R>_{RECO,HIGH,LOW}` with their `weight`). So the multijet selection and MC
+weighting are defined only here.
 
-   The in-situ combined mode re-applies only the `DijetTreeMaker` skim cuts plus |η| < 1.1 − R.
-2. **MC normalization.**
-   - `analysis.cc` uses its own per-sample weights, normalized to Jet30: Jet12 = 1.4903e6,
-     Jet20 = 6.2623e4 (pythia).
-   - `insitu/grid_insitu.C` uses `drawer.h`'s scale map: Jet12 = 3.997e6, Jet20 = 6.218e4,
-     and it also uses Jet50.
-   - They also differ in the top pT-hat slice: Jet30 runs to 100 GeV here, 50 GeV in `treeuser`.
-
-These should be reconciled before the two are compared.
+The order is:
+1. `./analysis 0`
+2. `makeratio.C`, then `./analysis 0` again, to update the reweighting
+3. `../insitu/run_grid.sh --mode combined`

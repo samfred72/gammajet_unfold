@@ -35,8 +35,9 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 //   "gammajet" (default) - the study described below: one constant scale pa. Its
 //       output (output/grid_insitu_<systag>.root, pdfs/grid_insitu_<systag>.pdf) is what
 //       draw_jes_summary.C turns into ana.h's jesNominal/jesBySystag.
-//   "combined" - gamma+jet plus the multijet balance from the multiJet analysis trees
-//       (trees/multijet_*.root, see insitu_utility::multijetFilename), fitting a linear
+//   "combined" - gamma+jet plus the multijet balance from multijet/analysis.cc's output
+//       (multijet/multijet_analysis_pythia.root - its per-radius event trees carry that
+//       analysis's selection and MC weights, see insitu_utility.h), fitting a linear
 //       JES f(pT) = pa + pb*pT on a 2D grid, as the old sibling-project grid_insitu.C did.
 //       A constant scale cancels in the multijet balance, so multijet constrains the
 //       slope and gamma+jet the normalization. Cross-check only: written to
@@ -78,13 +79,11 @@ const int nPtBinsUsed = ana::nPtBinsUsed;
 // drawer.h's scalemap[isphoton=1][sample] for sim="pythia".
 map<int,double> photon_scale = {{5,146359.3},{10,6944.675},{20,130.4461}};
 
-// Combined mode only. multiJet trees (local copies of the SDCC multiJet outputs) and the
-// Pythia8 dijet MC samples forming the multijet reference, weighted with drawer.h's
-// scalemap[isphoton=0] for sim="pythia" and cut to each sample's pT-hat slice
-// (treeuser::truthSliceLow/High) - the multiJet MC trees carry no event weight.
-string multijet_tree_dir = "/home/samson72/sphnx/gammajet_unfold/trees"; // non-const so a test can point it elsewhere
-vector<pair<string,double>> multijet_mc_samples = {
-  {"Jet8", 1.3013e+07}, {"Jet12", 3.997e+06}, {"Jet20", 6.218e+04}, {"Jet30", 2.502e+03}, {"Jet50", 7.2695}};
+// Combined mode only: directory holding multijet/analysis.cc's output
+// (multijet_analysis_pythia.root). The multijet event selection and MC weighting
+// (cross sections, pT-hat stitching, leading-pT and z-vertex reweighting) are all
+// analysis.cc's - this macro only reads its per-radius trees.
+string multijet_analysis_dir = "/home/samson72/sphnx/gammajet_unfold/multijet"; // non-const so a test can point it elsewhere
 // Linear-JES grid (combined mode): pa over the same window as the 1D scan but coarser
 // (2D grid cost), pb over +-0.005/GeV (1e-4 steps). 1-sigma region: delta-chi2 < 2.30
 // (two parameters).
@@ -653,7 +652,7 @@ static void drawMultijetPage(TCanvas * c, const char * pdfPath, int ir,
   l1->AddEntry(gMC, "Pythia8 dijet (reco)"); l1->AddEntry(gRaw, "Data (reco)"); l1->Draw();
   insitu_utility::drawSPhenixLabel({"Multijet balance"}, {
       Form("Jet R=%.1f", ana::JetRs[ir]),
-      Form("|#eta^{jet}|<%.1f, p_{T}^{sub,subsub} > %.0f GeV", ana::etacut-ana::JetRs[ir], insitu_utility::multijetSubPtMin)
+      "selection and MC weights: multijet/analysis.cc"
     }, .18, .85, 16, p1->GetWh()/1.5);
   p2->cd(); p2->SetTopMargin(0.02); p2->SetBottomMargin(0.2); p2->SetLeftMargin(.15); gPad->SetTicks(1,1);
   TH1F * f2 = p2->DrawFrame(b[0], 0.85, b[n], 1.15);
@@ -678,20 +677,23 @@ void runCombined(TCanvas * c, const char * pdfPath, TFile * fout, int ir, const 
     const float lowXj[]) {
   const int nMJ = insitu_utility::nMultijetPtBins;
 
-  // Multijet inputs - Data unweighted, MC sliced and cross-section weighted.
-  string mjDataFile = insitu_utility::multijetFilename(multijet_tree_dir.c_str(), "Data", "");
-  vector<MultijetEvent> mjData = insitu_utility::cacheMultijetEvents(mjDataFile.c_str(), ir, false, systag, 1.0, "Data", "");
+  // Multijet inputs: analysis.cc's per-radius trees (Data weight 1; MC weight from
+  // analysis.cc). JERhigh/JERlow use its HIGH/LOW smear variants, everything else RECO.
+  const int radius = (int)std::lround(ana::JetRs[ir]*10);
+  const string sys = insitu_utility::multijetSysName(systag);
+  string mjFile = insitu_utility::multijetAnalysisFilename(multijet_analysis_dir.c_str(), "pythia");
+  vector<MultijetEvent> mjData = insitu_utility::cacheMultijetEvents(mjFile.c_str(), Form("ttree_data_r%d", radius));
   vector<MultijetEvent> mjMC;
-  for (auto & s : multijet_mc_samples) {
-    string f = insitu_utility::multijetFilename(multijet_tree_dir.c_str(), s.first.c_str(), "pythia");
-    vector<MultijetEvent> ev = insitu_utility::cacheMultijetEvents(f.c_str(), ir, true, systag, s.second, s.first, "pythia");
-    cout << "  multijet MC " << s.first << ": " << ev.size() << " events" << endl;
+  for (int is = 0; is < insitu_utility::nMultijetMCSamples; is++) {
+    const char * sample = insitu_utility::multijetMCSamples[is];
+    vector<MultijetEvent> ev = insitu_utility::cacheMultijetEvents(mjFile.c_str(), Form("ttree_%s_r%d_%s", sample, radius, sys.c_str()));
+    cout << "  multijet MC " << sample << " (" << sys << "): " << ev.size() << " events" << endl;
     mjMC.insert(mjMC.end(), ev.begin(), ev.end());
   }
   cout << "Cached multijet events: Data=" << mjData.size() << " MC=" << mjMC.size() << endl;
   if (mjData.empty() || mjMC.empty()) {
-    cout << "ERROR: no multijet Data or MC events for R=" << ana::JetRs[ir]
-         << " - check " << multijet_tree_dir << "/multijet_*.root; skipping this radius" << endl;
+    cout << "ERROR: no multijet Data or MC events for R=" << ana::JetRs[ir] << " in " << mjFile
+         << " - run multijet/analysis first (multijet/README.md); skipping this radius" << endl;
     return;
   }
   float mjRef[nMJ], mjRefErr[nMJ];

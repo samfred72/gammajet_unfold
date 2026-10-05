@@ -30,37 +30,28 @@ Run the gammajet mode first if you want the combined plots to overlay its consta
   `unfolder.cc`.
 - Purity comes from `hists/purity_<systag>.root`.
 
-**Multijet (combined mode only):** local copies of the multiJet analysis trees go in `../trees/`.
+**Multijet (combined mode only):** `../multijet/multijet_analysis_pythia.root`, written by
+`../multijet/analysis` (see `../multijet/README.md`). Run that first: it reads the multiJet
+trees in `../trees/` and does the multijet event selection and MC weighting. This macro
+only reads its per-radius trees:
+- Data: `ttree_data_r<10R>`
+- MC: `ttree_Jet{8,12,20,30}_r<10R>_{RECO,HIGH,LOW}`
 
-| File | Source on SDCC/tg |
-|---|---|
-| `multijet_Data.root` | `/sphenix/tg/tg01/jets/samfred/multiJet_full_hadded/multijet_Data.root` (`multiJet/FunforAll/hadd_data.sh`) |
-| `multijet_pythia_Jet{8,12,20,30,50}.root` | `/sphenix/tg/tg01/jets/samfred/multiJet_hadded/` (`multiJet/FunforAll/condor_hadd.job`) |
-
-A missing MC sample is skipped with a warning. If there is no multijet Data or MC at all,
-that radius is skipped with an error.
+A missing MC tree is skipped with a warning. If there are no multijet Data or MC events at
+all, that radius is skipped with an error.
 
 ## Combined mode: what it does
 
-- **Multijet balance:** B = pT,lead / |p⃗T,sub + p⃗T,subsub|, in leading-jet pT bins
-  20, 25, 30, 35, 40, 50, 60 GeV. Each jet is divided by f at its own pT. A constant scale
-  cancels in B, so multijet constrains the slope `pb` and γ+jet fixes `pa`. This is the same
-  method as the old `~/sphnx/gammajet/macros/grid_insitu.C`.
-- **Selection:** re-applied on the pT actually used: Data `jet_pt_calib`, MC
-  `jet_pt_smear_truth` (`_high`/`_low` for JERhigh/JERlow; no other systag changes the
-  multijet side).
-  - at least 3 jets, all with |η| < 1.1 − R;
-  - sub and subsub pT ≥ 7 GeV;
-  - Δφ(lead, sub) ≥ 3π/4 and Δφ(lead, subsub) ≥ π/2;
-  - 0.4 ≤ B < 2.65.
-
-  These thresholds match `DijetTreeMaker`'s skim. The trees already have the skim's
-  |vz| < 60 cm and the Data jet timing cuts applied.
-- **MC reference:** Pythia8 Jet8–50. Each sample is cut to its pT-hat slice
-  (`treeuser::truthSliceLow/High`, leading truth jet at the same R) and weighted by the
-  `drawer.h` cross-section scale. The multiJet MC trees carry no weights and no
-  generated-event counts, so this follows the repo's convention. It is exact only if the
-  samples' event counts are comparable.
+- **Multijet balance:** B = pT,lead / |p⃗T,sub + p⃗T,subsub|, in `analysis.cc`'s
+  leading-jet pT bins (20, 25, 30, 35, 40, 50, 60, 70 GeV), for 0.4 ≤ B < 2.65. Each jet is
+  divided by f at its own pT. A constant scale cancels in B, so multijet constrains the
+  slope `pb` and γ+jet fixes `pa`. This is the same method as the old
+  `~/sphnx/gammajet/macros/grid_insitu.C`, which read the same kind of tree.
+- **Selection and MC weights:** taken entirely from `analysis.cc`. They are not
+  re-implemented here, so the two cannot drift apart.
+- **MC jet pT:** `analysis.cc`'s reco-based smearing `jet_pt_smear_reco`. JERhigh/JERlow
+  use its HIGH/LOW variants; no other systag changes the multijet side. This differs from
+  the γ+jet side, which uses `jet_pt_smear_truth` as `unfolder.cc` does.
 - **Fit:**
   - The χ² is the γ+jet χ² (region A, or purity-corrected) plus the multijet χ². Both use
     the same per-bin mean-ratio formula as the gammajet mode.
