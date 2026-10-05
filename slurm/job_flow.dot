@@ -1,0 +1,84 @@
+// Slurm job structure for the gammajet_unfold pipeline (option 2).
+// Render: dot -Tpdf job_flow.dot -o job_flow.pdf
+digraph jobflow {
+  graph [rankdir=TB, fontname="Helvetica", fontsize=11, nodesep=0.25, ranksep=0.42,
+         labelloc=t, label=<<B>gammajet_unfold on Alpine Slurm: jobs and dependencies</B><BR/><FONT POINT-SIZE="9">arrow = sbatch --dependency=afterok &nbsp;&nbsp; stacked box = job array (one task per index, all run in parallel) &nbsp;&nbsp; times = Sep 28 local run</FONT>>];
+  node  [fontname="Helvetica", fontsize=9, shape=box, style="rounded,filled", fillcolor="#ffffff", color="#555555"];
+  edge  [color="#555555", arrowsize=0.6];
+
+  // ---------- setup ----------
+  compile0 [label=<<B>compile</B><BR/>src/make.sh &nbsp;(acompile)>, fillcolor="#e8e8e8"];
+
+  // ---------- once: build the MC weight ----------
+  subgraph cluster_once {
+    label=<<B>Runs once</B>: derive the Data/MC v<SUB>z</SUB> + cluster-p<SUB>T</SUB> weight, then the MC unfolds>;
+    style="rounded,filled"; fillcolor="#eef4fb"; color="#7a9cc6"; fontsize=10;
+
+    unf0 [shape=box3d, style=filled, fillcolor="#cfe0f3",
+          label=<<B>unfold (nominal)</B> &nbsp;array ×4<BR/>Data, Photon5, Photon10, Photon20<BR/><FONT POINT-SIZE="8">unfold.C(trigger,"pythia","nominal")</FONT>>];
+    pur0 [label=<<B>puritymaker("nominal")</B><BR/><FONT POINT-SIZE="8">needs Data + Photon5/10/20 nominal</FONT>>, fillcolor="#cfe0f3"];
+    rew  [label=<<B>make_vz_pt_reweight(true)</B><BR/><FONT POINT-SIZE="8">~1-20 min (reads all trees)</FONT>>, fillcolor="#cfe0f3"];
+    unfmc [shape=box3d, style=filled, fillcolor="#cfe0f3",
+           label=<<B>MC unfold, all systags</B> &nbsp;array ×7<BR/>Photon5/10/20 pythia (unfold_allsys)<BR/>Photon5/10/20 herwig (nominal only)<BR/>Jet12_long pythia (unfold_allsys; only feeds the jet12 figures)<BR/><FONT POINT-SIZE="8">~10 min each; never rerun: p<SUB>a</SUB> only touches Data</FONT>>];
+    unf0 -> pur0 -> rew -> unfmc;
+  }
+  compile0 -> unf0;
+
+  // ---------- the in-situ feedback loop ----------
+  subgraph cluster_loop {
+    label=<<B>In-situ feedback loop</B> (repeats until p<SUB>a</SUB> converges) &mdash; only Data is re-unfolded>;
+    style="rounded,filled"; fillcolor="#fdf3e6"; color="#d9a35b"; fontsize=10;
+
+    unfdata [label=<<B>Data unfold, all systags</B><BR/>unfold_allsys.C("Data")<BR/><FONT POINT-SIZE="8">one tree read fills all 15 systags<BR/>MC weight is MC-only, so it does not wait for the MC jobs</FONT>>, fillcolor="#fbe0bd"];
+    pur [shape=box3d, style=filled, fillcolor="#fbe0bd",
+         label=<<B>puritymaker(systag)</B> &nbsp;array ×15<BR/><FONT POINT-SIZE="8">needs Data + Photon5/10/20 for that systag<BR/>all 7 radii inside one task (seconds)</FONT>>];
+    grid [shape=box3d, style=filled, fillcolor="#fbe0bd",
+          label=<<B>grid_insitu(systag)</B> &nbsp;array ×15<BR/><FONT POINT-SIZE="8">needs that systag's purity + Data/Photon insitu trees<BR/>(×7 radii = 105 tasks needs a small change:<BR/>per-radius output files, today one file per systag)</FONT>>];
+    jes [label=<<B>draw_jes_summary + draw_jes_variations</B><BR/><FONT POINT-SIZE="8">needs ALL 15 × 7 scan results; rewrites src/ana.h</FONT>>, fillcolor="#fbe0bd"];
+    recomp [label=<<B>compile</B>>, fillcolor="#e8e8e8"];
+    conv [shape=diamond, style=filled, fillcolor="#ffffff", label=<<B>converged?</B><BR/>max |&Delta;p<SUB>a</SUB>| &lt; tol>];
+    unfdata -> pur -> grid -> jes -> recomp -> conv;
+  }
+  unfmc -> unfdata [style=invis];
+  unfmc -> pur [label=<  pythia MC  >, fontsize=8, constraint=false];
+  compile0 -> unfdata [style=dashed, constraint=false, label=<  1st pass: no MC wait  >, fontsize=8];
+  conv -> unfdata [label=<  no: controller job<BR/>  resubmits the loop>, fontsize=8, color="#c0392b", fontcolor="#c0392b", style=dashed, constraint=false];
+
+  // ---------- final stage: everything independent fans out ----------
+  subgraph cluster_final {
+    label=<<B>Final stage</B> (after convergence): everything in here is independent unless an arrow says otherwise>;
+    style="rounded,filled"; fillcolor="#eef7ee"; color="#79b07d"; fontsize=10;
+
+    subgraph cluster_radius {
+      label=<<B>Per-radius chains</B> &nbsp;array ×7 (R = 0.2 ... 0.8), radii fully independent>;
+      style="rounded,filled"; fillcolor="#dcefdc"; color="#79b07d"; fontsize=9;
+      prior [label=<<B>draw_prior_sensitivity("nominal", ir)</B>>, fillcolor="#c4e4c6"];
+      syst  [label=<<B>draw_systematics(ir)</B><BR/><FONT POINT-SIZE="8">reads every systag's unfold + purity, herwig</FONT>>, fillcolor="#c4e4c6"];
+      final [label=<<B>draw_final_result(ir)</B>>, fillcolor="#c4e4c6"];
+      prior -> syst -> final;
+    }
+
+    subgraph cluster_diag {
+      label=<<B>R=0.4 nominal diagnostics</B> (each its own job)>;
+      style="rounded,filled"; fillcolor="#dcefdc"; color="#79b07d"; fontsize=9;
+      diag [shape=box3d, style=filled, fillcolor="#c4e4c6",
+            label=<draw_purity_corrected<BR/>draw_iteration_halfclosure<BR/>draw_refolding &nbsp;&nbsp; draw_nonclosure>];
+      toyr [label=<toy_iterations("nominal","resp")>, fillcolor="#c4e4c6"];
+      toyd [label=<toy_iterations("nominal","data")>, fillcolor="#c4e4c6"];
+      toyc [label=<plot_toy_chi2_combined>, fillcolor="#c4e4c6"];
+      toyr -> toyc; toyd -> toyc;
+    }
+
+    subgraph cluster_insitu {
+      label=<<B>In-situ figures for the note</B> (each its own job)>;
+      style="rounded,filled"; fillcolor="#dcefdc"; color="#79b07d"; fontsize=9;
+      insplots [shape=box3d, style=filled, fillcolor="#c4e4c6",
+                label=<grid_insitu_unfolded (mean), (shape)<BR/>grid_insitu_jet12 &nbsp;&nbsp; draw_insitu_xj_jet12<BR/><FONT POINT-SIZE="8">jet12 ones need the Jet12_long unfold</FONT><BR/>draw_insitu_xj &nbsp;&nbsp; draw_insitu_xj_allR>];
+    }
+  }
+  conv -> prior [label=<  yes>, fontsize=8, color="#2e7d32", fontcolor="#2e7d32"];
+  conv -> diag  [color="#2e7d32"];
+  conv -> toyr  [color="#2e7d32"];
+  conv -> toyd  [color="#2e7d32"];
+  conv -> insplots [color="#2e7d32"];
+}

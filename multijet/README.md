@@ -51,3 +51,12 @@ The order is:
 1. `./analysis 0`
 2. `makeratio.C`, then `./analysis 0` again, to update the reweighting
 3. `../insitu/run_grid.sh --mode combined`
+
+## Running on Alpine (Slurm)
+
+`bash slurm/multijet/submit.sh [--passes N] [--sims "pythia herwig"] [--no-draw]` submits
+build → `analysis` (one array task per sim) → `makeratio.C` → `analysis` … → `draw_xj.C`
+(one array task per radius) as a dependency chain. The default is 2 passes, i.e. one reweighting
+update, as in the order above. A sim whose trees are not all in `../trees/` is skipped.
+Logs, each pass's `multijet_analysis_<sim>.root`, and the `aux/` fits after each `makeratio`
+go to `logs/slurm/multijet_<timestamp>/`.
