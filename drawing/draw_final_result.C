@@ -189,27 +189,35 @@ void draw_final_result(int jetRadiusIndex = 2) {
     // (not truth's own uncertainty - the box is meant to carry only the analysis's
     // systematic uncertainty, same quantity as the top panel, just rescaled to sit on the
     // Data/Truth axis).
-    TGraphAsymmErrors * gRatioSystBox = new TGraphAsymmErrors(nb);
+    // Only bins with both a data and a truth value get a ratio point/box: with the
+    // unclipped draw options below, a placeholder at 0 would otherwise show up as a
+    // stray box/error bar pinned to the bottom of the frame.
+    TGraphAsymmErrors * gRatioSystBox = new TGraphAsymmErrors();
     gRatioSystBox->SetName(Form("gFinalRatioSystBox_pt%d", ipt));
     for (int b = 1; b <= nb; b++) {
       double truth = hTruthDisp->GetBinContent(b);
       double x, y;
       gSystBox->GetPoint(b-1, x, y);
-      double exl = gSystBox->GetErrorXlow(b-1);
-      double exh = gSystBox->GetErrorXhigh(b-1);
-      double eyl = gSystBox->GetErrorYlow(b-1);
-      double eyh = gSystBox->GetErrorYhigh(b-1);
-      double ratioY = truth > 0 ? y/truth : 0;
-      gRatioSystBox->SetPoint(b-1, x, ratioY);
-      gRatioSystBox->SetPointError(b-1, exl, exh, truth > 0 ? eyl/truth : 0, truth > 0 ? eyh/truth : 0);
+      if (truth <= 0 || y <= 0) continue;
+      int n = gRatioSystBox->GetN();
+      gRatioSystBox->SetPoint(n, x, y/truth);
+      gRatioSystBox->SetPointError(n, gSystBox->GetErrorXlow(b-1), gSystBox->GetErrorXhigh(b-1),
+                                   gSystBox->GetErrorYlow(b-1)/truth, gSystBox->GetErrorYhigh(b-1)/truth);
     }
     TH1D * hRatio = (TH1D*)hUnfoldDisp->Clone(Form("hFinalRatio_pt%d", ipt));
     hRatio->Divide(hTruthDisp);
+    for (int b = 1; b <= nb; b++) {
+      if (hUnfoldDisp->GetBinContent(b) <= 0 || hTruthDisp->GetBinContent(b) <= 0) {
+        hRatio->SetBinContent(b, 0);
+        hRatio->SetBinError(b, 0);
+      }
+    }
 
     TH1D * hFrame2 = (TH1D*)hRatio->Clone(Form("hFinalFrame2_pt%d", ipt));
     hFrame2->Reset("ICES");
     hFrame2->SetLineColor(kWhite);
-    hFrame2->GetYaxis()->SetRangeUser(0.5,1.5);
+    const double ratioMin = 0.5, ratioMax = 1.5;
+    hFrame2->GetYaxis()->SetRangeUser(ratioMin, ratioMax);
     hFrame2->GetYaxis()->SetTitle("Data / Pythia Truth");
     hFrame2->GetYaxis()->SetTitleSize(0.09);
     hFrame2->GetYaxis()->SetTitleOffset(0.7);
@@ -220,11 +228,30 @@ void draw_final_result(int jetRadiusIndex = 2) {
     hFrame2->Draw("p");
     gRatioSystBox->SetFillColorAlpha(kAzure+1, 0.35);
     gRatioSystBox->SetLineColor(kWhite);
-    gRatioSystBox->Draw("2 same");
+    // By default ROOT drops a point whose central value lies outside the frame together
+    // with its error bar and syst box. "2 0" (graph) and "e0" (histogram) keep them, clipped
+    // to the frame, so an off-scale bin still shows how far its uncertainties reach into
+    // the visible range. The marker itself can't be drawn outside the frame, so an arrow at
+    // the frame edge marks the direction of each off-scale central value instead.
+    gRatioSystBox->Draw("2 0 same");
     hRatio->SetLineColor(kBlack);
     hRatio->SetMarkerColor(kBlack);
     hRatio->SetMarkerStyle(20);
-    hRatio->Draw("p e same");
+    hRatio->Draw("p e0 same");
+    const double arrowLen = 0.12 * (ratioMax - ratioMin);
+    for (int b = 1; b <= nb; b++) {
+      double r = hRatio->GetBinContent(b);
+      if (hUnfoldDisp->GetBinContent(b) <= 0 || hTruthDisp->GetBinContent(b) <= 0) continue;
+      if (r >= ratioMin && r <= ratioMax) continue;
+      double xc = hRatio->GetBinCenter(b);
+      double yEdge = (r > ratioMax) ? ratioMax : ratioMin;
+      double yTail = (r > ratioMax) ? ratioMax - arrowLen : ratioMin + arrowLen;
+      TArrow * arr = new TArrow(xc, yTail, xc, yEdge, 0.015, "|>");
+      arr->SetLineColor(kBlack);
+      arr->SetFillColor(kBlack);
+      arr->SetLineWidth(2);
+      arr->Draw();
+    }
     TLine * line = new TLine(ana::unfoldXjBins[0],1,ana::unfoldXjBins[ana::nUnfoldXjBins],1);
     line->SetLineStyle(9);
     line->Draw("same");
