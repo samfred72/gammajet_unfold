@@ -56,6 +56,8 @@ const char * insitu_output_dir = ana::path("insitu/output");
 const char * insitu_pdf_dir    = ana::path("insitu/pdfs");
 
 const int nPtBinsUsed = ana::nPtBinsUsed;
+const int nXjBinsForChi2 = ana::nUnfoldXjBins - 3; // shape method: last 3 sparse x_J bins dropped
+bool shapeMethod = false; // set by grid_insitu_unfolded(..., method)
 
 // Bayesian-unfolding iteration count - same "best-iteration scan result" choice
 // drawing/draw_purity_corrected.C uses (see that file's niterate comment /
@@ -125,7 +127,62 @@ void computeUnfoldedMeans(const vector<DataEvent> & dataA, const vector<DataEven
   delete flatUnfolded;
 }
 
-// findError, meanGraph, ratioGraph, drawSPhenixLabel now live in src/insitu_utility.h/.cc.
+// Shape method: chi2 of unfolded vs truth x_J bin fractions per used pT bin.
+float computeUnfoldedShapeChi2(const vector<DataEvent> & dataA, const vector<DataEvent> & dataC, float pa,
+    const float purity[], const float purityC[], RooUnfoldResponse * response, TH1D * respRecoTemplate,
+    const vector<vector<double>> & truthFrac, const vector<vector<double>> & truthFracErr, const float lowXj[]) {
+  vector<TH1D*> hA    = insitu_utility::buildXjByPtBin(dataA, pa, ana::nPtBins, "hUnfShapeA_tmp", lowXj);
+  vector<TH1D*> hC    = insitu_utility::buildXjByPtBin(dataC, pa, ana::nPtBins, "hUnfShapeC_tmp", lowXj);
+  float zeroErrShape[ana::nPtBins] = {0};
+  vector<TH1D*> hCorr = insitu_utility::purityCorrectByPtBin(hA, hC, ana::nPtBins,
+      purity, zeroErrShape, zeroErrShape, purityC, zeroErrShape, zeroErrShape, "hUnfShapeCorr_tmp");
+
+  TH1D * flatCorrected = (TH1D*)respRecoTemplate->Clone("flatCorrectedShape_tmp");
+  flatCorrected->Reset("ICES");
+  for (int ipt = 0; ipt < ana::nPtBins; ipt++) unfold_utility::reflattenXj(hCorr[ipt], ipt, flatCorrected);
+
+  // includeSystematics=false: this is the actual fit criterion below, called once per
+  // pa-scan point (na=insitu_utility::scanN x ana::nJetR calls total) - the expensive
+  // response-matrix-statistics covariance term (see unfold_utility.h's includeSystematics
+  // comment, ~3s/call) made the full scan take hours. errUnf below still reflects the
+  // (cheap, always-on) data-statistics covariance term, just not the response-matrix
+  // contribution - acceptable here since this method is a cross-check against
+  // grid_insitu.C's plain purity-corrected fit (the one draw_jes_summary.C actually
+  // sources ana::jesNominal from), not the headline result.
+  TH1D * flatUnfolded = unfold_utility::unfoldOnce(response, flatCorrected, niterate, "flatUnfoldedShape_tmp", false);
+
+  float chisq = 0;
+  for (int k = 0; k < nPtBinsUsed; k++) {
+    int ipt = ana::firstUsedPtBin + k;
+    TH1D * hU = unfold_utility::unflattenXj(flatUnfolded, ipt, "hUnfoldedShapePt_tmp");
+    double N = hU->Integral();
+    if (N > 0) {
+      // errt floored at 1/N - same fix and same reason as grid_insitu.C (shape method)'s
+      // scan loop (see its comment): a bin that unfolds to ~0 content can still have
+      // errUnf~0, which understates the real uncertainty and lets one near-empty bin
+      // dominate the chi2 (see debug_shapechi2_spike.C, written against the Region-A
+      // version of this same pathology).
+      double errFloor = 1.0/N;
+      for (int ixj = 1; ixj <= nXjBinsForChi2; ixj++) {
+        double fUnf   = hU->GetBinContent(ixj)/N;
+        double errUnf = hU->GetBinError(ixj)/N;
+        double errt = sqrt(errUnf*errUnf + truthFracErr[k][ixj-1]*truthFracErr[k][ixj-1]);
+        errt = std::max(errt, errFloor);
+        double diff = fUnf - truthFrac[k][ixj-1];
+        chisq += diff*diff/(errt*errt);
+      }
+    }
+    delete hU;
+  }
+
+  for (auto h : hA)    delete h;
+  for (auto h : hC)    delete h;
+  for (auto h : hCorr) delete h;
+  delete flatCorrected;
+  delete flatUnfolded;
+  return chisq;
+}
+
 
 // One comparison page: top panel is unfolded mean(x_J) vs pT for Truth (fixed) and raw
 // (pa=1) unfolded Data; bottom panel is the raw ratio and the corrected ratio (evaluated
@@ -202,7 +259,7 @@ void drawJESPage(TCanvas * c, const char * pdfPath, const char * label, int ir,
   TLatex jestext;
   jestext.SetNDC();
   jestext.SetTextColor(kRed);
-  jestext.DrawLatex(.18,.28, Form("Data to MC JES (unfolded vs. truth) = %.4f #pm %.4f", pa, paErr));
+  jestext.DrawLatex(.18,.28, Form("Data to MC JES (unfolded vs. truth%s) = %.4f #pm %.4f", shapeMethod ? ", shape #chi^{2}" : "", pa, paErr));
 
   c->SaveAs(pdfPath);
 }
@@ -266,7 +323,12 @@ void drawXjPage(TCanvas * c, const char * pdfPath, const char * label, int ir, f
   c->SaveAs(pdfPath);
 }
 
-void grid_insitu_unfolded(string systag = "nominal", int na = insitu_utility::scanN) {
+// method = "mean" (mean x_J vs truth) or "shape" (x_J bin fractions vs truth); output
+// grid_insitu_unfolded_<systag> or grid_insitu_unfolded_shapechi2_<systag>.
+void grid_insitu_unfolded(string systag = "nominal", int na = insitu_utility::scanN, string method = "mean") {
+  if (method != "mean" && method != "shape") { cout << "method must be \"mean\" or \"shape\"" << endl; return; }
+  shapeMethod = (method == "shape");
+  const char * tag = shapeMethod ? "unfolded_shapechi2" : "unfolded";
   // Newly created histograms are not registered to any TDirectory, so the ~20
   // temporaries allocated per pa grid point (computeUnfoldedMeans, called na times) don't
   // pile up in gROOT's object list or collide on name across iterations - they're freed
@@ -281,11 +343,11 @@ void grid_insitu_unfolded(string systag = "nominal", int na = insitu_utility::sc
   // per-radius as before.
   drawer d("pythia", systag);
 
-  string pdfPathStr = Form("%s/grid_insitu_unfolded_%s.pdf", insitu_pdf_dir, systag.c_str());
+  string pdfPathStr = Form("%s/grid_insitu_%s_%s.pdf", insitu_pdf_dir, tag, systag.c_str());
   TCanvas * c = new TCanvas("c","",700,700);
   c->SaveAs(Form("%s[", pdfPathStr.c_str()));
 
-  string outfilename = Form("%s/grid_insitu_unfolded_%s.root", insitu_output_dir, systag.c_str());
+  string outfilename = Form("%s/grid_insitu_%s_%s.root", insitu_output_dir, tag, systag.c_str());
   TFile * fout = TFile::Open(outfilename.c_str(), "RECREATE");
 
   for (int ir = 0; ir < ana::nJetR; ir++) {
@@ -328,11 +390,19 @@ void grid_insitu_unfolded(string systag = "nominal", int na = insitu_utility::sc
   // the unfolded Data mean is compared against below (never rescaled: JES is a
   // reco-level detector effect, truth is untouched by it).
   float truthMean[nPtBinsUsed], truthMeanErr[nPtBinsUsed];
+  vector<vector<double>> truthFrac(nPtBinsUsed), truthFracErr(nPtBinsUsed);
   for (int k = 0; k < nPtBinsUsed; k++) {
     int ipt = ana::firstUsedPtBin + k;
     TH1D * hTruth = unfold_utility::unflattenXj(respTruthTemplate, ipt, "hTruthMean_tmp");
     truthMean[k] = hTruth->GetMean();
     truthMeanErr[k] = hTruth->GetMeanError();
+    double N = hTruth->Integral();
+    truthFrac[k].assign(ana::nUnfoldXjBins, 0.);
+    truthFracErr[k].assign(ana::nUnfoldXjBins, 0.);
+    for (int ixj = 1; N > 0 && ixj <= ana::nUnfoldXjBins; ixj++) {
+      truthFrac[k][ixj-1]    = hTruth->GetBinContent(ixj)/N;
+      truthFracErr[k][ixj-1] = hTruth->GetBinError(ixj)/N;
+    }
     cout << "Truth <x_J> pt bin " << k << " [" << ana::ptBinsUsed[k] << "," << ana::ptBinsUsed[k+1]
          << "): " << truthMean[k] << " +/- " << truthMeanErr[k] << endl;
     delete hTruth;
@@ -349,7 +419,7 @@ void grid_insitu_unfolded(string systag = "nominal", int na = insitu_utility::sc
 
   TGraph * gchisqUnfold = new TGraph(na);
   gchisqUnfold->SetName("gchisq_unfolded");
-  gchisqUnfold->SetTitle(";p_{a} (jet_{pt,corrected} = jet_{pt}/p_{a});#chi^{2}");
+  gchisqUnfold->SetTitle(shapeMethod ? ";p_{a} (jet_{pt,corrected} = jet_{pt}/p_{a});Shape #chi^{2}" : ";p_{a} (jet_{pt,corrected} = jet_{pt}/p_{a});#chi^{2}");
 
   float minchisqUnfold = FLT_MAX, minpaUnfold = 1;
   int ibestUnfold = 0;
@@ -357,16 +427,19 @@ void grid_insitu_unfolded(string systag = "nominal", int na = insitu_utility::sc
   for (int ia = 0; ia < na; ia++) {
     float pa = lowa + ia*(higha-lowa)/na;
 
+    float chisq = 0;
+    if (shapeMethod) {
+      chisq = computeUnfoldedShapeChi2(dataA, dataC, pa, purity, purityC, response, respRecoTemplate, truthFrac, truthFracErr, lowXj);
+    } else {
     float mean[nPtBinsUsed], err[nPtBinsUsed];
     computeUnfoldedMeans(dataA, dataC, pa, purity, purityC, response, respRecoTemplate, mean, err, lowXj);
-
-    float chisq = 0;
     for (int k = 0; k < nPtBinsUsed; k++) {
       if (truthMean[k] <= 0) continue;
       double diff = 1 - mean[k]/truthMean[k];
       double errt = sqrt((err[k]*err[k])/(truthMean[k]*truthMean[k])
           + mean[k]*mean[k]*truthMeanErr[k]*truthMeanErr[k]/pow(truthMean[k],4));
       if (errt > 0) chisq += diff*diff/(errt*errt);
+    }
     }
 
     gchisqUnfold->SetPoint(ia, pa, chisq);
@@ -378,7 +451,7 @@ void grid_insitu_unfolded(string systag = "nominal", int na = insitu_utility::sc
   float errLowUnfold, errHighUnfold;
   insitu_utility::findError(gchisqUnfold, ibestUnfold, minchisqUnfold, errLowUnfold, errHighUnfold);
 
-  cout << "\nFINAL RESULT (jet R=" << ana::JetRs[ir] << ", systag=" << systag << ", unfolded vs. truth)\n";
+  cout << "\nFINAL RESULT (jet R=" << ana::JetRs[ir] << ", systag=" << systag << ", unfolded vs. truth" << (shapeMethod ? ", shape chi2" : "") << ")\n";
   cout << "Purity-corrected + unfolded:  p_a = " << minpaUnfold
        << " +" << errHighUnfold << "/-" << errLowUnfold << " (chi2=" << minchisqUnfold << ")" << endl;
 
@@ -430,7 +503,7 @@ void grid_insitu_unfolded(string systag = "nominal", int na = insitu_utility::sc
     hUnfoldBest[k]->Write();
   }
 
-  TTree * wt = new TTree("results", "best-fit jet energy scale result (unfolded vs. truth)");
+  TTree * wt = new TTree("results", shapeMethod ? "best-fit jet energy scale result (unfolded vs. truth, shape chi2)" : "best-fit jet energy scale result (unfolded vs. truth)");
   float wpa = minpaUnfold, wchisq = minchisqUnfold, werrLow = errLowUnfold, werrHigh = errHighUnfold;
   wt->Branch("pa_unfolded", &wpa);
   wt->Branch("chisq_unfolded", &wchisq);

@@ -1,7 +1,7 @@
 #include "../src/ana.h"
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 // Standalone helper: reads the response-matrix-toy and Data-toy chi2/NDF graphs (each
-// written to its own small ROOT file by toy_resp_iterations.C / toy_data_iterations.C)
+// written to its own small ROOT file by toy_iterations.C)
 // and renders all of: response-matrix toy, Data toy, their quadrature sum, and the real
 // (non-toy) pairwise "iter n vs iter n-1" convergence curve together on one PDF page.
 // Either input file may be missing (if only one of the two macros has been run) - the
@@ -18,7 +18,7 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 //
 // Log-scale y-axis.
 //
-// Defaults match the paths toy_resp_iterations.C / toy_data_iterations.C already write
+// Defaults match the paths toy_iterations.C already write
 // to for systag="nominal" (see their respChi2DataFile/dataChi2DataFile/chi2PdfPath) and
 // the nominal jet radius (ir=2, R=0.4) both use - so once both toy macros have been run
 // for nominal, this can just be called standalone with no arguments:

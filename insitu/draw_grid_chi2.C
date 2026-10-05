@@ -19,8 +19,8 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 // methods side by side, for one systag - one page per jet radius, all seven in one
 // multi-page PDF (this macro no longer takes an `ir` argument; it loops
 // ana::nJetR internally, matching every grid_insitu*.C macro it reads). None of
-// grid_insitu.C, grid_insitu_shapechi2.C, grid_insitu_unfolded.C,
-// grid_insitu_unfolded_shapechi2.C, or grid_insitu_jet12.C actually draws its own
+// grid_insitu.C, grid_insitu.C (shape method), grid_insitu_unfolded.C,
+// grid_insitu_unfolded.C (shape method), or grid_insitu_jet12.C actually draws its own
 // gchisq_regionA/gchisq_puritycorrected/gchisq_unfolded/gchisq_regionA_jet12ref graph as
 // a PDF page - each only Write()s it into its own output .root, one ana::rnames[ir]
 // subdirectory per radius (see that macro's "// Save" block at the end) - so this reads
@@ -29,7 +29,7 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 // `systag` first (see run_grid.sh); this macro only reads their output and does no
 // scanning itself.
 //
-// Pads 3 and 6 read grid_insitu_jet12.C's and grid_insitu_jet12_shapechi2.C's output
+// Pads 3 and 6 read grid_insitu_jet12.C's and grid_insitu_jet12.C (shape method)'s output
 // (Data Region A vs. Jet12_long Region A, no truth-level jet-pT cut - the legacy
 // "Jet12_full" cross-check those two macros used to also support has been retired).
 // Since those two macros have to be re-run through the production pipeline
@@ -175,8 +175,8 @@ void draw_grid_chi2(string systag = "nominal") {
   if (!fMean || fMean->IsZombie() || !fShape || fShape->IsZombie() ||
       !fUnfold || fUnfold->IsZombie() || !fUnfoldShape || fUnfoldShape->IsZombie()) {
     cout << "Missing one of the four grid_insitu*.C output files for systag=" << systag
-         << " - run grid_insitu.C(\"" << systag << "\"), grid_insitu_shapechi2.C(...), "
-         << "grid_insitu_unfolded.C(\"" << systag << "\"), and grid_insitu_unfolded_shapechi2.C(...) first."
+         << " - run grid_insitu.C(\"" << systag << "\") with method \"mean\" and \"shape\", "
+         << "and grid_insitu_unfolded.C(\"" << systag << "\") with both methods first."
          << endl;
     return;
   }
@@ -192,12 +192,12 @@ void draw_grid_chi2(string systag = "nominal") {
     fJet12 = nullptr;
   }
 
-  // Shape-chi2 counterpart, from grid_insitu_jet12_shapechi2.C - same optional
+  // Shape-chi2 counterpart, from grid_insitu_jet12.C (shape method) - same optional
   // treatment as fJet12 above.
   const char * jet12ShapeFilename = Form("%s/grid_insitu_jet12_shapechi2_%s.root", insitu_output_dir, systag.c_str());
   TFile * fJet12Shape = TFile::Open(jet12ShapeFilename);
   if (!fJet12Shape || fJet12Shape->IsZombie()) {
-    cout << "WARNING: missing " << jet12ShapeFilename << " - run grid_insitu_jet12_shapechi2.C(\"" << systag
+    cout << "WARNING: missing " << jet12ShapeFilename << " - run grid_insitu_jet12.C(\"" << systag << "\",\"shape\") (\"" << systag
          << "\") first if you want the Region-A-vs-Jet12 shape-chi2 pad. Skipping pad 6 on every page." << endl;
     fJet12Shape = nullptr;
   }

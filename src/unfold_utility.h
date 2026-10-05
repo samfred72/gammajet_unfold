@@ -9,7 +9,7 @@
 
 // Shared helpers for the drawing/*.C unfolding macros - previously duplicated
 // (byte-for-byte, for unflattenXj/reflattenXj) across draw_purity_corrected.C,
-// draw_iteration_halfclosure.C, toy_resp_iterations.C and toy_data_iterations.C.
+// draw_iteration_halfclosure.C, toy_iterations.C.
 class unfold_utility {
   public:
     // hrecoxj_abcd[ir][region] (written by unfolder.cc) is a single TH1D whose bin index

@@ -71,9 +71,9 @@ These are constant-scale and gammajet only.
 
 | Macro | Purpose |
 |---|---|
-| `grid_insitu_shapechi2.C` | xJ shape χ² instead of mean |
-| `grid_insitu_unfolded.C`, `grid_insitu_unfolded_shapechi2.C` | compare after unfolding |
-| `grid_insitu_jet12.C`, `grid_insitu_jet12_shapechi2.C` | Jet12_long dijet-MC reference |
+| `grid_insitu.C(systag, "gammajet", -1, "shape")` | xJ shape χ² instead of mean (`grid_insitu_shapechi2_<systag>.*`) |
+| `grid_insitu_unfolded.C(systag, na, "mean"\|"shape")` | compare after unfolding |
+| `grid_insitu_jet12.C(systag, "mean"\|"shape")` | Jet12_long dijet-MC reference |
 | `draw_grid_chi2.C` | χ² comparison across methods |
 | `draw_jes_summary.C` | collects the gammajet-mode `pa` for all systags and rewrites `src/ana.h` (`jesNominal`, `jesBySystag`) |
 | `draw_jes_variations.C` | `pa` under each variation |

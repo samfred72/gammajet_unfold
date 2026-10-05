@@ -59,7 +59,7 @@ const vector<int> iterationsToScan = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}; // f
 // The last 3 xJ bins in each pT bin have very low counts, so chi2/NDF here would be
 // dominated by their noise rather than genuine bias - excluded from the chi2 metric only
 // (still drawn on the comparison pages). Same exclusion as draw_purity_corrected.C/
-// draw_iteration_halfclosure.C/toy_resp_iterations.C/toy_data_iterations.C/draw_refolding.C.
+// draw_iteration_halfclosure.C/toy_iterations.C/draw_refolding.C.
 const int nXjBinsForChi2 = ana::nUnfoldXjBins - 3;
 // densityForDisplay now lives in unfold_utility - see src/unfold_utility.h.
 

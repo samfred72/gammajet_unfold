@@ -19,8 +19,8 @@ using namespace std;
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
 // Diagnostic for the spike (pa~0.911-0.928) and cliff (pa~0.97) in
-// grid_insitu_shapechi2.C's Region-A-only shape-chi2 curve. Rebuilds exactly the same
-// per-(ptbin,xjbin) bin-fraction chi2 pieces grid_insitu_shapechi2.C's scan loop computes
+// grid_insitu.C (shape method)'s Region-A-only shape-chi2 curve. Rebuilds exactly the same
+// per-(ptbin,xjbin) bin-fraction chi2 pieces grid_insitu.C (shape method)'s scan loop computes
 // (see that file's referenceShape()/scan-loop comments for the formula/rationale this
 // copies), but frozen at three fixed trial pa values instead of scanned, so the actual
 // Data-vs-MC xJ shape and the per-bin chi2 pull can be looked at directly instead of only
@@ -31,14 +31,14 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 const char * insitu_input_dir = ana::path("insitu/inputs");
 const char * insitu_pdf_dir   = ana::path("insitu/pdfs");
 const int nPtBinsUsed = ana::nPtBinsUsed;
-// Same explicit low-stat-tail exclusion as grid_insitu_shapechi2.C (see that file's
+// Same explicit low-stat-tail exclusion as grid_insitu.C (shape method) (see that file's
 // header comment / gammajet_unfold/CLAUDE.md's bin-selection ground rule).
 const int nXjBinsForChi2 = ana::nUnfoldXjBins - 3;
 
 map<int,double> photon_scale = {{5,146359.3},{10,6944.675},{20,130.4461}};
 
 // Fixed MC reference xJ shape (bin fraction) and its per-bin error - identical
-// computation to grid_insitu_shapechi2.C's referenceShape().
+// computation to grid_insitu.C (shape method)'s referenceShape().
 void referenceShape(const vector<pair<string,double>> & samples, int abcdSelect, int ir,
     vector<vector<double>> & refFrac, vector<vector<double>> & refFracErr, const float lowXj[]) {
   vector<vector<double>> sumw(nPtBinsUsed, vector<double>(ana::nUnfoldXjBins, 0.));
@@ -94,7 +94,7 @@ void debug_shapechi2_spike(string systag = "nominal", int ir = 2) {
   vector<DataEvent> dataA = insitu_utility::cacheDataEvents(dataFile.c_str(), 0, ir);
   cout << "Cached Data Region A events: " << dataA.size() << endl;
 
-  // Low-xJ floor per used pT bin - same cut grid_insitu_shapechi2.C now applies (see
+  // Low-xJ floor per used pT bin - same cut grid_insitu.C (shape method) now applies (see
   // src/insitu_utility.h's lowXjFloor comment).
   float lowXj[nPtBinsUsed];
   for (int ipt = 0; ipt < nPtBinsUsed; ipt++) lowXj[ipt] = insitu_utility::lowXjFloor(ir, ana::ptBinsUsed[ipt]);
@@ -114,7 +114,7 @@ void debug_shapechi2_spike(string systag = "nominal", int ir = 2) {
 
   for (float pa : paValues) {
     // Per-(ptbin,xjbin) raw Data counts at this pa - identical to the inner loop of
-    // grid_insitu_shapechi2.C's scan, just at one fixed pa instead of every grid point.
+    // grid_insitu.C (shape method)'s scan, just at one fixed pa instead of every grid point.
     vector<vector<double>> countA(nPtBinsUsed, vector<double>(ana::nUnfoldXjBins, 0.));
     for (auto & ev : dataA) {
       float x = (ev.jet_pt/pa)/ev.pho_pt;
@@ -146,7 +146,7 @@ void debug_shapechi2_spike(string systag = "nominal", int ir = 2) {
 
         if (NA <= 0 || ixj >= nXjBinsForChi2) continue;
         double errt = sqrt(errData*errData + refFracErr[ipt][ixj]*refFracErr[ipt][ixj]);
-        errt = std::max(errt, 1.0/NA); // same errt floor as grid_insitu_shapechi2.C
+        errt = std::max(errt, 1.0/NA); // same errt floor as grid_insitu.C (shape method)
         double diff = fData - refFrac[ipt][ixj];
         double chi2bin = diff*diff/(errt*errt);
         chisqTotal += chi2bin;

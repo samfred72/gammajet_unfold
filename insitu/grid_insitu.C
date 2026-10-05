@@ -74,6 +74,12 @@ const char * insitu_pdf_dir    = ana::path("insitu/pdfs");
 // physics bin (see ana.h's ptBins/ptBinsUsed/firstUsedPtBin comment) and the top one
 // also has too few Data events for a meaningful in-situ point.
 const int nPtBinsUsed = ana::nPtBinsUsed;
+// Shape method: x_J bin fractions instead of means; last 3 sparse x_J bins dropped and
+// pT bin 2 merged in pairs of x_J bins (low-statistics spikes in that bin).
+const int nXjBinsForChi2 = ana::nUnfoldXjBins - 3;
+const int coarseRebinPtBin = 2;
+const int coarseGroupSize = 2;
+bool shapeMethod = false; // set by grid_insitu(..., method)
 
 // Cross-section weights for combining the Photon5/10/20 MC samples - same numbers as
 // drawer.h's scalemap[isphoton=1][sample] for sim="pythia".
@@ -173,7 +179,7 @@ void drawJESPage(TCanvas * c, const char * pdfPath, const char * label, int ir,
   TLatex jestext;
   jestext.SetNDC();
   jestext.SetTextColor(kRed);
-  jestext.DrawLatex(.18,.28, Form("Data to MC JES = %.4f #pm %.4f", pa, paErr));
+  jestext.DrawLatex(.18,.28, Form("Data to MC JES%s = %.4f #pm %.4f", shapeMethod ? " (shape #chi^{2})" : "", pa, paErr));
   if (extraText[0]) jestext.DrawLatex(.18,.22, extraText);
 
   c->SaveAs(pdfPath);
@@ -247,13 +253,17 @@ void runCombined(TCanvas * c, const char * pdfPath, TFile * fout, int ir, const 
     const float lowXj[]);
 
 // onlyIr >= 0 restricts the run to one jet radius (quick tests); -1 = all radii.
-void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr = -1) {
+// method = "mean" or "shape" (gammajet mode only); shape output is grid_insitu_shapechi2_<systag>.
+void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr = -1, string method = "mean") {
   if (mode != "gammajet" && mode != "combined") {
     cout << "ERROR: mode must be \"gammajet\" or \"combined\", got \"" << mode << "\"" << endl;
     return;
   }
   const bool combined = (mode == "combined");
-  const string tag = combined ? "combined_" + systag : systag;
+  if (method != "mean" && method != "shape") { cout << "ERROR: method must be \"mean\" or \"shape\"" << endl; return; }
+  shapeMethod = (method == "shape");
+  if (shapeMethod && combined) { cout << "ERROR: the shape method is gammajet-mode only" << endl; return; }
+  const string tag = combined ? "combined_" + systag : (shapeMethod ? "shapechi2_" + systag : systag);
   // Newly created histograms are not auto-registered to whatever TDirectory happens to
   // be gDirectory at construction time - without this, buildXjByPtBin/buildMCXjByPtBin's
   // fixed-name per-pT-bin histograms would auto-register into (and "Replacing existing
@@ -296,11 +306,14 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
   for (int ipt = 0; ipt < nPtBinsUsed; ipt++) lowXj[ipt] = insitu_utility::lowXjFloor(ir, ana::ptBinsUsed[ipt]);
 
   float refMean[nPtBinsUsed], refMeanErr[nPtBinsUsed];
-  insitu_utility::referenceMeans({
-      {insitu_utility::insituFilename(insitu_input_dir, "Photon5",  "pythia", systag), photon_scale[5]},
-      {insitu_utility::insituFilename(insitu_input_dir, "Photon10", "pythia", systag), photon_scale[10]},
-      {insitu_utility::insituFilename(insitu_input_dir, "Photon20", "pythia", systag), photon_scale[20]},
-    }, 0, ir, refMean, refMeanErr, lowXj);
+  vector<pair<string,double>> mcSamples = {
+    {insitu_utility::insituFilename(insitu_input_dir, "Photon5",  "pythia", systag), photon_scale[5]},
+    {insitu_utility::insituFilename(insitu_input_dir, "Photon10", "pythia", systag), photon_scale[10]},
+    {insitu_utility::insituFilename(insitu_input_dir, "Photon20", "pythia", systag), photon_scale[20]},
+  };
+  insitu_utility::referenceMeans(mcSamples, 0, ir, refMean, refMeanErr, lowXj);
+  vector<vector<double>> refFrac, refFracErr;
+  if (shapeMethod) insitu_utility::referenceShape(mcSamples, 0, ir, refFrac, refFracErr, lowXj);
   for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
     cout << "MC reference <x_J> pt bin " << ipt << " [" << ana::ptBinsUsed[ipt] << "," << ana::ptBinsUsed[ipt+1]
          << "): " << refMean[ipt] << " +/- " << refMeanErr[ipt] << endl;
@@ -339,9 +352,9 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
   TGraph * gchisqA    = new TGraph(na);
   TGraph * gchisqCorr = new TGraph(na);
   gchisqA->SetName("gchisq_regionA");
-  gchisqA->SetTitle(";p_{a} (jet_{pt,corrected} = jet_{pt}/p_{a});#chi^{2}");
+  gchisqA->SetTitle(shapeMethod ? ";p_{a} (jet_{pt,corrected} = jet_{pt}/p_{a});Shape #chi^{2}" : ";p_{a} (jet_{pt,corrected} = jet_{pt}/p_{a});#chi^{2}");
   gchisqCorr->SetName("gchisq_puritycorrected");
-  gchisqCorr->SetTitle(";p_{a} (jet_{pt,corrected} = jet_{pt}/p_{a});#chi^{2}");
+  gchisqCorr->SetTitle(shapeMethod ? ";p_{a} (jet_{pt,corrected} = jet_{pt}/p_{a});Shape #chi^{2}" : ";p_{a} (jet_{pt,corrected} = jet_{pt}/p_{a});#chi^{2}");
 
   float minchisqA = FLT_MAX, minpaA = 1;
   float minchisqCorr = FLT_MAX, minpaCorr = 1;
@@ -350,57 +363,157 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
   for (int ia = 0; ia < na; ia++) {
     float pa = lowa + ia*(higha-lowa)/na;
 
-    vector<double> sumA(nPtBinsUsed,0), sumA2(nPtBinsUsed,0);
-    vector<int> countA(nPtBinsUsed,0);
-    for (auto & ev : dataA) {
-      float x = (ev.jet_pt/pa)/ev.pho_pt;
-      if (x < lowXj[ev.ptbin]) continue;
-      sumA[ev.ptbin]  += x;
-      sumA2[ev.ptbin] += x*x;
-      countA[ev.ptbin]++;
-    }
-    vector<double> sumC(nPtBinsUsed,0), sumC2(nPtBinsUsed,0);
-    vector<int> countC(nPtBinsUsed,0);
-    for (auto & ev : dataC) {
-      float x = (ev.jet_pt/pa)/ev.pho_pt;
-      if (x < lowXj[ev.ptbin]) continue;
-      sumC[ev.ptbin]  += x;
-      sumC2[ev.ptbin] += x*x;
-      countC[ev.ptbin]++;
-    }
-
     float chisqA = 0, chisqCorr = 0;
-    for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
-      if (refMean[ipt] <= 0) continue;
-
-      // Region A only (naive, background-contaminated fit).
-      if (countA[ipt] > 0) {
-        double mean = sumA[ipt]/countA[ipt];
-        double var  = sumA2[ipt]/countA[ipt] - mean*mean;
-        double err  = sqrt(std::max(var,0.)/countA[ipt]);
-        double diff = 1 - mean/refMean[ipt];
-        double errt = sqrt((err*err)/(refMean[ipt]*refMean[ipt])
-            + mean*mean*refMeanErr[ipt]*refMeanErr[ipt]/pow(refMean[ipt],4));
-        if (errt > 0) chisqA += diff*diff/(errt*errt);
+    if (shapeMethod) {
+      vector<vector<double>> countA(nPtBinsUsed, vector<double>(ana::nUnfoldXjBins, 0.));
+      vector<vector<double>> countC(nPtBinsUsed, vector<double>(ana::nUnfoldXjBins, 0.));
+      for (auto & ev : dataA) {
+        float x = (ev.jet_pt/pa)/ev.pho_pt;
+        if (x < lowXj[ev.ptbin]) continue;
+        int ixj = ana::findUnfoldXjBin(x);
+        if (ixj < 0 || ixj >= ana::nUnfoldXjBins) continue;
+        countA[ev.ptbin][ixj] += 1;
+      }
+      for (auto & ev : dataC) {
+        float x = (ev.jet_pt/pa)/ev.pho_pt;
+        if (x < lowXj[ev.ptbin]) continue;
+        int ixj = ana::findUnfoldXjBin(x);
+        if (ixj < 0 || ixj >= ana::nUnfoldXjBins) continue;
+        countC[ev.ptbin][ixj] += 1;
       }
 
-      // Purity-corrected (two-purity method, both regions scaled by the same pa) - see
-      // unfold_utility::purityCorrectCoeffs for the coeffA/coeffC derivation.
-      if (countA[ipt] > 0 && countC[ipt] > 0) {
-        double NA = countA[ipt], NC = countC[ipt];
-        float coeffA, coeffC;
-        unfold_utility::purityCorrectCoeffs(purity[ipt], purityC[ipt], NA, NC, coeffA, coeffC);
-        double sumXcorr  = coeffA*sumA[ipt]  - coeffC*sumC[ipt];
-        double sumX2corr = coeffA*sumA2[ipt] - coeffC*sumC2[ipt];
-        double Ncorr = coeffA*NA - coeffC*NC;
-        if (Ncorr > 0) {
-          double mean = sumXcorr/Ncorr;
-          double var  = sumX2corr/Ncorr - mean*mean;
-          double err  = sqrt(std::max(var,0.)/Ncorr);
+      for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
+        double NA = 0;
+        for (double n : countA[ipt]) NA += n;
+
+        // pT bin 2 fits on coarsened bins (see coarseRebinPtBin above); every other pT
+        // bin uses the native fine binning, i.e. useA/useRefFrac/useRefFracErr are just
+        // the original per-bin arrays and nBins is nXjBinsForChi2 (unchanged behavior).
+        vector<double> useA, useC, useRefFrac, useRefFracErr;
+        int nBins;
+        if (ipt == coarseRebinPtBin) {
+          int startBin = ana::findUnfoldXjBin(lowXj[ipt]);
+          useA         = insitu_utility::coarsenSum(countA[ipt], startBin, nXjBinsForChi2, coarseGroupSize);
+          useC         = insitu_utility::coarsenSum(countC[ipt], startBin, nXjBinsForChi2, coarseGroupSize);
+          useRefFrac   = insitu_utility::coarsenSum(refFrac[ipt], startBin, nXjBinsForChi2, coarseGroupSize);
+          useRefFracErr = insitu_utility::coarsenQuadrature(refFracErr[ipt], startBin, nXjBinsForChi2, coarseGroupSize);
+          nBins = (int)useA.size();
+        } else {
+          useA = countA[ipt]; useC = countC[ipt];
+          useRefFrac = refFrac[ipt]; useRefFracErr = refFracErr[ipt];
+          nBins = nXjBinsForChi2;
+        }
+
+        // Region A only (naive, background-contaminated fit): pull-squared per xJ bin
+        // between Data's raw bin fraction and the fixed MC reference fraction, summed
+        // over the first nBins bins (low-stat tail dropped, see nXjBinsForChi2 above).
+        //
+        // errt is floored at 1/NA: sqrt(countA)/NA is the usual Poisson error on a bin
+        // fraction, but it goes to exactly 0 when countA=0, understating what a zero-count
+        // observation actually leaves open - a Poisson process with a real, nonzero rate
+        // routinely produces a handful of zero-count bins (e.g. rate~9 in the 25-35 GeV
+        // pT slice's sparsest bins - Region A there has only NA~100 events total), so an
+        // exactly-zero error is never justified. 1/NA is the coarsest resolvable step in
+        // a bin fraction built from NA raw counts, so no bin can claim to be known finer
+        // than that regardless of what the naive sqrt(count) formula says. Without this,
+        // a single zero-count bin sitting next to a well-populated MC reference bin can
+        // produce a pull of -70+ from one event's worth of statistical noise (see
+        // debug_shapechi2_spike.C).
+        if (NA > 0) {
+          double errFloor = 1.0/NA;
+          for (int ib = 0; ib < nBins; ib++) {
+            double fData = useA[ib]/NA;
+            double errData = sqrt(useA[ib])/NA;
+            double errt = sqrt(errData*errData + useRefFracErr[ib]*useRefFracErr[ib]);
+            errt = std::max(errt, errFloor);
+            double diff = fData - useRefFrac[ib];
+            chisqA += diff*diff/(errt*errt);
+          }
+        }
+
+        // Purity-corrected (two-purity method, both regions scaled by the same pa) - same
+        // coeffA/coeffC as grid_insitu.C's computeCorrectedMeans(), now applied to the
+        // per-xJ-bin counts instead of Sum(x_J)/Sum(x_J^2) (still linear, see
+        // unfold_utility::purityCorrectCoeffs). Stat error on the corrected fraction comes
+        // from A/C counting stats alone (Poisson on the raw counts before the linear
+        // combination) - purity's own uncertainty is held fixed across this scan, same
+        // simplification as grid_insitu.C's mean-based chi2.
+        double NC = 0;
+        for (double n : countC[ipt]) NC += n;
+        if (NA > 0 && NC > 0) {
+          float coeffA, coeffC;
+          unfold_utility::purityCorrectCoeffs(purity[ipt], purityC[ipt], NA, NC, coeffA, coeffC);
+          double Ncorr = coeffA*NA - coeffC*NC;
+          if (Ncorr > 0) {
+            // Same 1/Ncorr error floor as the Region A block above, and for the same
+            // reason - a zero-count bin in either region can drive errCorr to 0 even
+            // though it says nothing more than "at most 1/Ncorr of the corrected sample".
+            double errFloor = 1.0/Ncorr;
+            for (int ib = 0; ib < nBins; ib++) {
+              double corrCount = coeffA*useA[ib] - coeffC*useC[ib];
+              double fCorr = corrCount/Ncorr;
+              double errCorrCount = sqrt(coeffA*coeffA*useA[ib] + coeffC*coeffC*useC[ib]);
+              double errCorr = errCorrCount/Ncorr;
+              double errt = sqrt(errCorr*errCorr + useRefFracErr[ib]*useRefFracErr[ib]);
+              errt = std::max(errt, errFloor);
+              double diff = fCorr - useRefFrac[ib];
+              chisqCorr += diff*diff/(errt*errt);
+            }
+          }
+        }
+      }
+    } else {
+      vector<double> sumA(nPtBinsUsed,0), sumA2(nPtBinsUsed,0);
+      vector<int> countA(nPtBinsUsed,0);
+      for (auto & ev : dataA) {
+        float x = (ev.jet_pt/pa)/ev.pho_pt;
+        if (x < lowXj[ev.ptbin]) continue;
+        sumA[ev.ptbin]  += x;
+        sumA2[ev.ptbin] += x*x;
+        countA[ev.ptbin]++;
+      }
+      vector<double> sumC(nPtBinsUsed,0), sumC2(nPtBinsUsed,0);
+      vector<int> countC(nPtBinsUsed,0);
+      for (auto & ev : dataC) {
+        float x = (ev.jet_pt/pa)/ev.pho_pt;
+        if (x < lowXj[ev.ptbin]) continue;
+        sumC[ev.ptbin]  += x;
+        sumC2[ev.ptbin] += x*x;
+        countC[ev.ptbin]++;
+      }
+
+      for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
+        if (refMean[ipt] <= 0) continue;
+
+        // Region A only (naive, background-contaminated fit).
+        if (countA[ipt] > 0) {
+          double mean = sumA[ipt]/countA[ipt];
+          double var  = sumA2[ipt]/countA[ipt] - mean*mean;
+          double err  = sqrt(std::max(var,0.)/countA[ipt]);
           double diff = 1 - mean/refMean[ipt];
           double errt = sqrt((err*err)/(refMean[ipt]*refMean[ipt])
               + mean*mean*refMeanErr[ipt]*refMeanErr[ipt]/pow(refMean[ipt],4));
-          if (errt > 0) chisqCorr += diff*diff/(errt*errt);
+          if (errt > 0) chisqA += diff*diff/(errt*errt);
+        }
+
+        // Purity-corrected (two-purity method, both regions scaled by the same pa) - see
+        // unfold_utility::purityCorrectCoeffs for the coeffA/coeffC derivation.
+        if (countA[ipt] > 0 && countC[ipt] > 0) {
+          double NA = countA[ipt], NC = countC[ipt];
+          float coeffA, coeffC;
+          unfold_utility::purityCorrectCoeffs(purity[ipt], purityC[ipt], NA, NC, coeffA, coeffC);
+          double sumXcorr  = coeffA*sumA[ipt]  - coeffC*sumC[ipt];
+          double sumX2corr = coeffA*sumA2[ipt] - coeffC*sumC2[ipt];
+          double Ncorr = coeffA*NA - coeffC*NC;
+          if (Ncorr > 0) {
+            double mean = sumXcorr/Ncorr;
+            double var  = sumX2corr/Ncorr - mean*mean;
+            double err  = sqrt(std::max(var,0.)/Ncorr);
+            double diff = 1 - mean/refMean[ipt];
+            double errt = sqrt((err*err)/(refMean[ipt]*refMean[ipt])
+                + mean*mean*refMeanErr[ipt]*refMeanErr[ipt]/pow(refMean[ipt],4));
+            if (errt > 0) chisqCorr += diff*diff/(errt*errt);
+          }
         }
       }
     }
@@ -416,7 +529,7 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
   insitu_utility::findError(gchisqA,    ibestA,    minchisqA,    errLowA,    errHighA);
   insitu_utility::findError(gchisqCorr, ibestCorr, minchisqCorr, errLowCorr, errHighCorr);
 
-  cout << "\nFINAL RESULT (jet R=" << ana::JetRs[ir] << ", systag=" << systag << ")\n";
+  cout << "\nFINAL RESULT (jet R=" << ana::JetRs[ir] << ", systag=" << systag << (shapeMethod ? ", shape chi2" : "") << ")\n";
   cout << "Region A only:        p_a = " << minpaA
        << " +" << errHighA << "/-" << errLowA << " (chi2=" << minchisqA << ")" << endl;
   cout << "Purity-corrected:     p_a = " << minpaCorr
@@ -429,11 +542,6 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
   // saved to the output ROOT file below, for continuity with earlier versions of this
   // macro.
   // -----------------------------
-  vector<pair<string,double>> mcSamples = {
-    {insitu_utility::insituFilename(insitu_input_dir, "Photon5",  "pythia", systag), photon_scale[5]},
-    {insitu_utility::insituFilename(insitu_input_dir, "Photon10", "pythia", systag), photon_scale[10]},
-    {insitu_utility::insituFilename(insitu_input_dir, "Photon20", "pythia", systag), photon_scale[20]},
-  };
   vector<TH1D*> hxjMC_pt       = insitu_utility::buildMCXjByPtBin(mcSamples, 0, ir, "hxjA_pythia", lowXj);
   vector<TH1D*> hxjA_raw_pt    = insitu_utility::buildXjByPtBin(dataA, 1.0,       nPtBinsUsed, "hxjA_data_raw", lowXj);
   vector<TH1D*> hxjA_corr_pt   = insitu_utility::buildXjByPtBin(dataA, minpaA,    nPtBinsUsed, "hxjA_data_corr", lowXj);
@@ -527,7 +635,7 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
   gRatioRaw_Corr->Write();
   gRatioCorr_Corr->Write();
 
-  TTree * wt = new TTree("results", "best-fit jet energy scale results");
+  TTree * wt = new TTree("results", shapeMethod ? "best-fit jet energy scale results (shape chi2)" : "best-fit jet energy scale results");
   float wpaA = minpaA, wchisqA = minchisqA, werrLowA = errLowA, werrHighA = errHighA;
   float wpaCorr = minpaCorr, wchisqCorr = minchisqCorr, werrLowCorr = errLowCorr, werrHighCorr = errHighCorr;
   wt->Branch("pa_regionA", &wpaA);

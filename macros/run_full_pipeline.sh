@@ -119,7 +119,7 @@ insitu_plots() {
   cd "$TOPDIR/insitu"
   root -b -l -q 'grid_insitu.C("nominal")'
   root -b -l -q 'grid_insitu_unfolded.C("nominal", 1000)'
-  root -b -l -q 'grid_insitu_unfolded_shapechi2.C("nominal", 1000)'
+  root -b -l -q 'grid_insitu_unfolded.C("nominal", 1000, "shape")'
   root -b -l -q 'grid_insitu_jet12.C("nominal")'
   root -b -l -q 'draw_insitu_xj.C'
   root -b -l -q 'draw_insitu_xj_allR.C("nominal")'

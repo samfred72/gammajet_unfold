@@ -117,11 +117,11 @@ fi
 #     jetRadiusIndex argument and are the ONLY stage-4 macros re-run per radius (below,
 #     full mode only - they're the ones that actually feed the reported systematic
 #     uncertainty). draw_purity_corrected.C/draw_iteration_halfclosure.C/
-#     toy_resp_iterations.C/toy_data_iterations.C/draw_refolding.C/draw_nonclosure.C have
+#     toy_iterations.C/draw_refolding.C/draw_nonclosure.C have
 #     no radius parameter and are diagnostic/closure checks (plus the niter-selection
 #     scan) that don't feed the systematics chain - deliberately left at R=0.4/nominal
 #     only, not looped here.
-# toy_resp_iterations.C / toy_data_iterations.C each write their own
+# toy_iterations.C each write their own
 # .toy_{resp,data}_chi2_data_<systag>.root and read the OTHER's if present, then invoke
 # plot_toy_chi2_combined.C as a subprocess - run both for the full four-curve comparison
 # (running only one still produces a valid partial plot, just not this script's problem
@@ -132,8 +132,8 @@ echo "=== Stage 4: drawing macros ==="
 cd ../drawing
 root -b -l -q 'draw_purity_corrected.C("nominal")'
 root -b -l -q 'draw_iteration_halfclosure.C("nominal")'
-root -b -l -q 'toy_resp_iterations.C("nominal")'
-root -b -l -q 'toy_data_iterations.C("nominal")'
+root -b -l -q 'toy_iterations.C("nominal","resp")'
+root -b -l -q 'toy_iterations.C("nominal","data")'
 root -b -l -q 'draw_refolding.C("nominal")'
 root -b -l -q 'draw_nonclosure.C()'
 root -b -l -q 'draw_prior_sensitivity.C("nominal")'

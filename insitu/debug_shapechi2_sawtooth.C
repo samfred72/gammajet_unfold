@@ -17,7 +17,7 @@ using namespace std;
 
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
-// Digs into the sawtooth pattern grid_insitu_shapechi2.C's Region-A shape-chi2 curve
+// Digs into the sawtooth pattern grid_insitu.C (shape method)'s Region-A shape-chi2 curve
 // picked up after the low-xJ floor (insitu_utility::lowXjFloor) was added: as pa scans,
 // x_J(pa) = jet_pt/pa/pho_pt shifts continuously, so each event crosses the FIXED
 // lowXj[ptbin] threshold at its own pa_cross = jet_pt/(lowXj[ptbin]*pho_pt), leaving the

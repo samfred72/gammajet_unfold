@@ -1,6 +1,6 @@
 #!/bin/bash
-# Runs the in-situ JES scan (all four methods - grid_insitu.C, grid_insitu_shapechi2.C,
-# grid_insitu_unfolded.C, grid_insitu_unfolded_shapechi2.C - plus the fifth,
+# Runs the in-situ JES scan (all four methods - grid_insitu.C, grid_insitu.C (shape method),
+# grid_insitu_unfolded.C, grid_insitu_unfolded.C (shape method) - plus the fifth,
 # Jet12_long-referenced grid_insitu_jet12.C method, plus draw_grid_chi2.C's comparison
 # page) for every systag in ana::systags (src/ana.h) - nominal + the 14 named
 # systematic-variation reprocessings. Every macro below now loops internally over every
@@ -25,7 +25,7 @@
 # SYSTAGS below must be kept in sync with ana::systags (src/ana.h) - bash can't read a
 # C++ static vector<string> directly, so this is a duplicated, explicit list (same
 # convention as this project's other cross-language constant duplications, e.g.
-# grid_insitu_shapechi2.C's nXjBinsForChi2). Adding a systag to ana::systags does NOT
+# grid_insitu.C (shape method)'s nXjBinsForChi2). Adding a systag to ana::systags does NOT
 # automatically add it here - it does automatically make unfolder.cc/unfold_allsys.C
 # fill that systag's insitu_tree (every radius) once you re-run the production
 # pipeline, and automatically makes drawing/draw_systematics.C include it in the final
@@ -71,9 +71,9 @@ fi
 for systag in "${SYSTAGS[@]}"; do
   echo "=== systag=$systag ==="
   root -b -l -q "grid_insitu.C(\"$systag\")"
-  #root -b -l -q "grid_insitu_shapechi2.C(\"$systag\")"
+  #root -b -l -q "grid_insitu.C(\"$systag\",\"gammajet\",-1,\"shape\")"
   #root -b -l -q "grid_insitu_unfolded.C(\"$systag\")"
-  #root -b -l -q "grid_insitu_unfolded_shapechi2.C(\"$systag\")"
+  #root -b -l -q "grid_insitu_unfolded.C(\"$systag\",insitu_utility::scanN,\"shape\")"
   # Fifth method (mean chi2) and its shape-chi2 counterpart: Data Region A (raw) vs.
   # Pythia8 Jet12_long Region A (raw) - requires
   # insitu/inputs/Jet12_long_pythia_<systag>_insitu.root, produced by running Jet12_long
@@ -84,7 +84,7 @@ for systag in "${SYSTAGS[@]}"; do
   # cross-check that used to run as a nominal-only one-off here has been retired - see
   # src/treeuser.h/grid_insitu_jet12.C.)
   #root -b -l -q "grid_insitu_jet12.C(\"$systag\")"
-  #root -b -l -q "grid_insitu_jet12_shapechi2.C(\"$systag\")"
+  #root -b -l -q "grid_insitu_jet12.C(\"$systag\",\"shape\")"
   #root -b -l -q "draw_grid_chi2.C(\"$systag\")"
 done
 

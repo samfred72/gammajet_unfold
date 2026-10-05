@@ -24,7 +24,7 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 // matrix."
 //
 // This repo already implements both halves of that toy procedure separately -
-// toy_data_iterations.C (Data-side Poisson toys) and toy_resp_iterations.C
+// toy_iterations.C ("data") (Data-side Poisson toys) and toy_iterations.C ("resp")
 // (response-matrix-side Poisson toys) - but each only compares its OWN toy ensemble's
 // niter-convergence behavior to the "iter n vs n-1" pairwise metric; neither puts its
 // toy-derived spread side by side against the analytic error RooUnfoldBayes actually
@@ -38,7 +38,7 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 // ---------------------------------------------------------------------------------
 // Weighted-Poisson toy generator for the response matrix
 // ---------------------------------------------------------------------------------
-// toy_resp_iterations.C's own poissonToyMatrix draws straight from Poisson(bin content)
+// toy_iterations.C ("resp")'s own poissonToyMatrix draws straight from Poisson(bin content)
 // - correct ONLY if bin content is a raw, unweighted count. The response matrix
 // (hxjresponse<ir>) isn't: it's a cross-section-weighted combination of Photon5+10+20
 // (unfolder.h's TH1::SetDefaultSumw2() means every bin's GetBinError() already correctly
@@ -49,7 +49,7 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 // high-cross-section Photon5 event can outweigh hundreds of Photon20 events. Drawing
 // Poisson(content) for a bin like that (content ~300000) gives a ~0.2% relative
 // fluctuation; the bin's true effective statistics give more like 50-100%. This is why
-// toy_resp_iterations.C's own response-matrix-toy contribution came out negligible
+// toy_iterations.C ("resp")'s own response-matrix-toy contribution came out negligible
 // (orders of magnitude below the Data-toy term) in the quick check that motivated this
 // macro - it was underestimating the true response-matrix statistical noise, not
 // correctly finding it small.
@@ -152,7 +152,7 @@ TH1D * toyMeasuredFixedCoeffs(TH1D * toyFlatA, TH1D * toyFlatC, const vector<flo
   return flatCorrected;
 }
 
-const int ir = 2; // nominal jet radius index (R=0.4) - same fixed working point as toy_data_iterations.C/toy_resp_iterations.C
+const int ir = 2; // nominal jet radius index (R=0.4) - same fixed working point as toy_iterations.C
 const int nPtBinsUsed = ana::nPtBinsUsed;
 const int nToys = 10000; // toy count per side (Data, response)
 const int niterate = 2; // matches draw_final_result.C's actual working point
@@ -209,7 +209,7 @@ void draw_toy_vs_analytic(string systag = "nominal") {
   TH1::AddDirectory(kFALSE);
   gStyle->SetOptStat(0);
   gStyle->SetOptTitle(0);
-  gRandom->SetSeed(12345); // same seed toy_data_iterations.C/toy_resp_iterations.C use
+  gRandom->SetSeed(12345); // same seed toy_iterations.C use
 
   drawer d("pythia", systag);
   string pdfPath = Form("%s/pdfs/toy_vs_analytic_%s.pdf", ana::dir(), systag.c_str());

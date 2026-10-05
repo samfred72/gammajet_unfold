@@ -15,7 +15,7 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 // prediction to the purity-corrected measured spectrum that was actually unfolded.
 // Complementary to the other cross-checks in this directory: draw_iteration_halfclosure.C
 // asks whether Data's unfolded shape converges as niter increases, and
-// toy_resp_iterations.C/toy_data_iterations.C ask how much statistical noise the response
+// toy_iterations.C ask how much statistical noise the response
 // matrix / Data itself contribute to that result - none of those ever compare back to the
 // reco-level measurement, so none would catch a broken round-trip (a bad response matrix,
 // an inconsistent purity correction, or a RooUnfold setup mistake). This does.
@@ -71,8 +71,8 @@ const vector<int> iterationsToScan = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}; // f
 // The last 3 xJ bins in each pT bin have very low counts, so chi2/NDF here would be
 // dominated by their noise rather than genuine refolding residual - excluded from the
 // chi2 metric only (still drawn on the comparison pages). Same exclusion as
-// draw_purity_corrected.C/draw_iteration_halfclosure.C/toy_resp_iterations.C/
-// toy_data_iterations.C.
+// draw_purity_corrected.C/draw_iteration_halfclosure.C/toy_iterations.C ("resp")/
+// toy_iterations.C ("data").
 const int nXjBinsForChi2 = ana::nUnfoldXjBins - 3;
 
 // densityForDisplay now lives in unfold_utility - see src/unfold_utility.h.
@@ -312,7 +312,7 @@ void draw_refolding(string systag = "nominal") {
 
   // Last page: refolding chi2/NDF (mean over used pT bins) vs iteration count - does the
   // round trip get better or worse with more/fewer iterations? Mirrors the niter-dependence
-  // scans in draw_iteration_halfclosure.C/toy_resp_iterations.C/toy_data_iterations.C,
+  // scans in draw_iteration_halfclosure.C/toy_iterations.C,
   // using this file's own refolding residual (refolded+fakes vs measured) as the metric
   // instead. Fakes is niter-independent (a fixed property of the response matrix), so it's
   // added once per iteration point here, not recomputed.

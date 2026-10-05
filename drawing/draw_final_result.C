@@ -17,8 +17,8 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 //
 // Statistical uncertainty: the bin errors already carried on the unfolded histogram
 // itself, from RooUnfoldBayes's own analytic covariance calculation (computed for every
-// unfoldOnce() call - see the "Calculating covariances..." log line). toy_resp_iterations.C
-// / toy_data_iterations.C exist specifically to cross-check this analytic covariance
+// unfoldOnce() call - see the "Calculating covariances..." log line). toy_iterations.C ("resp")
+// / toy_iterations.C ("data") exist specifically to cross-check this analytic covariance
 // against a toy-based estimate; they're a validation of this number, not a replacement
 // for it, so no toy loops are re-run here.
 //

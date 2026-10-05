@@ -12,7 +12,7 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 
 // Covariance/correlation matrix of the unfolded Data result, at every scanned iteration
 // count. Every chi2/NDF metric built elsewhere in this directory (draw_purity_corrected.C,
-// draw_iteration_halfclosure.C, toy_resp_iterations.C/toy_data_iterations.C,
+// draw_iteration_halfclosure.C, toy_iterations.C,
 // draw_refolding.C, draw_nonclosure.C, draw_prior_sensitivity.C) sums (residual/sigma_i)^2
 // bin by bin - i.e. assumes a DIAGONAL covariance matrix. Bayesian unfolding doesn't
 // produce one: every iteration redistributes weight across bins through the same

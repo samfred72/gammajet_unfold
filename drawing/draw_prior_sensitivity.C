@@ -79,8 +79,8 @@ const int wIndex = 1; // which entry above is the reported systematic (PPG08's "
 // The last 3 xJ bins in each pT bin have very low counts, so chi2/NDF here would be
 // dominated by their noise rather than genuine prior sensitivity - excluded from the
 // chi2 metric only (still drawn on the comparison pages). Same exclusion as
-// draw_purity_corrected.C/draw_iteration_halfclosure.C/toy_resp_iterations.C/
-// toy_data_iterations.C/draw_refolding.C/draw_nonclosure.C.
+// draw_purity_corrected.C/draw_iteration_halfclosure.C/toy_iterations.C ("resp")/
+// toy_iterations.C ("data")/draw_refolding.C/draw_nonclosure.C.
 const int nXjBinsForChi2 = ana::nUnfoldXjBins - 3;
 
 // densityForDisplay now lives in unfold_utility - see src/unfold_utility.h.

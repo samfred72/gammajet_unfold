@@ -24,7 +24,7 @@ using namespace std;
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
 // Shape-chi2 variant of fit_closure.C, same relationship as insitu/grid_insitu.C to
-// insitu/grid_insitu_shapechi2.C: fit_closure.C picks the trial jet-energy-scale factor
+// insitu/grid_insitu.C (shape method): fit_closure.C picks the trial jet-energy-scale factor
 // pa that makes the "data" half's mean(x_J) match the "sim" half's - a single number per
 // pT bin, blind to any shape difference that happens to preserve the mean. This version
 // instead picks pa by minimizing a bin-by-bin shape chi2 between the "data" half's and
@@ -65,7 +65,7 @@ const int na = 4000;
 
 // The last 3 xJ bins in each pT bin have very low counts, so a per-bin shape chi2
 // computed against them is dominated by their noise rather than genuine shape
-// agreement - same explicit-threshold precedent as insitu/grid_insitu_shapechi2.C and
+// agreement - same explicit-threshold precedent as insitu/grid_insitu.C (shape method) and
 // drawing/draw_covariance_chi2.C:60 (gammajet_unfold/CLAUDE.md's bin-selection ground
 // rule: exclude low-count bins only with a stated, explicit threshold).
 const int nXjBinsForChi2 = ana::nUnfoldXjBins - 3;
@@ -108,7 +108,7 @@ vector<ClosureEvent> cacheClosureEvents(const char * filename, int abcdSelect, i
 // fit_closure.C, kept here for the display-only mean/ratio comparison page (see that
 // file's comment: the fit criterion below is shape, not mean, but plotting the mean
 // anyway shows how much shape-matching still brings it into line - same cross-check
-// insitu/grid_insitu_shapechi2.C keeps its mean panel for).
+// insitu/grid_insitu.C (shape method) keeps its mean panel for).
 void weightedRegionAMeans(const vector<ClosureEvent> & events, float pa, float mean[], float err[], const float lowXj[]) {
   vector<double> sumw(nPtBinsUsed,0), sumw2(nPtBinsUsed,0), sumwx(nPtBinsUsed,0), sumwx2(nPtBinsUsed,0);
   for (auto & ev : events) {
@@ -138,7 +138,7 @@ void weightedRegionAMeans(const vector<ClosureEvent> & events, float pa, float m
 // the weighted generalization of a raw event count, needed below for a per-bin error
 // floor: a bin fraction built from Neff effectively-independent events can't be known
 // finer than 1/Neff, same reasoning as (and same failure mode without it as)
-// grid_insitu_shapechi2.C's 1/NA floor on its raw, unweighted Data counts.
+// grid_insitu.C (shape method)'s 1/NA floor on its raw, unweighted Data counts.
 void weightedRegionAShape(const vector<ClosureEvent> & events, float pa,
     vector<vector<double>> & frac, vector<vector<double>> & fracErr, vector<double> & neff, const float lowXj[]) {
   vector<vector<double>> sumw(nPtBinsUsed, vector<double>(ana::nUnfoldXjBins, 0.));
@@ -169,7 +169,7 @@ void weightedRegionAShape(const vector<ClosureEvent> & events, float pa,
 
 // Same two-panel mean/ratio comparison page as fit_closure.C's drawMeanPage, duplicated
 // here (rather than shared) per this project's precedent of self-contained ROOT macros
-// (e.g. insitu/grid_insitu.C and grid_insitu_shapechi2.C each carry their own copy of
+// (e.g. insitu/grid_insitu.C and grid_insitu.C (shape method) each carry their own copy of
 // drawJESPage/drawXjPage) - only the axis label changes (this study's pa comes from a
 // shape fit, not a mean fit).
 void drawMeanPage(TCanvas * c, const char * pdfPath,
@@ -349,7 +349,7 @@ void fit_closure_shapechi2() {
 
   // Raw (pa=1) and best-fit-corrected (pa=minpa) "data" means - display only (the fit
   // criterion above is shape, not mean), same convention as
-  // insitu/grid_insitu_shapechi2.C's own mean panel.
+  // insitu/grid_insitu.C (shape method)'s own mean panel.
   float refMean[nPtBinsUsed], refMeanErr[nPtBinsUsed];
   weightedRegionAMeans(simA, 1.0, refMean, refMeanErr, lowXj);
   float rawMean[nPtBinsUsed], rawErr[nPtBinsUsed];

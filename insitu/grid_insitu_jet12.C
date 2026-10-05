@@ -56,6 +56,12 @@ const char * insitu_pdf_dir    = ana::path("insitu/pdfs");
 // dropping both the 13-15 GeV migration buffer bin and the 35-100 GeV overflow bin
 // (the latter for low Data statistics).
 const int nPtBinsUsed = ana::nPtBinsUsed;
+// Shape method: last 3 sparse x_J bins dropped; pT bin 2 merged in pairs of x_J bins
+// (see grid_insitu.C's shape method).
+const int nXjBinsForChi2 = ana::nUnfoldXjBins - 3;
+const int coarseRebinPtBin = 2;
+const int coarseGroupSize = 2;
+bool shapeMethod = false; // set by grid_insitu_jet12(..., method)
 
 // The MC reference sample - always "Jet12_long" now (see file header; the legacy
 // "Jet12_full" cross-check has been retired).
@@ -147,7 +153,7 @@ void drawJESPage(TCanvas * c, const char * pdfPath, const char * label, int ir,
   TLatex jestext;
   jestext.SetNDC();
   jestext.SetTextColor(kRed);
-  jestext.DrawLatex(.18,.28, Form("Data to MC (Jet12) JES = %.4f #pm %.4f", pa, paErr));
+  jestext.DrawLatex(.18,.28, Form("Data to MC (Jet12) JES%s = %.4f #pm %.4f", shapeMethod ? " (shape #chi^{2})" : "", pa, paErr));
 
   c->SaveAs(pdfPath);
 }
@@ -211,7 +217,11 @@ void drawXjPage(TCanvas * c, const char * pdfPath, const char * label, int ir, f
   c->SaveAs(pdfPath);
 }
 
-void grid_insitu_jet12(string systag = "nominal") {
+// method = "mean" or "shape"; output grid_insitu_jet12_<systag> or grid_insitu_jet12_shapechi2_<systag>.
+void grid_insitu_jet12(string systag = "nominal", string method = "mean") {
+  if (method != "mean" && method != "shape") { cout << "method must be \"mean\" or \"shape\"" << endl; return; }
+  shapeMethod = (method == "shape");
+  const char * tag = shapeMethod ? "jet12_shapechi2" : "jet12";
   // See grid_insitu.C's identical comment: avoids per-pT-bin histograms auto-
   // registering into whichever radius subdirectory was left current by the previous
   // iteration's mkdir/cd.
@@ -220,11 +230,11 @@ void grid_insitu_jet12(string systag = "nominal") {
   // One file/one PDF for the whole systag, all seven jet radii inside (each in its own
   // ana::rnames[ir] subdirectory of fout - see grid_insitu.C's identical comment for
   // why mkdir/cd has to happen before "results" (a TTree) is constructed).
-  string pdfPathStr = Form("%s/grid_insitu_jet12_%s.pdf", insitu_pdf_dir, systag.c_str());
+  string pdfPathStr = Form("%s/grid_insitu_%s_%s.pdf", insitu_pdf_dir, tag, systag.c_str());
   TCanvas * c = new TCanvas("c","",700,700);
   c->SaveAs(Form("%s[", pdfPathStr.c_str()));
 
-  string outfilename = Form("%s/grid_insitu_jet12_%s.root", insitu_output_dir, systag.c_str());
+  string outfilename = Form("%s/grid_insitu_%s_%s.root", insitu_output_dir, tag, systag.c_str());
   TFile * fout = TFile::Open(outfilename.c_str(), "RECREATE");
 
   for (int ir = 0; ir < ana::nJetR; ir++) {
@@ -245,6 +255,8 @@ void grid_insitu_jet12(string systag = "nominal") {
 
   float refMean[nPtBinsUsed], refMeanErr[nPtBinsUsed];
   insitu_utility::referenceMeans(mcSamples, 0, ir, refMean, refMeanErr, lowXj);
+  vector<vector<double>> refFrac, refFracErr;
+  if (shapeMethod) insitu_utility::referenceShape(mcSamples, 0, ir, refFrac, refFracErr, lowXj);
   for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
     cout << "Jet12 MC reference <x_J> pt bin " << ipt << " [" << ana::ptBinsUsed[ipt] << "," << ana::ptBinsUsed[ipt+1]
          << "): " << refMean[ipt] << " +/- " << refMeanErr[ipt] << endl;
@@ -260,7 +272,7 @@ void grid_insitu_jet12(string systag = "nominal") {
 
   TGraph * gchisq = new TGraph(na);
   gchisq->SetName("gchisq_regionA_jet12ref");
-  gchisq->SetTitle(";p_{a} (jet_{pt,corrected} = jet_{pt}/p_{a});#chi^{2}");
+  gchisq->SetTitle(shapeMethod ? ";p_{a} (jet_{pt,corrected} = jet_{pt}/p_{a});Shape #chi^{2}" : ";p_{a} (jet_{pt,corrected} = jet_{pt}/p_{a});#chi^{2}");
 
   float minchisq = FLT_MAX, minpa = 1;
   int ibest = 0;
@@ -268,6 +280,43 @@ void grid_insitu_jet12(string systag = "nominal") {
   for (int ia = 0; ia < na; ia++) {
     float pa = lowa + ia*(higha-lowa)/na;
 
+    float chisq = 0;
+    if (shapeMethod) {
+      vector<vector<double>> countXj(nPtBinsUsed, vector<double>(ana::nUnfoldXjBins, 0.));
+      for (auto & ev : dataA) {
+        float x = (ev.jet_pt/pa)/ev.pho_pt;
+        if (x < lowXj[ev.ptbin]) continue;
+        int ixj = ana::findUnfoldXjBin(x);
+        if (ixj < 0 || ixj >= ana::nUnfoldXjBins) continue;
+        countXj[ev.ptbin][ixj] += 1;
+      }
+      for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
+        double NA = 0;
+        for (double n : countXj[ipt]) NA += n;
+        if (NA <= 0) continue;
+        vector<double> useA, useRefFrac, useRefFracErr;
+        int nBins;
+        if (ipt == coarseRebinPtBin) {
+          int startBin = ana::findUnfoldXjBin(lowXj[ipt]);
+          useA          = insitu_utility::coarsenSum(countXj[ipt], startBin, nXjBinsForChi2, coarseGroupSize);
+          useRefFrac    = insitu_utility::coarsenSum(refFrac[ipt], startBin, nXjBinsForChi2, coarseGroupSize);
+          useRefFracErr = insitu_utility::coarsenQuadrature(refFracErr[ipt], startBin, nXjBinsForChi2, coarseGroupSize);
+          nBins = (int)useA.size();
+        } else {
+          useA = countXj[ipt];
+          useRefFrac = refFrac[ipt]; useRefFracErr = refFracErr[ipt];
+          nBins = nXjBinsForChi2;
+        }
+        double errFloor = 1.0/NA;
+        for (int ib = 0; ib < nBins; ib++) {
+          double fData = useA[ib]/NA;
+          double errData = sqrt(useA[ib])/NA;
+          double errt = std::max(sqrt(errData*errData + useRefFracErr[ib]*useRefFracErr[ib]), errFloor);
+          double diff = fData - useRefFrac[ib];
+          chisq += diff*diff/(errt*errt);
+        }
+      }
+    } else {
     vector<double> sumA(nPtBinsUsed,0), sumA2(nPtBinsUsed,0);
     vector<int> countA(nPtBinsUsed,0);
     for (auto & ev : dataA) {
@@ -277,8 +326,6 @@ void grid_insitu_jet12(string systag = "nominal") {
       sumA2[ev.ptbin] += x*x;
       countA[ev.ptbin]++;
     }
-
-    float chisq = 0;
     for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
       if (refMean[ipt] <= 0 || countA[ipt] == 0) continue;
       double mean = sumA[ipt]/countA[ipt];
@@ -289,6 +336,7 @@ void grid_insitu_jet12(string systag = "nominal") {
           + mean*mean*refMeanErr[ipt]*refMeanErr[ipt]/pow(refMean[ipt],4));
       if (errt > 0) chisq += diff*diff/(errt*errt);
     }
+    }
 
     gchisq->SetPoint(ia, pa, chisq);
     if (chisq < minchisq) { minchisq = chisq; minpa = pa; ibest = ia; }
@@ -297,7 +345,7 @@ void grid_insitu_jet12(string systag = "nominal") {
   float errLow, errHigh;
   insitu_utility::findError(gchisq, ibest, minchisq, errLow, errHigh);
 
-  cout << "\nFINAL RESULT (jet R=" << ana::JetRs[ir] << ", systag=" << systag << ", non-purity-corrected, "
+  cout << "\nFINAL RESULT (jet R=" << ana::JetRs[ir] << ", systag=" << systag << (shapeMethod ? ", shape chi2" : "") << ", non-purity-corrected, "
        << mcTrigger << " reference)\n";
   cout << "Region A (Data) vs. Region A (" << mcTrigger << " MC):  p_a = " << minpa
        << " +" << errHigh << "/-" << errLow << " (chi2=" << minchisq << ")" << endl;
@@ -365,7 +413,7 @@ void grid_insitu_jet12(string systag = "nominal") {
   gRatioRaw->Write();
   gRatioCorr->Write();
 
-  TTree * wt = new TTree("results", "best-fit jet energy scale result (non-purity-corrected, Jet12 reference)");
+  TTree * wt = new TTree("results", shapeMethod ? "best-fit jet energy scale result (shape chi2, non-purity-corrected, Jet12 reference)" : "best-fit jet energy scale result (non-purity-corrected, Jet12 reference)");
   float wpa = minpa, wchisq = minchisq, werrLow = errLow, werrHigh = errHigh;
   wt->Branch("pa_regionA_jet12ref", &wpa);
   wt->Branch("chisq_regionA_jet12ref", &wchisq);

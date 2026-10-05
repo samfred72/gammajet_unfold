@@ -23,8 +23,8 @@ class insitu_utility {
     // jet-energy-scale factor pa over na=scanN steps of (scanHigh-scanLow)/scanN each,
     // covering [scanLow, scanHigh) - centralized here (was six copies of
     // "const float lowa = 0.95, higha = 1.05;"/"const int na = 1000;" duplicated across
-    // grid_insitu.C, grid_insitu_jet12.C, grid_insitu_shapechi2.C, grid_insitu_unfolded.C,
-    // and grid_insitu_unfolded_shapechi2.C) so the scan range only needs to change in one
+    // grid_insitu.C, grid_insitu_jet12.C, grid_insitu.C (shape method), grid_insitu_unfolded.C,
+    // and grid_insitu_unfolded.C (shape method)) so the scan range only needs to change in one
     // place. scanN is chosen to hold the step size (scanHigh-scanLow)/scanN fixed at 1e-4
     // (the original [0.95,1.05]/1000 granularity) as the window moves - unfolder.cc's
     // ispairedInsitu floorScale is tied directly to scanLow (see fill_matrix()), so
@@ -98,14 +98,14 @@ class insitu_utility {
     // ----- Computational helpers shared by the six grid_insitu*.C JES-scan macros -----
     // Consolidated here after the same logic was found copy-pasted (and once, actually
     // buggy in one of its copies but not the other) across grid_insitu.C,
-    // grid_insitu_shapechi2.C, grid_insitu_unfolded.C,
-    // grid_insitu_unfolded_shapechi2.C, grid_insitu_jet12.C, and
-    // grid_insitu_jet12_shapechi2.C. See those macros for how each is used - none of
+    // grid_insitu.C (shape method), grid_insitu_unfolded.C,
+    // grid_insitu_unfolded.C (shape method), grid_insitu_jet12.C, and
+    // grid_insitu_jet12.C (shape method). See those macros for how each is used - none of
     // the logic below changed in the move, only its location.
 
     // Sums a fine-binned array's [startBin, nBinsForFit) range into groups of groupSize
     // fine bins each - used by the shape-chi2 macros' pT-bin-2 coarse rebinning (see
-    // grid_insitu_shapechi2.C's coarseRebinPtBin comment).
+    // grid_insitu.C (shape method)'s coarseRebinPtBin comment).
     static vector<double> coarsenSum(const vector<double> & fine, int startBin, int nBinsForFit, int groupSize);
     // Same grouping, but combines per-bin errors in quadrature.
     static vector<double> coarsenQuadrature(const vector<double> & fineErr, int startBin, int nBinsForFit, int groupSize);
@@ -121,7 +121,7 @@ class insitu_utility {
 
     // Fixed MC reference xJ SHAPE (bin fraction, not density) and its per-bin error, per
     // used photon-pT bin - the shape-chi2 analogue of referenceMeans() above (see
-    // grid_insitu_shapechi2.C's referenceShape() comment for the bin-fraction-vs-density
+    // grid_insitu.C (shape method)'s referenceShape() comment for the bin-fraction-vs-density
     // and error-convention rationale).
     static void referenceShape(const vector<pair<string,double>> & samples, int abcdSelect, int ir,
         vector<vector<double>> & refFrac, vector<vector<double>> & refFracErr, const float lowXj[]);
@@ -155,7 +155,7 @@ class insitu_utility {
 
     // Purity-correct region A/C histograms per pT bin via unfold_utility::purityCorrect
     // (src/unfold_utility.h) - the exact two-purity method. nBins is ana::nPtBinsUsed
-    // (grid_insitu.C/grid_insitu_shapechi2.C, with real asymmetric purity-error arrays)
+    // (grid_insitu.C/grid_insitu.C (shape method), with real asymmetric purity-error arrays)
     // or ana::nPtBins (the unfolded macros, which pass zero-filled error arrays since
     // purity is held fixed there and the asymmetric term isn't needed).
     static vector<TH1D*> purityCorrectByPtBin(const vector<TH1D*> & hA, const vector<TH1D*> & hC, int nBins,

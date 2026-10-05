@@ -31,7 +31,7 @@ TH1D * unfold_utility::unfoldOnce(TH1D * respRecoTemplate, TH1D * respTruthTempl
   // reading Reset() (which does `delete _mes/_tru/_res/_fak`) vs. ~RooUnfoldResponseT()
   // side by side - this is a real leak in that RooUnfold build, not a false lead.
   // Without this, every toy iteration in a bootstrap loop (draw_toy_vs_analytic.C,
-  // toy_data_iterations.C, toy_resp_iterations.C - anything calling this overload in a
+  // toy_iterations.C ("data"), toy_iterations.C ("resp") - anything calling this overload in a
   // loop) permanently leaks one response-matrix clone; at 10k toys that's what exhausted
   // memory and forced a machine restart, where 1k toys had stayed under the radar.
   response.Reset();
@@ -55,7 +55,7 @@ TH1D * unfold_utility::unfoldOnce(RooUnfoldResponse * response, TH1D * flatMeasu
   // Expensive (~3s/call measured on this project's binning, vs a few ms without it) - see
   // includeSystematics's header comment. Only enabled when the caller actually wants the
   // resulting GetBinError(); toy bootstrap loops (draw_toy_vs_analytic.C,
-  // toy_data_iterations.C, toy_resp_iterations.C) should pass includeSystematics=false -
+  // toy_iterations.C ("data"), toy_iterations.C ("resp")) should pass includeSystematics=false -
   // they only ever read GetBinContent() per toy, so paying for this on every one of
   // thousands of toy calls was pure waste (and looked like the macro had frozen: the
   // per-toy cost went from milliseconds to ~3s, but the progress printout only fires
