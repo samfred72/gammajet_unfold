@@ -9,6 +9,8 @@
 #include "TFile.h"
 #include "TTree.h"
 #include "TH1D.h"
+#include "TH2D.h"
+#include "TBox.h"
 #include "TGraph.h"
 #include "TGraphErrors.h"
 #include "TCanvas.h"
@@ -27,8 +29,19 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 
 // In-situ jet-energy-scale study, in the style of gammajet/macros/run_grid.sh's
 // grid_insitu.C, but reading this project's insitutree files (see draw_insitu_xj.C)
-// instead of the sibling gammajet project's tree_Data.root, and gammajet-only (no
-// multijet/trijet reference - we don't have those trees here).
+// instead of the sibling gammajet project's tree_Data.root.
+//
+// Two modes (second argument):
+//   "gammajet" (default) - the study described below: one constant scale pa. Its
+//       output (output/grid_insitu_<systag>.root, pdfs/grid_insitu_<systag>.pdf) is what
+//       draw_jes_summary.C turns into ana.h's jesNominal/jesBySystag.
+//   "combined" - gamma+jet plus the multijet balance from the multiJet analysis trees
+//       (trees/multijet_*.root, see insitu_utility::multijetFilename), fitting a linear
+//       JES f(pT) = pa + pb*pT on a 2D grid, as the old sibling-project grid_insitu.C did.
+//       A constant scale cancels in the multijet balance, so multijet constrains the
+//       slope and gamma+jet the normalization. Cross-check only: written to
+//       grid_insitu_combined_<systag>.root/.pdf and never read by draw_jes_summary.C.
+//       See runCombined() below.
 //
 // Scans a single overall jet-energy-scale factor pa (jet_pt_corrected = jet_pt/pa,
 // no pT-dependence) and finds the value that makes Data's mean(x_{J#gamma}) match the
@@ -65,6 +78,21 @@ const int nPtBinsUsed = ana::nPtBinsUsed;
 // drawer.h's scalemap[isphoton=1][sample] for sim="pythia".
 map<int,double> photon_scale = {{5,146359.3},{10,6944.675},{20,130.4461}};
 
+// Combined mode only. multiJet trees (local copies of the SDCC multiJet outputs) and the
+// Pythia8 dijet MC samples forming the multijet reference, weighted with drawer.h's
+// scalemap[isphoton=0] for sim="pythia" and cut to each sample's pT-hat slice
+// (treeuser::truthSliceLow/High) - the multiJet MC trees carry no event weight.
+string multijet_tree_dir = "/home/samson72/sphnx/gammajet_unfold/trees"; // non-const so a test can point it elsewhere
+vector<pair<string,double>> multijet_mc_samples = {
+  {"Jet8", 1.3013e+07}, {"Jet12", 3.997e+06}, {"Jet20", 6.218e+04}, {"Jet30", 2.502e+03}, {"Jet50", 7.2695}};
+// Linear-JES grid (combined mode): pa over the same window as the 1D scan but coarser
+// (2D grid cost), pb over +-0.005/GeV (1e-4 steps). 1-sigma region: delta-chi2 < 2.30
+// (two parameters).
+const int combinedNa = 200;
+const int combinedNb = 100;
+const float combinedLowb = -0.005, combinedHighb = 0.005; // widened from the old macro's +-0.002: a first test fit sat at +0.002
+const float combinedDchi2 = 2.30;
+
 // referenceMeans, computeRegionAMeans, computeCorrectedMeans, buildXjByPtBin,
 // buildMCXjByPtBin, and purityCorrectByPtBin now live in src/insitu_utility.h/.cc
 // (insitu_utility:: namespace) - moved there after being found copy-pasted
@@ -77,7 +105,7 @@ map<int,double> photon_scale = {{5,146359.3},{10,6944.675},{20,130.4461}};
 // (Region A or purity-corrected), stamped on the bottom panel in red.
 void drawJESPage(TCanvas * c, const char * pdfPath, const char * label, int ir,
     TGraphErrors * gMC, TGraphErrors * gDataRaw, TGraphErrors * gRatioRaw, TGraphErrors * gRatioCorr,
-    float pa, float paErrLow, float paErrHigh) {
+    float pa, float paErrLow, float paErrHigh, const char * extraText = "") {
   c->Clear();
   TPad * p1 = new TPad("p1","",0,.5,1,1);
   TPad * p2 = new TPad("p2","",0,0,1,.5);
@@ -147,6 +175,7 @@ void drawJESPage(TCanvas * c, const char * pdfPath, const char * label, int ir,
   jestext.SetNDC();
   jestext.SetTextColor(kRed);
   jestext.DrawLatex(.18,.28, Form("Data to MC JES = %.4f #pm %.4f", pa, paErr));
+  if (extraText[0]) jestext.DrawLatex(.18,.22, extraText);
 
   c->SaveAs(pdfPath);
 }
@@ -213,7 +242,19 @@ void drawXjPage(TCanvas * c, const char * pdfPath, const char * label, int ir, f
   c->SaveAs(pdfPath);
 }
 
-void grid_insitu(string systag = "nominal") {
+void runCombined(TCanvas * c, const char * pdfPath, TFile * fout, int ir, const string & systag,
+    const vector<DataEvent> & dataA, const vector<DataEvent> & dataC,
+    const float refMean[], const float refMeanErr[], const float purity[], const float purityC[],
+    const float lowXj[]);
+
+// onlyIr >= 0 restricts the run to one jet radius (quick tests); -1 = all radii.
+void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr = -1) {
+  if (mode != "gammajet" && mode != "combined") {
+    cout << "ERROR: mode must be \"gammajet\" or \"combined\", got \"" << mode << "\"" << endl;
+    return;
+  }
+  const bool combined = (mode == "combined");
+  const string tag = combined ? "combined_" + systag : systag;
   // Newly created histograms are not auto-registered to whatever TDirectory happens to
   // be gDirectory at construction time - without this, buildXjByPtBin/buildMCXjByPtBin's
   // fixed-name per-pT-bin histograms would auto-register into (and "Replacing existing
@@ -232,14 +273,15 @@ void grid_insitu(string systag = "nominal") {
   // become one more page in the same multi-page PDF via the standard "file.pdf["/
   // "file.pdf"/"file.pdf]" SaveAs bracket already used per-pT-bin below, just wrapped
   // one level higher.
-  string pdfPathStr = Form("%s/grid_insitu_%s.pdf", insitu_pdf_dir, systag.c_str());
+  string pdfPathStr = Form("%s/grid_insitu_%s.pdf", insitu_pdf_dir, tag.c_str());
   TCanvas * c = new TCanvas("c","",700,700);
   c->SaveAs(Form("%s[", pdfPathStr.c_str()));
 
-  string outfilename = Form("%s/grid_insitu_%s.root", insitu_output_dir, systag.c_str());
+  string outfilename = Form("%s/grid_insitu_%s.root", insitu_output_dir, tag.c_str());
   TFile * fout = TFile::Open(outfilename.c_str(), "RECREATE");
 
   for (int ir = 0; ir < ana::nJetR; ir++) {
+  if (onlyIr >= 0 && ir != onlyIr) continue;
 
   string dataFile = insitu_utility::insituFilename(insitu_input_dir, "Data", "", systag);
   vector<DataEvent> dataA = insitu_utility::cacheDataEvents(dataFile.c_str(), 0, ir);
@@ -279,6 +321,11 @@ void grid_insitu(string systag = "nominal") {
     purityCErrLow[ipt]  = ana::getPurityCErrorLow(ana::ptBinsUsed[ipt], ana::ptBinsUsed[ipt+1], systag, ir);
     purityCErrHigh[ipt] = ana::getPurityCErrorHigh(ana::ptBinsUsed[ipt], ana::ptBinsUsed[ipt+1], systag, ir);
     cout << "Purity pt bin " << ipt << ": P_A=" << purity[ipt] << " P_C=" << purityC[ipt] << endl;
+  }
+
+  if (combined) {
+    runCombined(c, pdfPathStr.c_str(), fout, ir, systag, dataA, dataC, refMean, refMeanErr, purity, purityC, lowXj);
+    continue;
   }
 
   // -----------------------------
@@ -502,4 +549,296 @@ void grid_insitu(string systag = "nominal") {
   cout << "Wrote " << pdfPathStr << endl;
   fout->Close();
   cout << "Wrote " << outfilename << endl;
+}
+
+// =============================================================================
+// Combined mode: gamma+jet + multijet balance, linear JES f(pT) = pa + pb*pT.
+// =============================================================================
+
+// Gamma+jet sums of x = (jet_pt/f(jet_pt))/pho_pt per used pT bin, with the same low-xJ
+// floor as the constant-scale scan above (same formula with f = pa).
+static void gammaSumsLinear(const vector<DataEvent> & ev, double pa, double pb, const float lowXj[],
+    vector<double> & sum, vector<double> & sum2, vector<int> & count) {
+  sum.assign(nPtBinsUsed, 0); sum2.assign(nPtBinsUsed, 0); count.assign(nPtBinsUsed, 0);
+  for (auto & e : ev) {
+    double x = (e.jet_pt/(pa + pb*e.jet_pt))/e.pho_pt;
+    if (x < lowXj[e.ptbin]) continue;
+    sum[e.ptbin] += x; sum2[e.ptbin] += x*x; count[e.ptbin]++;
+  }
+}
+
+// Region-A and purity-corrected mean(x_J) per used pT bin from those sums - the same
+// two calculations the constant-scale chi2 loop above does inline (two-purity method via
+// unfold_utility::purityCorrectCoeffs for the corrected one).
+static void gammaMeansLinear(const vector<DataEvent> & dataA, const vector<DataEvent> & dataC,
+    double pa, double pb, const float purity[], const float purityC[], const float lowXj[],
+    float meanA[], float errA[], float meanCorr[], float errCorr[]) {
+  vector<double> sA, sA2, sC, sC2; vector<int> nA, nC;
+  gammaSumsLinear(dataA, pa, pb, lowXj, sA, sA2, nA);
+  gammaSumsLinear(dataC, pa, pb, lowXj, sC, sC2, nC);
+  for (int i = 0; i < nPtBinsUsed; i++) {
+    meanA[i] = errA[i] = meanCorr[i] = errCorr[i] = 0;
+    if (nA[i] > 0) {
+      double m = sA[i]/nA[i];
+      meanA[i] = m;
+      errA[i] = sqrt(std::max(sA2[i]/nA[i] - m*m, 0.)/nA[i]);
+    }
+    if (nA[i] > 0 && nC[i] > 0) {
+      float cA, cC;
+      unfold_utility::purityCorrectCoeffs(purity[i], purityC[i], nA[i], nC[i], cA, cC);
+      double N = cA*nA[i] - cC*nC[i];
+      if (N > 0) {
+        double m = (cA*sA[i] - cC*sC[i])/N;
+        meanCorr[i] = m;
+        errCorr[i] = sqrt(std::max((cA*sA2[i] - cC*sC2[i])/N - m*m, 0.)/N);
+      }
+    }
+  }
+}
+
+// chi2 of measured means against a reference - same per-bin formula as the 1D scan.
+static double meanChi2(const float mean[], const float err[], const float ref[], const float refErr[], int n) {
+  double chi2 = 0;
+  for (int i = 0; i < n; i++) {
+    if (ref[i] <= 0 || mean[i] <= 0) continue;
+    double diff = 1 - mean[i]/ref[i];
+    double errt = sqrt(err[i]*err[i]/(ref[i]*ref[i]) + mean[i]*mean[i]*refErr[i]*refErr[i]/pow(ref[i],4));
+    if (errt > 0) chi2 += diff*diff/(errt*errt);
+  }
+  return chi2;
+}
+
+// Mean multijet balance vs leading-jet pT: MC reference and raw Data on top, raw and
+// JES-corrected Data/MC on the bottom.
+static void drawMultijetPage(TCanvas * c, const char * pdfPath, int ir,
+    const float mcMean[], const float mcErr[], const float rawMean[], const float rawErr[],
+    const float corrMean[], const float corrErr[], float pa, float pb) {
+  const int n = insitu_utility::nMultijetPtBins;
+  const double * b = insitu_utility::multijetPtBins;
+  auto graph = [&](const float y[], const float ey[], const char * name) {
+    TGraphErrors * g = new TGraphErrors();
+    g->SetName(name);
+    for (int i = 0; i < n; i++) {
+      if (y[i] <= 0) continue;
+      int k = g->GetN();
+      g->SetPoint(k, 0.5*(b[i]+b[i+1]), y[i]);
+      g->SetPointError(k, 0.5*(b[i+1]-b[i]), ey[i]);
+    }
+    return g;
+  };
+  auto ratio = [&](const float y[], const float ey[], const char * name) {
+    float r[insitu_utility::nMultijetPtBins], er[insitu_utility::nMultijetPtBins];
+    for (int i = 0; i < n; i++) {
+      r[i] = (mcMean[i] > 0 && y[i] > 0) ? y[i]/mcMean[i] : 0;
+      er[i] = r[i] > 0 ? r[i]*sqrt(pow(ey[i]/y[i],2) + pow(mcErr[i]/mcMean[i],2)) : 0;
+    }
+    return graph(r, er, name);
+  };
+  TGraphErrors * gMC = graph(mcMean, mcErr, "gMultijetMC");
+  TGraphErrors * gRaw = graph(rawMean, rawErr, "gMultijetDataRaw");
+  TGraphErrors * rRaw = ratio(rawMean, rawErr, "gMultijetRatioRaw");
+  TGraphErrors * rCorr = ratio(corrMean, corrErr, "gMultijetRatioCorr");
+
+  c->Clear();
+  TPad * p1 = new TPad("p1","",0,.5,1,1);
+  TPad * p2 = new TPad("p2","",0,0,1,.5);
+  p1->Draw(); p2->Draw();
+  p1->cd(); p1->SetBottomMargin(0.02); p1->SetLeftMargin(.15); gPad->SetTicks(1,1);
+  TH1F * f1 = p1->DrawFrame(b[0], 0.8, b[n], 1.6);
+  f1->GetYaxis()->SetTitle("<p_{T}^{lead}/|#vec{p}_{T}^{sub}+#vec{p}_{T}^{subsub}|>");
+  f1->GetXaxis()->SetLabelSize(0);
+  gMC->SetLineColor(kMagenta+1); gMC->SetMarkerColor(kMagenta+1); gMC->SetMarkerStyle(21); gMC->Draw("p same");
+  gRaw->SetLineColor(kBlue); gRaw->SetMarkerColor(kBlue); gRaw->SetMarkerStyle(20); gRaw->Draw("p same");
+  TLegend * l1 = new TLegend(.55,.1,.85,.3); l1->SetLineWidth(0);
+  l1->AddEntry(gMC, "Pythia8 dijet (reco)"); l1->AddEntry(gRaw, "Data (reco)"); l1->Draw();
+  insitu_utility::drawSPhenixLabel({"Multijet balance"}, {
+      Form("Jet R=%.1f", ana::JetRs[ir]),
+      Form("|#eta^{jet}|<%.1f, p_{T}^{sub,subsub} > %.0f GeV", ana::etacut-ana::JetRs[ir], insitu_utility::multijetSubPtMin)
+    }, .18, .85, 16, p1->GetWh()/1.5);
+  p2->cd(); p2->SetTopMargin(0.02); p2->SetBottomMargin(0.2); p2->SetLeftMargin(.15); gPad->SetTicks(1,1);
+  TH1F * f2 = p2->DrawFrame(b[0], 0.85, b[n], 1.15);
+  f2->GetYaxis()->SetTitle("Data/MC");
+  f2->GetXaxis()->SetTitle("p_{T}^{lead} [GeV]");
+  f2->GetYaxis()->SetTitleSize(0.06); f2->GetYaxis()->SetTitleOffset(1.1); f2->GetYaxis()->SetLabelSize(0.05);
+  f2->GetXaxis()->SetTitleSize(0.06); f2->GetXaxis()->SetLabelSize(0.05);
+  rRaw->SetMarkerStyle(20); rRaw->Draw("p same");
+  rCorr->SetMarkerStyle(24); rCorr->Draw("p same");
+  TLine * line = new TLine(b[0],1,b[n],1); line->SetLineStyle(9); line->Draw("same");
+  TLegend * l2 = new TLegend(.55,.7,.85,.9); l2->SetLineWidth(0);
+  l2->AddEntry(rRaw, "Raw ratio"); l2->AddEntry(rCorr, "Corrected ratio"); l2->Draw();
+  TLatex t; t.SetNDC(); t.SetTextColor(kRed);
+  t.DrawLatex(.18,.28, Form("f(p_{T}) = %.4f %+.2e p_{T}", pa, pb));
+  c->SaveAs(pdfPath);
+  gMC->Write(); gRaw->Write(); rRaw->Write(); rCorr->Write();
+}
+
+void runCombined(TCanvas * c, const char * pdfPath, TFile * fout, int ir, const string & systag,
+    const vector<DataEvent> & dataA, const vector<DataEvent> & dataC,
+    const float refMean[], const float refMeanErr[], const float purity[], const float purityC[],
+    const float lowXj[]) {
+  const int nMJ = insitu_utility::nMultijetPtBins;
+
+  // Multijet inputs - Data unweighted, MC sliced and cross-section weighted.
+  string mjDataFile = insitu_utility::multijetFilename(multijet_tree_dir.c_str(), "Data", "");
+  vector<MultijetEvent> mjData = insitu_utility::cacheMultijetEvents(mjDataFile.c_str(), ir, false, systag, 1.0, "Data", "");
+  vector<MultijetEvent> mjMC;
+  for (auto & s : multijet_mc_samples) {
+    string f = insitu_utility::multijetFilename(multijet_tree_dir.c_str(), s.first.c_str(), "pythia");
+    vector<MultijetEvent> ev = insitu_utility::cacheMultijetEvents(f.c_str(), ir, true, systag, s.second, s.first, "pythia");
+    cout << "  multijet MC " << s.first << ": " << ev.size() << " events" << endl;
+    mjMC.insert(mjMC.end(), ev.begin(), ev.end());
+  }
+  cout << "Cached multijet events: Data=" << mjData.size() << " MC=" << mjMC.size() << endl;
+  if (mjData.empty() || mjMC.empty()) {
+    cout << "ERROR: no multijet Data or MC events for R=" << ana::JetRs[ir]
+         << " - check " << multijet_tree_dir << "/multijet_*.root; skipping this radius" << endl;
+    return;
+  }
+  float mjRef[nMJ], mjRefErr[nMJ];
+  insitu_utility::multijetMeans(mjMC, 1.0, 0.0, mjRef, mjRefErr);
+
+  // 2D grid scan.
+  const float lowa = insitu_utility::scanLow, higha = insitu_utility::scanHigh;
+  const float stepa = (higha-lowa)/combinedNa, stepb = (combinedHighb-combinedLowb)/combinedNb;
+  TH2D * hA   = new TH2D("hchisq2d_regionA_multijet", ";p_{a};p_{b} [GeV^{-1}];#chi^{2}",
+      combinedNa, lowa-0.5*stepa, higha-0.5*stepa, combinedNb, combinedLowb-0.5*stepb, combinedHighb-0.5*stepb);
+  TH2D * hCorr = (TH2D*)hA->Clone("hchisq2d_puritycorrected_multijet");
+  TH2D * hMJ   = (TH2D*)hA->Clone("hchisq2d_multijet_only");
+  struct Pt { float pa, pb, cA, cCorr, cMJ; };
+  vector<Pt> pts; pts.reserve(combinedNa*combinedNb);
+  float gA[ana::nPtBinsUsed], eA[ana::nPtBinsUsed], gC[ana::nPtBinsUsed], eC[ana::nPtBinsUsed];
+  float mj[nMJ], emj[nMJ];
+  for (int ia = 0; ia < combinedNa; ia++) {
+    float pa = lowa + ia*stepa;
+    for (int ib = 0; ib < combinedNb; ib++) {
+      float pb = combinedLowb + ib*stepb;
+      gammaMeansLinear(dataA, dataC, pa, pb, purity, purityC, lowXj, gA, eA, gC, eC);
+      insitu_utility::multijetMeans(mjData, pa, pb, mj, emj);
+      float cMJ = meanChi2(mj, emj, mjRef, mjRefErr, nMJ);
+      float cA = meanChi2(gA, eA, refMean, refMeanErr, nPtBinsUsed) + cMJ;
+      float cCorr = meanChi2(gC, eC, refMean, refMeanErr, nPtBinsUsed) + cMJ;
+      pts.push_back({pa, pb, cA, cCorr, cMJ});
+      hA->SetBinContent(ia+1, ib+1, cA);
+      hCorr->SetBinContent(ia+1, ib+1, cCorr);
+      hMJ->SetBinContent(ia+1, ib+1, cMJ);
+    }
+  }
+
+  // Best point and delta-chi2 < 2.30 region for each total chi2: marginal pa/pb ranges
+  // and the envelope of f(pT) over the region (old grid_insitu.C's fLow/fHigh band).
+  struct Fit { float pa, pb, chi2, paLo, paHi, pbLo, pbHi; TGraph * band[3]; bool edge; };
+  auto fit = [&](float Pt::*chi, const char * name) {
+    Fit r; r.chi2 = FLT_MAX;
+    for (auto & p : pts) if (p.*chi < r.chi2) { r.chi2 = p.*chi; r.pa = p.pa; r.pb = p.pb; }
+    r.paLo = r.paHi = r.pa; r.pbLo = r.pbHi = r.pb;
+    const int nx = 56; // f(pT) band from 5 to 60 GeV
+    vector<double> x(nx), lo(nx, 1e9), hi(nx, -1e9), best(nx);
+    for (int i = 0; i < nx; i++) { x[i] = 5 + i; best[i] = r.pa + r.pb*x[i]; }
+    for (auto & p : pts) {
+      if (p.*chi >= r.chi2 + combinedDchi2) continue;
+      r.paLo = std::min(r.paLo, p.pa); r.paHi = std::max(r.paHi, p.pa);
+      r.pbLo = std::min(r.pbLo, p.pb); r.pbHi = std::max(r.pbHi, p.pb);
+      for (int i = 0; i < nx; i++) { double f = p.pa + p.pb*x[i]; lo[i] = std::min(lo[i], f); hi[i] = std::max(hi[i], f); }
+    }
+    r.edge = (r.paLo <= lowa || r.paHi >= higha - stepa || r.pbLo <= combinedLowb || r.pbHi >= combinedHighb - stepb);
+    r.band[0] = new TGraph(nx, x.data(), best.data()); r.band[0]->SetName(Form("gJES_best_%s", name));
+    r.band[1] = new TGraph(nx, x.data(), lo.data());   r.band[1]->SetName(Form("gJES_low_%s", name));
+    r.band[2] = new TGraph(nx, x.data(), hi.data());   r.band[2]->SetName(Form("gJES_high_%s", name));
+    return r;
+  };
+  Fit fitA = fit(&Pt::cA, "regionA_multijet");
+  Fit fitC = fit(&Pt::cCorr, "puritycorrected_multijet");
+
+  cout << "\nCOMBINED RESULT (jet R=" << ana::JetRs[ir] << ", systag=" << systag << "), f(pT) = pa + pb*pT\n";
+  for (auto p : {make_pair("Region A + multijet:        ", &fitA), make_pair("Purity-corrected + multijet:", &fitC)}) {
+    const Fit & r = *p.second;
+    cout << p.first << " pa = " << r.pa << " [" << r.paLo << ", " << r.paHi << "]"
+         << "  pb = " << r.pb << " [" << r.pbLo << ", " << r.pbHi << "] /GeV  chi2 = " << r.chi2 << endl;
+    if (r.edge) cout << "  WARNING: the delta-chi2 < 2.30 region touches the grid edge - widen the scan" << endl;
+  }
+
+  // Pages: gamma+jet at the combined best fits, multijet balance, f(pT) band, chi2 map.
+  float rawA[ana::nPtBinsUsed], rawEA[ana::nPtBinsUsed], rawC[ana::nPtBinsUsed], rawEC[ana::nPtBinsUsed];
+  float bA[ana::nPtBinsUsed], bEA[ana::nPtBinsUsed], bC[ana::nPtBinsUsed], bEC[ana::nPtBinsUsed], dum[ana::nPtBinsUsed], dumE[ana::nPtBinsUsed];
+  gammaMeansLinear(dataA, dataC, 1.0, 0.0, purity, purityC, lowXj, rawA, rawEA, rawC, rawEC);
+  gammaMeansLinear(dataA, dataC, fitA.pa, fitA.pb, purity, purityC, lowXj, bA, bEA, dum, dumE);
+  gammaMeansLinear(dataA, dataC, fitC.pa, fitC.pb, purity, purityC, lowXj, dum, dumE, bC, bEC);
+
+  fout->cd();
+  fout->mkdir(ana::rnames[ir])->cd();
+
+  TGraphErrors * gMC = insitu_utility::meanGraph(refMean, refMeanErr, "gMeanMC");
+  drawJESPage(c, pdfPath, "Region A + multijet", ir, gMC,
+      insitu_utility::meanGraph(rawA, rawEA, "gMeanData_regionA_raw"),
+      insitu_utility::ratioGraph(rawA, rawEA, refMean, refMeanErr, "gRatio_regionA_raw"),
+      insitu_utility::ratioGraph(bA, bEA, refMean, refMeanErr, "gRatio_regionA_multijet_corrected"),
+      fitA.pa, fitA.pa - fitA.paLo, fitA.paHi - fitA.pa, Form("p_{b} = %.2e [%.2e, %.2e] GeV^{-1}", fitA.pb, fitA.pbLo, fitA.pbHi));
+  drawJESPage(c, pdfPath, "Purity-corrected + multijet", ir, gMC,
+      insitu_utility::meanGraph(rawC, rawEC, "gMeanData_puritycorrected_raw"),
+      insitu_utility::ratioGraph(rawC, rawEC, refMean, refMeanErr, "gRatio_puritycorrected_raw"),
+      insitu_utility::ratioGraph(bC, bEC, refMean, refMeanErr, "gRatio_puritycorrected_multijet_corrected"),
+      fitC.pa, fitC.pa - fitC.paLo, fitC.paHi - fitC.pa, Form("p_{b} = %.2e [%.2e, %.2e] GeV^{-1}", fitC.pb, fitC.pbLo, fitC.pbHi));
+
+  float mjRaw[nMJ], mjRawE[nMJ], mjCorr[nMJ], mjCorrE[nMJ];
+  insitu_utility::multijetMeans(mjData, 1.0, 0.0, mjRaw, mjRawE);
+  insitu_utility::multijetMeans(mjData, fitC.pa, fitC.pb, mjCorr, mjCorrE);
+  drawMultijetPage(c, pdfPath, ir, mjRef, mjRefErr, mjRaw, mjRawE, mjCorr, mjCorrE, fitC.pa, fitC.pb);
+
+  // f(pT) bands, with the gammajet-only constant scale (same systag) for comparison if
+  // that output exists.
+  c->Clear(); c->cd(); gPad->SetLeftMargin(.15); gPad->SetBottomMargin(.12); gPad->SetTicks(1,1);
+  TH1F * fr = gPad->DrawFrame(5, 0.75, 60, 1.05);
+  fr->GetXaxis()->SetTitle("p_{T}^{jet} [GeV]");
+  fr->GetYaxis()->SetTitle("f(p_{T}) = p_{a} + p_{b} p_{T}  (jet_{pt,corrected} = jet_{pt}/f)");
+  int cols[2] = {kBlue, kRed};
+  Fit * fits[2] = {&fitC, &fitA};
+  const char * names[2] = {"Purity-corrected + multijet", "Region A + multijet"};
+  TLegend * lb = new TLegend(.45,.15,.9,.35); lb->SetLineWidth(0);
+  for (int k = 0; k < 2; k++) {
+    for (int j = 0; j < 3; j++) { fits[k]->band[j]->SetLineColor(cols[k]); fits[k]->band[j]->SetLineWidth(j ? 1 : 2); fits[k]->band[j]->SetLineStyle(j ? 2 : 1); fits[k]->band[j]->Draw("l same"); fits[k]->band[j]->Write(); }
+    lb->AddEntry(fits[k]->band[0], names[k], "l");
+  }
+  TFile * fg = TFile::Open(Form("%s/grid_insitu_%s.root", insitu_output_dir, systag.c_str()), "READ");
+  if (fg && !fg->IsZombie()) {
+    TTree * rt = (TTree*)fg->Get(Form("%s/results", ana::rnames[ir]));
+    float paG = 0, eLo = 0, eHi = 0;
+    if (rt) {
+      rt->SetBranchAddress("pa_puritycorrected", &paG); rt->SetBranchAddress("errLow_puritycorrected", &eLo);
+      rt->SetBranchAddress("errHigh_puritycorrected", &eHi); rt->GetEntry(0);
+      TBox * bx = new TBox(5, paG - eLo, 60, paG + eHi); bx->SetFillColor(kGray); bx->SetFillStyle(1001); bx->Draw();
+      TLine * lg = new TLine(5, paG, 60, paG); lg->SetLineColor(kBlack); lg->SetLineWidth(2); lg->Draw();
+      lb->AddEntry(lg, "#gamma+jet only (constant, purity-corr.)", "l");
+      for (int k = 0; k < 2; k++) for (int j = 0; j < 3; j++) fits[k]->band[j]->Draw("l same"); // redraw over the box
+    }
+    fg->Close();
+  }
+  fout->cd(ana::rnames[ir]);
+  lb->Draw();
+  insitu_utility::drawSPhenixLabel({"#gamma+jet + multijet"}, {Form("Jet R=%.1f", ana::JetRs[ir]), "solid: best fit, dashed: #Delta#chi^{2} < 2.30"}, .18, .85, 16, gPad->GetWh());
+  c->SaveAs(pdfPath);
+
+  // chi2 map (purity-corrected + multijet)
+  c->Clear(); c->cd(); gPad->SetRightMargin(.15); gPad->SetLeftMargin(.15); gPad->SetBottomMargin(.12);
+  TH2D * hDisp = (TH2D*)hCorr->Clone("hchisq2d_display");
+  hDisp->SetMaximum(fitC.chi2 + 25); hDisp->SetMinimum(fitC.chi2);
+  hDisp->Draw("colz");
+  TGraph * gb = new TGraph(1); gb->SetPoint(0, fitC.pa, fitC.pb); gb->SetMarkerStyle(29); gb->SetMarkerSize(2); gb->SetMarkerColor(kRed); gb->Draw("p same");
+  insitu_utility::drawSPhenixLabel({"#chi^{2}: purity-corrected #gamma+jet + multijet"}, {Form("Jet R=%.1f", ana::JetRs[ir])}, .2, .85, 14, gPad->GetWh());
+  c->SaveAs(pdfPath);
+  gPad->SetRightMargin(.05);
+
+  fout->cd(ana::rnames[ir]);
+  hA->Write(); hCorr->Write(); hMJ->Write();
+  TTree * wt = new TTree("results", "best-fit linear JES f(pT) = pa + pb*pT");
+  float w[2][7];
+  for (int k = 0; k < 2; k++) { Fit & r = (k ? fitA : fitC); float v[7] = {r.pa, r.pb, r.chi2, r.paLo, r.paHi, r.pbLo, r.pbHi}; for (int j = 0; j < 7; j++) w[k][j] = v[j]; }
+  const char * lab[7] = {"pa", "pb", "chisq", "paLow", "paHigh", "pbLow", "pbHigh"};
+  for (int j = 0; j < 7; j++) {
+    wt->Branch(Form("%s_puritycorrected_multijet", lab[j]), &w[0][j]);
+    wt->Branch(Form("%s_regionA_multijet", lab[j]), &w[1][j]);
+  }
+  int nData = mjData.size(), nMC = mjMC.size();
+  wt->Branch("nMultijetData", &nData); wt->Branch("nMultijetMC", &nMC);
+  wt->Fill(); wt->Write();
+  cout << "Finished combined ir=" << ir << " (" << ana::rnames[ir] << ")" << endl;
 }

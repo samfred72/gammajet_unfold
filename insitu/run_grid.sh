@@ -8,11 +8,18 @@
 # PDF per systag (one ana::rnames[ir] subdirectory/page per radius - see grid_insitu.C's
 # header comment), so this script itself no longer loops over radius - only over systag.
 #
-# Usage: run_grid.sh [--systag TAG]
+# Usage: run_grid.sh [--systag TAG] [--mode gammajet|combined]
 #   --systag TAG   Restrict the sweep to one systag (e.g. "nominal") instead of the
 #                   full SYSTAGS list below - e.g. for a quick nominal-only comparison
 #                   right after running unfold once, without waiting on the full
 #                   15-systag sweep.
+#   --mode MODE    gammajet (default): the constant-JES gamma+jet scan, followed by
+#                   draw_jes_summary.C (which rewrites src/ana.h) and draw_jes_variations.C.
+#                   combined: grid_insitu.C's gamma+jet + multijet linear-JES fit
+#                   (output/pdfs grid_insitu_combined_<systag>.*). Cross-check only - it
+#                   never runs draw_jes_summary.C, so ana.h is not touched. Needs the
+#                   multiJet trees in ../trees (see README.md). Run the gammajet mode
+#                   first if you want its constant scale overlaid on the combined plots.
 #
 # SYSTAGS below must be kept in sync with ana::systags (src/ana.h) - bash can't read a
 # C++ static vector<string> directly, so this is a duplicated, explicit list (same
@@ -30,18 +37,35 @@
 # be read by anything below.
 SYSTAGS=(nominal JERhigh JERlow emscale_high emscale_low EMRhigh EMRlow jes_high jes_low threejet narrowBDT narrowISO narrowBDTbkg narrowISObkg wideISObkg)
 
+MODE=gammajet
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --systag)
       SYSTAGS=("$2")
       shift 2
       ;;
+    --mode)
+      MODE="$2"
+      shift 2
+      ;;
     *)
-      echo "Usage: $0 [--systag TAG]" >&2
+      echo "Usage: $0 [--systag TAG] [--mode gammajet|combined]" >&2
       exit 1
       ;;
   esac
 done
+if [[ "$MODE" != gammajet && "$MODE" != combined ]]; then
+  echo "Unknown --mode '$MODE' (gammajet or combined)" >&2
+  exit 1
+fi
+
+if [[ "$MODE" == combined ]]; then
+  for systag in "${SYSTAGS[@]}"; do
+    echo "=== systag=$systag (gammajet + multijet) ==="
+    root -b -l -q "grid_insitu.C(\"$systag\",\"combined\")"
+  done
+  exit 0
+fi
 
 for systag in "${SYSTAGS[@]}"; do
   echo "=== systag=$systag ==="

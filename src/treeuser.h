@@ -45,7 +45,27 @@ class treeuser {
       //  4: jet R=0.6
       //  5: jet R=0.7
       //  6: jet R=0.8
-      threshmap = (sim == "pythia" ? 
+      // Truth-jet (photon: truth-cluster) pT-hat slice windows per radius/sample - see
+      // truthSliceLow/truthSliceHigh below (static so other code, e.g. the in-situ
+      // multijet reference, can use the same tables without opening any trees).
+      threshmap = truthSliceLow(sim);
+      threshmap_high = truthSliceHigh(sim);
+      reco_threshmap_high = std::map<int, std::map<std::string, int>>{
+        {-1,{{"Jet5",12},{"Jet8",20},{"Jet12",30},{"Jet12_long",100},{"Jet20",42},{"Jet30",60},{"Jet50",83},{"Jet70",200},{"Photon5", 0},{"Photon10", 0},{"Photon20", 0}}},
+        { 0,{{"Jet5",12},{"Jet8",20},{"Jet12",30},{"Jet12_long",100},{"Jet20",42},{"Jet30",60},{"Jet50",83},{"Jet70",200},{"Photon5", 0},{"Photon10", 0},{"Photon20", 0}}},
+        { 1,{{"Jet5",12},{"Jet8",20},{"Jet12",30},{"Jet12_long",100},{"Jet20",42},{"Jet30",60},{"Jet50",83},{"Jet70",200},{"Photon5", 0},{"Photon10", 0},{"Photon20", 0}}},
+        { 2,{{"Jet5",12},{"Jet8",20},{"Jet12",30},{"Jet12_long",100},{"Jet20",42},{"Jet30",60},{"Jet50",83},{"Jet70",200},{"Photon5", 0},{"Photon10", 0},{"Photon20", 0}}},
+        { 3,{{"Jet5",12},{"Jet8",20},{"Jet12",30},{"Jet12_long",100},{"Jet20",42},{"Jet30",60},{"Jet50",83},{"Jet70",200},{"Photon5", 0},{"Photon10", 0},{"Photon20", 0}}},
+        { 4,{{"Jet5",12},{"Jet8",20},{"Jet12",30},{"Jet12_long",100},{"Jet20",42},{"Jet30",60},{"Jet50",83},{"Jet70",200},{"Photon5", 0},{"Photon10", 0},{"Photon20", 0}}},
+        { 5,{{"Jet5",12},{"Jet8",20},{"Jet12",30},{"Jet12_long",100},{"Jet20",42},{"Jet30",60},{"Jet50",83},{"Jet70",200},{"Photon5", 0},{"Photon10", 0},{"Photon20", 0}}},
+        { 6,{{"Jet5",12},{"Jet8",20},{"Jet12",30},{"Jet12_long",100},{"Jet20",42},{"Jet30",60},{"Jet50",83},{"Jet70",200},{"Photon5", 0},{"Photon10", 0},{"Photon20", 0}}}
+      };
+    }
+    // Lower/upper pT-hat slice edges (GeV): an MC event from sample `trigger` is kept for
+    // jet radius index ir (-1 = photon) only if the truth pT is inside (low, high) - see
+    // check_keep_MC. -1: cluster; 0..6: jet R=0.2..0.8.
+    static std::map<int, std::map<std::string, int>> truthSliceLow(const std::string & sim) {
+      return (sim == "pythia" ? 
       std::map<int, std::map<std::string, int>>{
         {-1,{{"Jet5", 0},{"Jet8", 0},{"Jet12", 0},{"Jet20", 0},{"Jet30", 0},{"Jet50", 0},{"Jet70",  0},{"Photon5", 0},{"Photon10",12},{"Photon20", 24}}},
         { 0,{{"Jet5", 0},{"Jet8", 0},{"Jet12",12},{"Jet12_long",0},{"Jet20",20},{"Jet30",30},{"Jet50",50},{"Jet70", 70},{"Photon5", 0},{"Photon10", 0},{"Photon20",  0}}},
@@ -66,8 +86,10 @@ class treeuser {
         { 5,{{"Jet5", 0},{"Jet8",14},{"Jet12",24},{"Jet12_long",0},{"Jet20",32},{"Jet30",45},{"Jet50",66},{"Jet70", 80},{"Photon5", 0},{"Photon10", 0},{"Photon20",  0}}},
         { 6,{{"Jet5", 0},{"Jet8",15},{"Jet12",25},{"Jet12_long",0},{"Jet20",34},{"Jet30",47},{"Jet50",68},{"Jet70", 80},{"Photon5", 0},{"Photon10", 0},{"Photon20",  0}}}
       }
-      ); 
-      threshmap_high = (sim == "pythia" ? 
+      );
+    }
+    static std::map<int, std::map<std::string, int>> truthSliceHigh(const std::string & sim) {
+      return (sim == "pythia" ? 
       std::map<int, std::map<std::string, int>>{
         {-1,{{"Jet5", 0},{"Jet8", 0},{"Jet12", 0},{"Jet20", 0},{"Jet30", 0},{"Jet50", 0},{"Jet70",  0},{"Photon5", 12},{"Photon10",24},{"Photon20",100}}},
         { 0,{{"Jet5", 5},{"Jet8",12},{"Jet12",20},{"Jet12_long",100},{"Jet20",30},{"Jet30",50},{"Jet50",70},{"Jet70",200},{"Photon5", 0},{"Photon10", 0},{"Photon20",  0}}},
@@ -89,16 +111,6 @@ class treeuser {
         { 6,{{"Jet5",15},{"Jet8",25},{"Jet12",34},{"Jet12_long",100},{"Jet20",47},{"Jet30",68},{"Jet50",80},{"Jet70",200},{"Photon5", 0},{"Photon10", 0},{"Photon20",  0}}}
       }
       );
-      reco_threshmap_high = std::map<int, std::map<std::string, int>>{
-        {-1,{{"Jet5",12},{"Jet8",20},{"Jet12",30},{"Jet12_long",100},{"Jet20",42},{"Jet30",60},{"Jet50",83},{"Jet70",200},{"Photon5", 0},{"Photon10", 0},{"Photon20", 0}}},
-        { 0,{{"Jet5",12},{"Jet8",20},{"Jet12",30},{"Jet12_long",100},{"Jet20",42},{"Jet30",60},{"Jet50",83},{"Jet70",200},{"Photon5", 0},{"Photon10", 0},{"Photon20", 0}}},
-        { 1,{{"Jet5",12},{"Jet8",20},{"Jet12",30},{"Jet12_long",100},{"Jet20",42},{"Jet30",60},{"Jet50",83},{"Jet70",200},{"Photon5", 0},{"Photon10", 0},{"Photon20", 0}}},
-        { 2,{{"Jet5",12},{"Jet8",20},{"Jet12",30},{"Jet12_long",100},{"Jet20",42},{"Jet30",60},{"Jet50",83},{"Jet70",200},{"Photon5", 0},{"Photon10", 0},{"Photon20", 0}}},
-        { 3,{{"Jet5",12},{"Jet8",20},{"Jet12",30},{"Jet12_long",100},{"Jet20",42},{"Jet30",60},{"Jet50",83},{"Jet70",200},{"Photon5", 0},{"Photon10", 0},{"Photon20", 0}}},
-        { 4,{{"Jet5",12},{"Jet8",20},{"Jet12",30},{"Jet12_long",100},{"Jet20",42},{"Jet30",60},{"Jet50",83},{"Jet70",200},{"Photon5", 0},{"Photon10", 0},{"Photon20", 0}}},
-        { 5,{{"Jet5",12},{"Jet8",20},{"Jet12",30},{"Jet12_long",100},{"Jet20",42},{"Jet30",60},{"Jet50",83},{"Jet70",200},{"Photon5", 0},{"Photon10", 0},{"Photon20", 0}}},
-        { 6,{{"Jet5",12},{"Jet8",20},{"Jet12",30},{"Jet12_long",100},{"Jet20",42},{"Jet30",60},{"Jet50",83},{"Jet70",200},{"Photon5", 0},{"Photon10", 0},{"Photon20", 0}}}
-      };
     }
     void treesetup();
     void disableBranchesUnusedByUnfolder();

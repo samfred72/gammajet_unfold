@@ -12,6 +12,10 @@
 // duplicated byte-for-byte across grid_insitu.C, grid_insitu_jet12.C,
 // grid_insitu_unfolded.C, and (for some) draw_insitu_xj.C.
 struct DataEvent { float pho_pt, jet_pt; int ptbin; };
+// One multijet-balance event (multiJet analysis trees): leading jet pT, the two recoil
+// jets' pT/phi, the leading-jet pT bin, and the per-event weight (1 for Data, the MC
+// sample's cross-section scale for MC).
+struct MultijetEvent { float lead, sl, slphi, ssl, sslphi, w; int bin; };
 
 class insitu_utility {
   public:
@@ -158,6 +162,48 @@ class insitu_utility {
         const float purity[], const float purityErrLow[], const float purityErrHigh[],
         const float purityC[], const float purityCErrLow[], const float purityCErrHigh[],
         const char * prefix);
+
+    // ----- Multijet balance (grid_insitu.C's gammajet+multijet "combined" mode) -----
+    // Reads the multiJet analysis trees (multiJet/src/DijetTreeMaker.cc, tree "ttree",
+    // per-radius jet vectors jet_<var>_<10R>) and builds the multijet balance
+    //   B = pT,lead / |pT,sub + pT,subsub|   (vector sum of the two recoil jets)
+    // binned in leading-jet pT - the same observable as the old sibling-project
+    // gammajet/macros/grid_insitu.C. A constant JES cancels in B, so these points only
+    // constrain the slope pb of a linear JES f(pT) = pa + pb*pT; the gamma+jet points fix pa.
+    static constexpr int nMultijetPtBins = 6;
+    static constexpr double multijetPtBins[nMultijetPtBins+1] = {20, 25, 30, 35, 40, 50, 60};
+    static constexpr float multijetBalanceLow = 0.4, multijetBalanceHigh = 2.65; // B window (old grid_insitu.C)
+    // Event selection, re-applied on whichever jet pT is used (Data: jet_pt_calib; MC: the
+    // smeared pT), with the same thresholds as DijetTreeMaker's skim
+    // (passesOfflineSkimCuts): >= 3 jets, sub and subsub pT >= 7 GeV (pt_cutCalib),
+    // dphi(lead,sub) >= 3pi/4, dphi(lead,subsub) >= pi/2. All three jets must also be
+    // inside |eta| < ana::etacut - R, as for the gamma+jet recoil jet. The tree's skim
+    // already applies |vz| < 60 cm and, in Data, the jet timing cuts.
+    static constexpr float multijetSubPtMin = 7;
+    static constexpr double multijetDphiSubMin = 2.356194490192345;    // 3pi/4
+    static constexpr double multijetDphiSubSubMin = 1.5707963267948966; // pi/2
+
+    static int findMultijetPtBin(double leadPt);
+    // Local copy of the multiJet trees, in this repo's trees/ directory:
+    //   Data: multijet_Data.root  (SDCC multiJet/FunforAll/hadd_data.sh output)
+    //   MC:   multijet_<sim>_<sample>.root  (SDCC multiJet condor_hadd.job output)
+    static string multijetFilename(const char * tree_dir, const char * sample, const char * sim);
+    // Jet pT branch stem: Data jet_pt_calib; MC jet_pt_smear_truth, or its _high/_low
+    // variant for the JERhigh/JERlow systags (same choice as unfolder.cc's recoJetPt).
+    // No other systag changes the multijet side.
+    static string multijetJetPtBranch(bool isMC, const string & systag);
+    // Caches selected events at jet radius ir. MC events are kept only inside the
+    // sample's truth pT-hat slice (treeuser::truthSliceLow/High, leading truth jet at the
+    // same radius) and carry `weight`. Returns an empty vector (with a warning) if the
+    // file or a needed branch is missing.
+    static vector<MultijetEvent> cacheMultijetEvents(const char * filename, int ir, bool isMC,
+        const string & systag, double weight, const string & sample, const string & sim);
+    // B for one event with every jet divided by f(pT) = pa + pb*pT (each at its own pT).
+    static double multijetBalance(const MultijetEvent & ev, double pa, double pb);
+    // Weighted mean B and its error (Kish effective N) per leading-pT bin, events with B
+    // inside [multijetBalanceLow, multijetBalanceHigh) only. Empty bins get mean = err = 0.
+    static void multijetMeans(const vector<MultijetEvent> & events, double pa, double pb,
+        float mean[], float err[]);
 };
 
 #endif // INSITU_UTILITY_H

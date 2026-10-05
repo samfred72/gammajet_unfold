@@ -15,6 +15,9 @@
 # Use this for a quick nominal-only in-situ check after changing unfolder.cc/ana.h -
 # for the full systag sweep (needed before trusting/reporting in-situ results), use
 # run_pipeline.sh (full mode) followed by plain run_grid.sh instead.
+#
+# Usage: run_grid_nominal.sh [--mode gammajet|combined]  (passed through to run_grid.sh;
+# default gammajet). The combined mode also needs the multiJet trees in ../trees.
 set -e
 cd "$(dirname "$0")"
 
@@ -36,6 +39,6 @@ echo "=== Stage 3: puritymaker.C (nominal) ==="
 (cd ../macros && bash run_puritymaker.sh nominal)
 
 echo "=== Stage 4: in-situ grid (nominal) ==="
-bash run_grid.sh --systag nominal
+bash run_grid.sh --systag nominal "$@"
 
 echo "=== Done ==="

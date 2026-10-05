@@ -1,5 +1,8 @@
 #include "/home/samson72/sphnx/gammajet_unfold/src/insitu_utility.h"
 #include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "/home/samson72/sphnx/gammajet_unfold/src/treeuser.h"
+#include <algorithm>
+#include "TMath.h"
 #include "TFile.h"
 #include "TTree.h"
 #include "TLatex.h"
@@ -345,4 +348,124 @@ vector<TH1D*> insitu_utility::purityCorrectByPtBin(const vector<TH1D*> & hA, con
     h[ipt] = hcorr ? hcorr : (TH1D*)hA[ipt]->Clone(Form("%s_pt%d", prefix, ipt));
   }
   return h;
+}
+
+// ----- Multijet balance -----
+
+int insitu_utility::findMultijetPtBin(double leadPt) {
+  for (int i = 0; i < nMultijetPtBins; i++)
+    if (leadPt >= multijetPtBins[i] && leadPt < multijetPtBins[i+1]) return i;
+  return -1;
+}
+
+string insitu_utility::multijetFilename(const char * tree_dir, const char * sample, const char * sim) {
+  if (string(sample) == "Data") return Form("%s/multijet_Data.root", tree_dir);
+  return Form("%s/multijet_%s_%s.root", tree_dir, sim, sample);
+}
+
+string insitu_utility::multijetJetPtBranch(bool isMC, const string & systag) {
+  if (!isMC) return "jet_pt_calib";
+  if (systag == "JERhigh") return "jet_pt_smear_high_truth";
+  if (systag == "JERlow")  return "jet_pt_smear_low_truth";
+  return "jet_pt_smear_truth";
+}
+
+vector<MultijetEvent> insitu_utility::cacheMultijetEvents(const char * filename, int ir, bool isMC,
+    const string & systag, double weight, const string & sample, const string & sim) {
+  vector<MultijetEvent> events;
+  TFile * f = TFile::Open(filename, "READ");
+  if (!f || f->IsZombie()) {
+    cout << "WARNING: could not open multijet file " << filename << endl;
+    return events;
+  }
+  TTree * t = (TTree*)f->Get("ttree");
+  if (!t) {
+    cout << "WARNING: no ttree in " << filename << endl;
+    f->Close();
+    return events;
+  }
+  int cone = (int)std::lround(ana::JetRs[ir]*10);
+  string ptBranch    = Form("%s_%d", multijetJetPtBranch(isMC, systag).c_str(), cone);
+  string etaBranch   = Form("jet_eta_%d", cone);
+  string phiBranch   = Form("jet_phi_%d", cone);
+  string truthBranch = Form("truth_jet_pt_%d", cone);
+  vector<string> needed = {ptBranch, etaBranch, phiBranch};
+  if (isMC) needed.push_back(truthBranch);
+  for (auto & b : needed) {
+    if (!t->GetBranch(b.c_str())) {
+      cout << "WARNING: branch " << b << " missing in " << filename << endl;
+      f->Close();
+      return events;
+    }
+  }
+
+  vector<float> *pt = nullptr, *eta = nullptr, *phi = nullptr, *truthPt = nullptr;
+  t->SetBranchStatus("*", 0);
+  for (auto & b : needed) t->SetBranchStatus(b.c_str(), 1);
+  t->SetBranchAddress(ptBranch.c_str(), &pt);
+  t->SetBranchAddress(etaBranch.c_str(), &eta);
+  t->SetBranchAddress(phiBranch.c_str(), &phi);
+  if (isMC) t->SetBranchAddress(truthBranch.c_str(), &truthPt);
+
+  // MC pT-hat slice for this radius/sample (same tables as treeuser::check_keep_MC).
+  double sliceLow = 0, sliceHigh = 1e9;
+  if (isMC) {
+    auto lo = treeuser::truthSliceLow(sim), hi = treeuser::truthSliceHigh(sim);
+    if (lo[ir].count(sample) && hi[ir].count(sample)) { sliceLow = lo[ir][sample]; sliceHigh = hi[ir][sample]; }
+    else cout << "WARNING: no pT-hat slice for " << sim << " " << sample << " - keeping all events" << endl;
+  }
+
+  const double etaMax = ana::etacut - ana::JetRs[ir];
+  struct J { float pt, eta, phi; };
+  Long64_t nentries = t->GetEntries();
+  for (Long64_t e = 0; e < nentries; e++) {
+    t->GetEntry(e);
+    if (isMC) {
+      float tlead = 0;
+      for (float x : *truthPt) tlead = std::max(tlead, x);
+      if (!(tlead > sliceLow && tlead < sliceHigh)) continue;
+    }
+    vector<J> jets;
+    for (size_t j = 0; j < pt->size(); j++)
+      if (std::fabs(eta->at(j)) < etaMax) jets.push_back({pt->at(j), eta->at(j), phi->at(j)});
+    if (jets.size() < 3) continue;
+    std::partial_sort(jets.begin(), jets.begin() + 3, jets.end(), [](const J & a, const J & b) { return a.pt > b.pt; });
+    const J & L = jets[0], & S = jets[1], & SS = jets[2];
+    if (S.pt < multijetSubPtMin || SS.pt < multijetSubPtMin) continue;
+    auto dphi = [](float a, float b) { double d = std::fabs(a - b); return d > TMath::Pi() ? 2*TMath::Pi() - d : d; };
+    if (dphi(L.phi, S.phi) < multijetDphiSubMin) continue;
+    if (dphi(L.phi, SS.phi) < multijetDphiSubSubMin) continue;
+    int bin = findMultijetPtBin(L.pt);
+    if (bin < 0) continue;
+    events.push_back({L.pt, S.pt, S.phi, SS.pt, SS.phi, (float)weight, bin});
+  }
+  f->Close();
+  return events;
+}
+
+double insitu_utility::multijetBalance(const MultijetEvent & ev, double pa, double pb) {
+  double lead = ev.lead / (pa + pb*ev.lead);
+  double s1 = ev.sl / (pa + pb*ev.sl), s2 = ev.ssl / (pa + pb*ev.ssl);
+  double px = s1*std::cos(ev.slphi) + s2*std::cos(ev.sslphi);
+  double py = s1*std::sin(ev.slphi) + s2*std::sin(ev.sslphi);
+  double recoil = std::sqrt(px*px + py*py);
+  return recoil > 0 ? lead/recoil : -1;
+}
+
+void insitu_utility::multijetMeans(const vector<MultijetEvent> & events, double pa, double pb,
+    float mean[], float err[]) {
+  vector<double> sw(nMultijetPtBins,0), sw2(nMultijetPtBins,0), swx(nMultijetPtBins,0), swx2(nMultijetPtBins,0);
+  for (auto & ev : events) {
+    double b = multijetBalance(ev, pa, pb);
+    if (b < multijetBalanceLow || b >= multijetBalanceHigh) continue;
+    sw[ev.bin] += ev.w; sw2[ev.bin] += ev.w*ev.w; swx[ev.bin] += ev.w*b; swx2[ev.bin] += ev.w*b*b;
+  }
+  for (int i = 0; i < nMultijetPtBins; i++) {
+    if (sw[i] <= 0) { mean[i] = 0; err[i] = 0; continue; }
+    double m = swx[i]/sw[i];
+    double var = swx2[i]/sw[i] - m*m;
+    double neff = sw[i]*sw[i]/sw2[i];
+    mean[i] = m;
+    err[i] = std::sqrt(std::max(var, 0.)/neff);
+  }
 }
