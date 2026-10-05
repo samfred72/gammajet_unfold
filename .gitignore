@@ -8,3 +8,6 @@ trees/
 logs/
 # TimingAna study trees copied from SDCC/tg (~2.5 GB) - originals on /sphenix/tg/tg01/jets/samfred/timingana
 claude_checks/jet_timing/timingana/
+# multijet/ build product and scratch output
+multijet/analysis
+multijet/checkhists.root
