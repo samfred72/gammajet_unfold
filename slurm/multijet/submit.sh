@@ -5,13 +5,11 @@
 # previous pass (see multijet/README.md).
 #
 # Usage: bash slurm/multijet/submit.sh [--passes N (2)] [--sims "pythia herwig"] [--no-draw]
-# A sim whose trees are not all in trees/ is skipped with a message.
 # Logs and each pass's output go to logs/slurm/multijet_<timestamp>/.
 set -eo pipefail
 : "${GAMMAJET_UNFOLD:?set GAMMAJET_UNFOLD to the gammajet_unfold checkout (see README.md)}"
 
 HERE="$GAMMAJET_UNFOLD/slurm/multijet"
-TREES="$GAMMAJET_UNFOLD/trees"
 PASSES=2
 SIMS="pythia herwig"
 DRAW=1
@@ -26,32 +24,17 @@ done
 
 # analysis.cc's sim index: 0 = pythia, 1 = herwig
 IDX=()
-USED=()
 for sim in $SIMS; do
   case "$sim" in
-    pythia) i=0 ;;
-    herwig) i=1 ;;
+    pythia) IDX+=(0) ;;
+    herwig) IDX+=(1) ;;
     *) echo "Unknown sim '$sim' (pythia or herwig)" >&2; exit 1 ;;
   esac
-  missing=""
-  for t in Data ${sim}_Jet8 ${sim}_Jet12 ${sim}_Jet20 ${sim}_Jet30; do
-    [[ -f "$TREES/multijet_$t.root" ]] || missing+=" multijet_$t.root"
-  done
-  if [[ -n "$missing" ]]; then
-    echo "Skipping $sim: missing in $TREES:$missing"
-    continue
-  fi
-  IDX+=("$i")
-  USED+=("$sim")
 done
-if [[ ${#IDX[@]} -eq 0 ]]; then
-  echo "No sim has all its trees; nothing submitted." >&2
-  exit 1
-fi
 ARRAY=$(IFS=,; echo "${IDX[*]}")
 
 export MJ_LOGDIR="$GAMMAJET_UNFOLD/logs/slurm/multijet_$(date +%Y%m%d_%H%M%S)"
-export MJ_SIMS="${USED[*]}"
+export MJ_SIMS="$SIMS"
 mkdir -p "$MJ_LOGDIR"
 echo "Sims: $MJ_SIMS   passes: $PASSES   draw: $DRAW"
 echo "Logs: $MJ_LOGDIR"

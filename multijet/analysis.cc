@@ -17,6 +17,7 @@
 #include "TStyle.h"
 #include "TLatex.h"
 #include "TMarker.h"
+#include "TSystem.h"
 #include <vector>
 #include <cmath>
 #include <iomanip>
@@ -109,13 +110,19 @@ int main(int argc, char* argv[]) {
 
   // file setup
   TFile infile(Form("%s/multijet_Data.root", treedir), "READ"); // Data
-  TFile f08(Form("%s/multijet_%s_Jet8.root",  treedir, sim), "READ"); //sim
+  // herwig has no Jet8 sample: that tree is skipped; pythia requires it
+  const char * f08name = Form("%s/multijet_%s_Jet8.root", treedir, sim);
+  TFile * f08 = gSystem->AccessPathName(f08name) ? nullptr : TFile::Open(f08name, "READ");
   TFile f12(Form("%s/multijet_%s_Jet12.root", treedir, sim), "READ"); //sim
   TFile f20(Form("%s/multijet_%s_Jet20.root", treedir, sim), "READ"); //sim
   TFile f30(Form("%s/multijet_%s_Jet30.root", treedir, sim), "READ"); //sim
 
   if (infile.IsZombie()) return 1;
-  if (f08.IsZombie()) return 1;
+  if (!f08 || f08->IsZombie()) {
+    if (!isherwig) return 1;
+    std::cout << "No herwig Jet8 sample: skipping the Jet8 tree" << std::endl;
+    f08 = nullptr;
+  }
   if (f12.IsZombie()) return 1;
   if (f20.IsZombie()) return 1;
   if (f30.IsZombie()) return 1;
@@ -272,7 +279,7 @@ int main(int argc, char* argv[]) {
 
   // tree setup
   TTree* TreeRead = (TTree*) infile.Get("ttree");
-  TTree *t08 = (TTree*) f08.Get("ttree");
+  TTree *t08 = f08 ? (TTree*) f08->Get("ttree") : nullptr;
   TTree *t12 = (TTree*) f12.Get("ttree");
   TTree *t20 = (TTree*) f20.Get("ttree");
   TTree *t30 = (TTree*) f30.Get("ttree");
@@ -286,6 +293,7 @@ int main(int argc, char* argv[]) {
   std::cout << "Running over trees..." << std::endl;
   for (int i = 0; i < ntrees; i++) {
     std::cout << i << "..." << std::endl;
+    if (!intree[i]) continue;
     bool isMC = (i != 0);
     int nJloop = (isMC ? nsystypes : 1);
 
