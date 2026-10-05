@@ -12,9 +12,9 @@
 // have unrelated absolute normalizations (weighted cross-section-scaled MC vs. raw Data
 // event counts) - this is a shape comparison, not an absolute-rate one.
 
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/reweight_utility.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
+#include "../src/ana.h"
+#include "../src/reweight_utility.h"
+#include "../src/drawer.h"
 R__LOAD_LIBRARY(libgammajet_unfold.so)
 
 #include <string>
@@ -89,8 +89,8 @@ void processFile(const std::string & trigger, bool isMC, std::vector<TH1D*> & hx
     std::vector<Accum> & accPt, Reweighter & rw, Long64_t maxEntries = -1) {
 
   std::string fname = isMC ?
-      "/home/samson72/sphnx/gammajet_unfold/trees/gammajet_pythia_" + trigger + ".root" :
-      "/home/samson72/sphnx/gammajet_unfold/trees/gammajet_Data.root";
+      ana::path("trees/gammajet_pythia_") + trigger + ".root" :
+      ana::path("trees/gammajet_Data.root");
   TFile * f = TFile::Open(fname.c_str(), "read");
   if (!f || f->IsZombie()) { std::cout << "Could not open " << fname << std::endl; return; }
   TTree * t = (TTree*)f->Get("towerntup");
@@ -211,7 +211,7 @@ void draw_xj_data_mc(Long64_t maxEntriesPerFile = -1) {
   for (const std::string & trigger : {"Photon5", "Photon10", "Photon20"})
     processFile(trigger, /*isMC=*/true, hxjMC, accMC, rw, maxEntriesPerFile);
 
-  std::string dataFname = "/home/samson72/sphnx/gammajet_unfold/trees/gammajet_Data.root";
+  std::string dataFname = ana::path("trees/gammajet_Data.root");
   bool haveData = !gSystem->AccessPathName(dataFname.c_str()); // AccessPathName returns 0 (false) iff the file exists
   if (haveData) {
     processFile("Data", /*isMC=*/false, hxjData, accData, rw, maxEntriesPerFile);
@@ -227,7 +227,7 @@ void draw_xj_data_mc(Long64_t maxEntriesPerFile = -1) {
         (mMC > 0 && mData > 0) ? mData / mMC : 0) << std::endl;
   }
 
-  std::string pdfPath = "/home/samson72/sphnx/gammajet_unfold/temporary_study/draw_xj_data_mc.pdf";
+  std::string pdfPath = ana::path("temporary_study/draw_xj_data_mc.pdf");
   TCanvas * c = new TCanvas("c_xj_data_mc", "", 700, 600);
   c->SetLeftMargin(.13);
   c->SetBottomMargin(.13);

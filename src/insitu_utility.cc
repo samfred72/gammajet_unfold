@@ -1,5 +1,5 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/insitu_utility.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "insitu_utility.h"
+#include "unfold_utility.h"
 #include <algorithm>
 #include "TFile.h"
 #include "TTree.h"

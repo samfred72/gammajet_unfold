@@ -1,12 +1,12 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/pho_object.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/jet_object.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/reweight_utility.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/insitu_utility.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "../../src/ana.h"
+#include "../../src/drawer.h"
+#include "../../src/pho_object.h"
+#include "../../src/jet_object.h"
+#include "../../src/reweight_utility.h"
+#include "../../src/insitu_utility.h"
+#include "../../src/unfold_utility.h"
 // Reuse the production purity solver itself (leakage-corrected ABCD quadratic + bootstrap).
-#include "/home/samson72/sphnx/gammajet_unfold/macros/puritymaker.C"
+#include "../../macros/puritymaker.C"
 // Explicit load; run interpreted, never with ACLiC "+" (sibling libgammajet.so collision).
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
@@ -151,7 +151,7 @@ void insitu_eta07()
     cout << fname << " done" << endl;
   };
 
-  const string tdir = "/home/samson72/sphnx/gammajet_unfold/trees/";
+  const string tdir = ana::path("trees/");
   process((tdir + "gammajet_Data.root").c_str(), false, 1, 0, 0);
   process((tdir + "gammajet_pythia_Photon5.root").c_str(),  true, 146359.3,  0, 12);
   process((tdir + "gammajet_pythia_Photon10.root").c_str(), true, 6944.675, 12, 24);
@@ -168,7 +168,7 @@ void insitu_eta07()
 
   // ---------------- validation (nominal) ----------------
   map<int,double> photon_scale = {{5,146359.3},{10,6944.675},{20,130.4461}};
-  const char * inDir = "/home/samson72/sphnx/gammajet_unfold/insitu/inputs";
+  const char * inDir = ana::path("insitu/inputs");
   printf("\nValidation (nominal selection) vs committed insitu inputs:\n");
   for (int ir = 0; ir < nR; ir++) {
     string dataFile = insitu_utility::insituFilename(inDir, "Data", "", "nominal");
@@ -189,7 +189,7 @@ void insitu_eta07()
   // ---------------- purities ----------------
   float P[nSel][nR][nPt], PC[nSel][nR][nPt];
   drawer d("pythia", "nominal");
-  string outdir = "/home/samson72/sphnx/gammajet_unfold/claude_checks/purity/pdfs";
+  string outdir = ana::path("claude_checks/purity/pdfs");
   TFile * fout = TFile::Open((outdir + "/insitu_eta07.root").c_str(), "recreate");
   for (int ir = 0; ir < nR; ir++) {
     for (int p = 0; p < nPt; p++) {

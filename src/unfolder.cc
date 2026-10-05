@@ -109,7 +109,7 @@ void unfolder::fill_matrix() {
 
   TCanvas * c = new TCanvas("c","",500,1000);
   gStyle->SetOptStat(0);
-  if (dodraw) c->SaveAs(Form("/home/samson72/sphnx/gammajet_unfold/pdfs/event_displays_%s.pdf[",trigger.c_str()));
+  if (dodraw) c->SaveAs(Form("%s/pdfs/event_displays_%s.pdf[", ana::dir(),trigger.c_str()));
   int ndraw = 0;
 
   for (Long64_t e = 0; e < nentries; e++) {
@@ -565,12 +565,12 @@ void unfolder::fill_matrix() {
           if (!ispaired_truth[ir]) latex.DrawLatex(0.3,0.9,"Truth Failed");
 
           ndraw++;
-          c->SaveAs(Form("/home/samson72/sphnx/gammajet_unfold/pdfs/event_displays_%s.pdf",trigger.c_str()));
+          c->SaveAs(Form("%s/pdfs/event_displays_%s.pdf", ana::dir(),trigger.c_str()));
           delete h;
           delete l;
           c->Clear();
 
-          if (ndraw == 100) c->SaveAs(Form("/home/samson72/sphnx/gammajet_unfold/pdfs/event_displays_%s.pdf]",trigger.c_str()));
+          if (ndraw == 100) c->SaveAs(Form("%s/pdfs/event_displays_%s.pdf]", ana::dir(),trigger.c_str()));
         }
       }
     }
@@ -644,8 +644,8 @@ void unfolder::end() {
     insitu_file[isys]->Close();
 
     const string & systag = systags[isys];
-    const char * wfilename = Form("/home/samson72/sphnx/gammajet_unfold/hists/%s_%s_%s_unfolding.root",trigger.c_str(),sim.c_str(),systag.c_str());
-    if (!isMC) wfilename = Form("/home/samson72/sphnx/gammajet_unfold/hists/%s_%s_unfolding.root",trigger.c_str(),systag.c_str());
+    const char * wfilename = Form("%s/hists/%s_%s_%s_unfolding.root", ana::dir(),trigger.c_str(),sim.c_str(),systag.c_str());
+    if (!isMC) wfilename = Form("%s/hists/%s_%s_unfolding.root", ana::dir(),trigger.c_str(),systag.c_str());
     cout << "Writing files to " << wfilename << endl;
     TFile * fout = TFile::Open(wfilename, "RECREATE");
 

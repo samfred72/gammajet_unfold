@@ -1,8 +1,8 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfolder.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/reweight_utility.h"
+#include "../src/ana.h"
+#include "../src/drawer.h"
+#include "../src/unfolder.h"
+#include "../src/unfold_utility.h"
+#include "../src/reweight_utility.h"
 // The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
 // into /home/samson72/root/lib/libgammajet.so, sitting on the same library search path
 // as this project's libgammajet_unfold.so. Without forcing which one loads first, ROOT's
@@ -656,7 +656,7 @@ void drawMeanXjVsPtPage(TCanvas * c, const char * pdfPath, const vector<EmfracEv
 void draw_emfrac_xj() {
   gStyle->SetOptStat(0);
   TH1::AddDirectory(kFALSE);
-  const char * pdfPath = "/home/samson72/sphnx/gammajet_unfold/pdfs/draw_emfrac_xj.pdf";
+  const char * pdfPath = ana::path("pdfs/draw_emfrac_xj.pdf");
 
   vector<string> commonFeatures = {
       Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV", singleBinPtLo, singleBinPtHi),

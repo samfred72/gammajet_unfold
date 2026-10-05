@@ -1,6 +1,6 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "../src/ana.h"
+#include "../src/drawer.h"
+#include "../src/unfold_utility.h"
 #include "RooUnfoldResponse.h"
 #include "RooUnfoldBayes.h"
 #include "TDecompSVD.h"
@@ -74,8 +74,8 @@ void draw_covariance_chi2(string systag = "nominal") {
   gStyle->SetOptStat(0);
 
   drawer d("pythia", systag);
-  string pdfPath  = Form("/home/samson72/sphnx/gammajet_unfold/pdfs/draw_covariance_chi2_%s.pdf", systag.c_str());
-  string rootPath = Form("/home/samson72/sphnx/gammajet_unfold/hists/covariance_chi2_%s.root", systag.c_str());
+  string pdfPath  = Form("%s/pdfs/draw_covariance_chi2_%s.pdf", ana::dir(), systag.c_str());
+  string rootPath = Form("%s/hists/covariance_chi2_%s.root", ana::dir(), systag.c_str());
 
   TH1D * respRecoTemplate  = d.get(Form("hrecoxj%i",ir), 1);
   TH1D * respTruthTemplate = d.get(Form("htruthxj%i",ir), 1);

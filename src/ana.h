@@ -19,6 +19,11 @@ using namespace std;
 
 class ana {
   public :
+    // Repository root ($GAMMAJET_UNFOLD); exits if unset.
+    static const char * dir();
+    // dir() + "/" + rel, valid for the whole program (usable wherever a string literal was).
+    static const char * path(const std::string & rel);
+
     ana();
     ~ana() = default;
 

@@ -1,7 +1,7 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/pho_object.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/jet_object.h"
+#include "../../src/ana.h"
+#include "../../src/drawer.h"
+#include "../../src/pho_object.h"
+#include "../../src/jet_object.h"
 // Explicit load - see drawing/draw_final_result.C: the sibling gammajet project's
 // libgammajet.so has same-named classes, and implicit autoload can bind to it. Run
 // interpreted (root -b -q draw_jet_timing.C), never with ACLiC "+".
@@ -83,7 +83,7 @@ void draw_jet_timing(int ir = 2)
   gStyle->SetOptTitle(0);
   TH1::SetDefaultSumw2();
 
-  TFile * fin = TFile::Open("/home/samson72/sphnx/gammajet_unfold/trees/gammajet_Data.root", "read");
+  TFile * fin = TFile::Open(ana::path("trees/gammajet_Data.root"), "read");
   TTree * t = (TTree*)fin->Get("towerntup");
 
   float vz, mbd_time, cluster_pt, cluster_e, cluster_eta, cluster_phi, cluster_time;
@@ -250,7 +250,7 @@ void draw_jet_timing(int ir = 2)
   drawer d("pythia", "nominal"); // ctor args only pick files for other helpers; labels come from drawAll
   string rLabel = Form("Jet R=%.1f, p_{T}^{jet} > %.0f GeV", ana::JetRs[ir], ana::jet_calib_pt_cut[ir]);
   string phoLabel = Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV", phoLow, phoHigh);
-  string outdir = "/home/samson72/sphnx/gammajet_unfold/claude_checks/jet_timing/pdfs";
+  string outdir = ana::path("claude_checks/jet_timing/pdfs");
   gSystem->mkdir(outdir.c_str(), true);
   string pdf = outdir + Form("/draw_jet_timing_r%02d.pdf", (int)(ana::JetRs[ir]*10+0.5));
   TCanvas * c = new TCanvas("c", "", 700, 600);

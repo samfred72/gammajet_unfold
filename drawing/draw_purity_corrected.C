@@ -1,6 +1,6 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "../src/ana.h"
+#include "../src/drawer.h"
+#include "../src/unfold_utility.h"
 #include "RooUnfoldResponse.h"
 #include "RooUnfoldBayes.h"
 // The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
@@ -392,9 +392,9 @@ void draw_purity_corrected(string systag = "nominal") {
   gStyle->SetOptStat(0);
 
   drawer d("pythia", systag);
-  string purityRootPath     = Form("/home/samson72/sphnx/gammajet_unfold/hists/purity_corrected_%s.root", systag.c_str());
-  string purityPdfPath      = Form("/home/samson72/sphnx/gammajet_unfold/pdfs/purity_corrected_%s.pdf", systag.c_str());
-  string iterationsPdfPath  = Form("/home/samson72/sphnx/gammajet_unfold/pdfs/purity_corrected_iterations_%s.pdf", systag.c_str());
+  string purityRootPath     = Form("%s/hists/purity_corrected_%s.root", ana::dir(), systag.c_str());
+  string purityPdfPath      = Form("%s/pdfs/purity_corrected_%s.pdf", ana::dir(), systag.c_str());
+  string iterationsPdfPath  = Form("%s/pdfs/purity_corrected_iterations_%s.pdf", ana::dir(), systag.c_str());
 
   TFile * fout = TFile::Open(purityRootPath.c_str(),"RECREATE");
   TCanvas * c = new TCanvas("c","",700,700);

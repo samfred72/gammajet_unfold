@@ -1,7 +1,7 @@
 #ifndef INSITU_UTILITY_H
 #define INSITU_UTILITY_H
 
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
+#include "ana.h"
 #include <vector>
 #include <string>
 #include "TGraph.h"

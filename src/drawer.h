@@ -1,7 +1,7 @@
 #ifndef DRAWER_H
 #define DRAWER_H
 
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
+#include "ana.h"
 #include <string>
 #include <vector>
 #include "TLatex.h"
@@ -19,17 +19,17 @@ class drawer {
     // reprocessing instead (see the unfolder constructor comment in src/unfolder.h for
     // the full list).
     drawer(string sim = "pythia", string systag = "nominal") : systag(systag) {
-      TFile * f = TFile::Open(Form("/home/samson72/sphnx/gammajet_unfold/hists/Data_%s_unfolding.root", systag.c_str()));
-      TFile * f05_p = TFile::Open(Form("/home/samson72/sphnx/gammajet_unfold/hists/%s_%s_%s_unfolding.root","Photon5" , sim.c_str(), systag.c_str()));
-      TFile * f10_p = TFile::Open(Form("/home/samson72/sphnx/gammajet_unfold/hists/%s_%s_%s_unfolding.root","Photon10", sim.c_str(), systag.c_str()));
-      TFile * f20_p = TFile::Open(Form("/home/samson72/sphnx/gammajet_unfold/hists/%s_%s_%s_unfolding.root","Photon20", sim.c_str(), systag.c_str()));
-      TFile * f08_j = TFile::Open(Form("/home/samson72/sphnx/gammajet_unfold/hists/%s_%s_%s_unfolding.root","Jet8"    , sim.c_str(), systag.c_str()));
-      TFile * f12_j = TFile::Open(Form("/home/samson72/sphnx/gammajet_unfold/hists/%s_%s_%s_unfolding.root","Jet12"   , sim.c_str(), systag.c_str()));
-      TFile * f20_j = TFile::Open(Form("/home/samson72/sphnx/gammajet_unfold/hists/%s_%s_%s_unfolding.root","Jet20"   , sim.c_str(), systag.c_str()));
-      TFile * f30_j = TFile::Open(Form("/home/samson72/sphnx/gammajet_unfold/hists/%s_%s_%s_unfolding.root","Jet30"   , sim.c_str(), systag.c_str()));
-      TFile * f50_j = TFile::Open(Form("/home/samson72/sphnx/gammajet_unfold/hists/%s_%s_%s_unfolding.root","Jet50"   , sim.c_str(), systag.c_str()));
-      TFile * f60_j = TFile::Open(Form("/home/samson72/sphnx/gammajet_unfold/hists/%s_%s_%s_unfolding.root","Jet60"   , sim.c_str(), systag.c_str()));
-      TFile * f80_j = TFile::Open(Form("/home/samson72/sphnx/gammajet_unfold/hists/%s_%s_%s_unfolding.root","Jet80"   , sim.c_str(), systag.c_str()));
+      TFile * f = TFile::Open(Form("%s/hists/Data_%s_unfolding.root", ana::dir(), systag.c_str()));
+      TFile * f05_p = TFile::Open(Form("%s/hists/%s_%s_%s_unfolding.root", ana::dir(),"Photon5" , sim.c_str(), systag.c_str()));
+      TFile * f10_p = TFile::Open(Form("%s/hists/%s_%s_%s_unfolding.root", ana::dir(),"Photon10", sim.c_str(), systag.c_str()));
+      TFile * f20_p = TFile::Open(Form("%s/hists/%s_%s_%s_unfolding.root", ana::dir(),"Photon20", sim.c_str(), systag.c_str()));
+      TFile * f08_j = TFile::Open(Form("%s/hists/%s_%s_%s_unfolding.root", ana::dir(),"Jet8"    , sim.c_str(), systag.c_str()));
+      TFile * f12_j = TFile::Open(Form("%s/hists/%s_%s_%s_unfolding.root", ana::dir(),"Jet12"   , sim.c_str(), systag.c_str()));
+      TFile * f20_j = TFile::Open(Form("%s/hists/%s_%s_%s_unfolding.root", ana::dir(),"Jet20"   , sim.c_str(), systag.c_str()));
+      TFile * f30_j = TFile::Open(Form("%s/hists/%s_%s_%s_unfolding.root", ana::dir(),"Jet30"   , sim.c_str(), systag.c_str()));
+      TFile * f50_j = TFile::Open(Form("%s/hists/%s_%s_%s_unfolding.root", ana::dir(),"Jet50"   , sim.c_str(), systag.c_str()));
+      TFile * f60_j = TFile::Open(Form("%s/hists/%s_%s_%s_unfolding.root", ana::dir(),"Jet60"   , sim.c_str(), systag.c_str()));
+      TFile * f80_j = TFile::Open(Form("%s/hists/%s_%s_%s_unfolding.root", ana::dir(),"Jet80"   , sim.c_str(), systag.c_str()));
 
       dfiles[0] = f;
 

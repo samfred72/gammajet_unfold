@@ -1,6 +1,6 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/insitu_utility.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "../src/ana.h"
+#include "../src/insitu_utility.h"
+#include "../src/unfold_utility.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -46,9 +46,9 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 // insitu/ is split into inputs/ (the raw Data/Photon insitu ntuples, written by
 // unfolder.h's production pipeline), output/ (this and the other grid_insitu*.C
 // macros' own .root output), and pdfs/ (their .pdf output).
-const char * insitu_input_dir  = "/home/samson72/sphnx/gammajet_unfold/insitu/inputs";
-const char * insitu_output_dir = "/home/samson72/sphnx/gammajet_unfold/insitu/output";
-const char * insitu_pdf_dir    = "/home/samson72/sphnx/gammajet_unfold/insitu/pdfs";
+const char * insitu_input_dir  = ana::path("insitu/inputs");
+const char * insitu_output_dir = ana::path("insitu/output");
+const char * insitu_pdf_dir    = ana::path("insitu/pdfs");
 
 // Only ana::ptBinsUsed (15-20, 20-25, 25-35 GeV) is used for every calculation and
 // plot below - same restriction as grid_insitu.C (see ana.h's

@@ -1,6 +1,6 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/insitu_utility.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "../src/ana.h"
+#include "../src/insitu_utility.h"
+#include "../src/unfold_utility.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -64,9 +64,9 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 // insitu/ is split into inputs/ (the raw Data/Photon insitu ntuples, written by
 // unfolder.h's production pipeline), output/ (this and the other grid_insitu*.C
 // macros' own .root output), and pdfs/ (their .pdf output).
-const char * insitu_input_dir  = "/home/samson72/sphnx/gammajet_unfold/insitu/inputs";
-const char * insitu_output_dir = "/home/samson72/sphnx/gammajet_unfold/insitu/output";
-const char * insitu_pdf_dir    = "/home/samson72/sphnx/gammajet_unfold/insitu/pdfs";
+const char * insitu_input_dir  = ana::path("insitu/inputs");
+const char * insitu_output_dir = ana::path("insitu/output");
+const char * insitu_pdf_dir    = ana::path("insitu/pdfs");
 
 // Only ana::ptBinsUsed (15-20, 20-25, 25-35 GeV) is used for every calculation and
 // plot below - both the low-pT migration-only buffer bin (13-15 GeV, ana::ptBins[0])
@@ -83,7 +83,7 @@ map<int,double> photon_scale = {{5,146359.3},{10,6944.675},{20,130.4461}};
 // (multijet_analysis_pythia.root). The multijet event selection and MC weighting
 // (cross sections, pT-hat stitching, leading-pT and z-vertex reweighting) are all
 // analysis.cc's - this macro only reads its per-radius trees.
-string multijet_analysis_dir = "/home/samson72/sphnx/gammajet_unfold/multijet"; // non-const so a test can point it elsewhere
+string multijet_analysis_dir = ana::path("multijet"); // non-const so a test can point it elsewhere
 // Linear-JES grid (combined mode): pa over the same window as the 1D scan but coarser
 // (2D grid cost), pb over +-0.005/GeV (1e-4 steps). 1-sigma region: delta-chi2 < 2.30
 // (two parameters).

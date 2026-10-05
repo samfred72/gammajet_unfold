@@ -1,6 +1,6 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "../src/ana.h"
+#include "../src/drawer.h"
+#include "../src/unfold_utility.h"
 #include "RooUnfoldResponse.h"
 #include "RooUnfoldBayes.h"
 // The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
@@ -179,8 +179,8 @@ void draw_nonclosure() {
   gStyle->SetOptStat(0);
 
   drawer d("pythia", "nominal");
-  string pdfPath  = "/home/samson72/sphnx/gammajet_unfold/pdfs/draw_nonclosure.pdf";
-  string rootPath = "/home/samson72/sphnx/gammajet_unfold/hists/nonclosure.root";
+  string pdfPath  = ana::path("pdfs/draw_nonclosure.pdf");
+  string rootPath = ana::path("hists/nonclosure.root");
 
   // Nominal response matrix - full, cross-section-weighted combination of Photon5/10/20,
   // same construction as draw_refolding.C/draw_purity_corrected.C.

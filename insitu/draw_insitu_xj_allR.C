@@ -1,6 +1,6 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/insitu_utility.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "../src/ana.h"
+#include "../src/insitu_utility.h"
+#include "../src/unfold_utility.h"
 #include <string>
 #include <vector>
 #include "TFile.h"
@@ -42,9 +42,9 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 // Usage: root -b -l -q 'draw_insitu_xj_allR.C("nominal")'
 // Output: insitu/pdfs/insitu_xj_allR_<systag>.pdf, insitu/output/insitu_xj_allR_<systag>.root
 
-const char * insitu_input_dir  = "/home/samson72/sphnx/gammajet_unfold/insitu/inputs";
-const char * insitu_output_dir = "/home/samson72/sphnx/gammajet_unfold/insitu/output";
-const char * insitu_pdf_dir    = "/home/samson72/sphnx/gammajet_unfold/insitu/pdfs";
+const char * insitu_input_dir  = ana::path("insitu/inputs");
+const char * insitu_output_dir = ana::path("insitu/output");
+const char * insitu_pdf_dir    = ana::path("insitu/pdfs");
 
 // Same cross-section weights as draw_insitu_xj.C / drawer.h's scalemap for sim="pythia".
 map<int,double> photon_scale = {{5,146359.3},{10,6944.675},{20,130.4461}};

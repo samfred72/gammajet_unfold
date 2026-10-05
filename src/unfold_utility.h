@@ -1,7 +1,7 @@
 #ifndef UNFOLD_UTILITY_H
 #define UNFOLD_UTILITY_H
 
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
+#include "ana.h"
 #include "TH1D.h"
 #include "TH2D.h"
 #include "TGraphAsymmErrors.h"

@@ -18,9 +18,9 @@
 // identical normalization comment. The legend's <x_J> is the exact unbinned mean (Accum),
 // not TH1::GetMean() on the density-scaled histogram, for the same reason.
 
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "../src/ana.h"
+#include "../src/drawer.h"
+#include "../src/unfold_utility.h"
 R__LOAD_LIBRARY(libgammajet_unfold.so)
 
 #include <string>
@@ -109,7 +109,7 @@ void draw_xj_data_purity(Long64_t maxEntries = -1) {
     hC[ip] = new TH1D(Form("hxjRegionC_pt%d", ip), "", nb, edges);
   }
 
-  std::string fname = "/home/samson72/sphnx/gammajet_unfold/trees/gammajet_Data.root";
+  std::string fname = ana::path("trees/gammajet_Data.root");
   TFile * f = TFile::Open(fname.c_str(), "read");
   if (!f || f->IsZombie()) { std::cout << "Could not open " << fname << std::endl; return; }
   TTree * t = (TTree*)f->Get("towerntup");
@@ -224,7 +224,7 @@ void draw_xj_data_purity(Long64_t maxEntries = -1) {
         (mRaw > 0 && mCorr != 0) ? mCorr / mRaw : 0) << std::endl;
   }
 
-  std::string pdfPath = "/home/samson72/sphnx/gammajet_unfold/temporary_study/draw_xj_data_purity.pdf";
+  std::string pdfPath = ana::path("temporary_study/draw_xj_data_purity.pdf");
   TCanvas * c = new TCanvas("c_xj_data_purity", "", 700, 600);
   c->SetLeftMargin(.13);
   c->SetBottomMargin(.13);

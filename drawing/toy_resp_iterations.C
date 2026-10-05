@@ -1,6 +1,6 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "../src/ana.h"
+#include "../src/drawer.h"
+#include "../src/unfold_utility.h"
 #include "RooUnfoldResponse.h"
 #include "RooUnfoldBayes.h"
 // The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
@@ -71,7 +71,7 @@ void toy_resp_iterations(string systag = "nominal") {
   gRandom->SetSeed(12345);
 
   drawer d("pythia", systag);
-  string pdfPath = Form("/home/samson72/sphnx/gammajet_unfold/pdfs/toy_resp_iterations_%s.pdf", systag.c_str());
+  string pdfPath = Form("%s/pdfs/toy_resp_iterations_%s.pdf", ana::dir(), systag.c_str());
 
   // Response matrix: full, cross-section-weighted combination of Photon5/10/20 - same
   // construction as draw_purity_corrected.C / draw_iteration_halfclosure.C.
@@ -338,15 +338,15 @@ void toy_resp_iterations(string systag = "nominal") {
   // ".toy_data_chi2_data.root" file - whichever of the two macros runs second picks up
   // both and produces the full four-curve comparison; running only one still produces a
   // valid (partial) plot.
-  string respChi2DataFile = Form("/home/samson72/sphnx/gammajet_unfold/pdfs/.toy_resp_chi2_data_%s.root", systag.c_str());
-  string dataChi2DataFile = Form("/home/samson72/sphnx/gammajet_unfold/pdfs/.toy_data_chi2_data_%s.root", systag.c_str());
-  string chi2PdfPath      = Form("/home/samson72/sphnx/gammajet_unfold/pdfs/toy_iterations_chi2_%s.pdf", systag.c_str());
+  string respChi2DataFile = Form("%s/pdfs/.toy_resp_chi2_data_%s.root", ana::dir(), systag.c_str());
+  string dataChi2DataFile = Form("%s/pdfs/.toy_data_chi2_data_%s.root", ana::dir(), systag.c_str());
+  string chi2PdfPath      = Form("%s/pdfs/toy_iterations_chi2_%s.pdf", ana::dir(), systag.c_str());
   TFile * fOut = TFile::Open(respChi2DataFile.c_str(), "RECREATE");
   gToyChi2->Write("gToy");
   gPairChi2->Write("gPair");
   fOut->Close();
   gSystem->Exec(Form(
-    "cd /home/samson72/sphnx/gammajet_unfold/drawing && root -b -l -q 'plot_toy_chi2_combined.C(\"%s\",\"%s\",\"%s\",\"Jet R=%.1f\")'",
+    "cd $GAMMAJET_UNFOLD/drawing && root -b -l -q 'plot_toy_chi2_combined.C(\"%s\",\"%s\",\"%s\",\"Jet R=%.1f\")'",
     respChi2DataFile.c_str(), dataChi2DataFile.c_str(), chi2PdfPath.c_str(), ana::JetRs[ir]));
 
   cout << "Done. Wrote " << pdfPath << " and " << chi2PdfPath << endl;

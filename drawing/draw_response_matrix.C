@@ -1,5 +1,5 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
+#include "../src/ana.h"
+#include "../src/drawer.h"
 // The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
 // into /home/samson72/root/lib/libgammajet.so, sitting on the same library search path
 // as this project's libgammajet_unfold.so. Without forcing which one loads first, ROOT's
@@ -22,7 +22,7 @@ void draw_response_matrix(string systag = "nominal") {
   gStyle->SetPalette(kBird);
 
   drawer d("pythia", systag);
-  string pdfPath = Form("/home/samson72/sphnx/gammajet_unfold/pdfs/draw_response_matrix_%s.pdf", systag.c_str());
+  string pdfPath = Form("%s/pdfs/draw_response_matrix_%s.pdf", ana::dir(), systag.c_str());
 
   TH2D * hResponse = d.get2d(Form("hxjresponse%i", ir), 1);
 

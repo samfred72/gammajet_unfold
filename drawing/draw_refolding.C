@@ -1,6 +1,6 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "../src/ana.h"
+#include "../src/drawer.h"
+#include "../src/unfold_utility.h"
 #include "RooUnfoldResponse.h"
 #include "RooUnfoldBayes.h"
 // The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
@@ -100,8 +100,8 @@ void draw_refolding(string systag = "nominal") {
   gStyle->SetOptStat(0);
 
   drawer d("pythia", systag);
-  string pdfPath  = Form("/home/samson72/sphnx/gammajet_unfold/pdfs/draw_refolding_%s.pdf", systag.c_str());
-  string rootPath = Form("/home/samson72/sphnx/gammajet_unfold/hists/refolding_%s.root", systag.c_str());
+  string pdfPath  = Form("%s/pdfs/draw_refolding_%s.pdf", ana::dir(), systag.c_str());
+  string rootPath = Form("%s/hists/refolding_%s.root", ana::dir(), systag.c_str());
 
   // Response matrix: full, cross-section-weighted combination of Photon5/10/20 - same
   // construction as draw_purity_corrected.C/draw_final_result.C. Built explicitly here

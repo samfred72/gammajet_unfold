@@ -1,6 +1,6 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "../src/ana.h"
+#include "../src/drawer.h"
+#include "../src/unfold_utility.h"
 #include "RooUnfoldResponse.h"
 #include "RooUnfoldBayes.h"
 // The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
@@ -59,7 +59,7 @@ void draw_iteration_halfclosure(string systag = "nominal") {
   gStyle->SetOptStat(0);
 
   drawer d("pythia", systag);
-  string pdfPath = Form("/home/samson72/sphnx/gammajet_unfold/pdfs/iteration_halfclosure_%s.pdf", systag.c_str());
+  string pdfPath = Form("%s/pdfs/iteration_halfclosure_%s.pdf", ana::dir(), systag.c_str());
 
   // Response matrix: the full, cross-section-weighted combination of Photon5/10/20
   // (type=1, isample=-1 default), same construction as drawing/draw_purity_corrected.C -

@@ -1,5 +1,5 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/insitu_utility.h"
+#include "../src/ana.h"
+#include "../src/insitu_utility.h"
 #include <string>
 #include <vector>
 #include <cfloat>
@@ -47,9 +47,9 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 // used for both the fixed "sim" reference (pa=1, called once) and the "data" scan
 // (called once per trial pa).
 
-const char * closure_input_dir  = "/home/samson72/sphnx/gammajet_unfold/insitu_closure/inputs";
-const char * closure_output_dir = "/home/samson72/sphnx/gammajet_unfold/insitu_closure/output";
-const char * closure_pdf_dir    = "/home/samson72/sphnx/gammajet_unfold/insitu_closure/pdfs";
+const char * closure_input_dir  = ana::path("insitu_closure/inputs");
+const char * closure_output_dir = ana::path("insitu_closure/output");
+const char * closure_pdf_dir    = ana::path("insitu_closure/pdfs");
 
 const int nPtBinsUsed = ana::nPtBinsUsed;
 

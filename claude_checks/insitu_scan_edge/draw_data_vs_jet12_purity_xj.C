@@ -1,7 +1,7 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/insitu_utility.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "../../src/ana.h"
+#include "../../src/drawer.h"
+#include "../../src/insitu_utility.h"
+#include "../../src/unfold_utility.h"
 // Explicit load; run interpreted, never with ACLiC "+" (sibling libgammajet.so collision).
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
@@ -55,10 +55,10 @@ void draw_data_vs_jet12_purity_xj()
 
   const int irs[3] = {0, 1, 2};
   const int nR = 3, nPt = ana::nPtBinsUsed;
-  const char * inDir = "/home/samson72/sphnx/gammajet_unfold/insitu/inputs";
+  const char * inDir = ana::path("insitu/inputs");
   const char * systag = "nominal";
   map<int,double> photon_scale = {{5,146359.3},{10,6944.675},{20,130.4461}}; // = grid_insitu.C
-  string outdir = "/home/samson72/sphnx/gammajet_unfold/claude_checks/insitu_scan_edge/pdfs";
+  string outdir = ana::path("claude_checks/insitu_scan_edge/pdfs");
   TFile * fj = TFile::Open((outdir + "/draw_jet12_purity_corrected_xj.root").c_str(), "read");
   if (!fj || fj->IsZombie()) { cout << "Run draw_jet12_purity_corrected_xj.C first." << endl; return; }
 

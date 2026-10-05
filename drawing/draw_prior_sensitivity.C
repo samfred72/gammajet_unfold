@@ -1,6 +1,6 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "../src/ana.h"
+#include "../src/drawer.h"
+#include "../src/unfold_utility.h"
 #include "RooUnfoldResponse.h"
 #include "RooUnfoldBayes.h"
 // The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
@@ -172,10 +172,10 @@ void draw_prior_sensitivity(string systag = "nominal", int jetRadiusIndex = 2) {
   // ir==2 (R=0.4) keeps the original, un-suffixed filenames - draw_systematics.C's
   // ir==2 default reads these exact paths; every other radius gets its own file, same
   // convention as draw_systematics.C's systematics.root vs systematics_R0X.root.
-  string pdfPath  = (ir == 2) ? Form("/home/samson72/sphnx/gammajet_unfold/pdfs/draw_prior_sensitivity_%s.pdf", systag.c_str())
-                              : Form("/home/samson72/sphnx/gammajet_unfold/pdfs/draw_prior_sensitivity_%s_%s.pdf", systag.c_str(), ana::rnames[ir]);
-  string rootPath = (ir == 2) ? Form("/home/samson72/sphnx/gammajet_unfold/hists/prior_sensitivity_%s.root", systag.c_str())
-                              : Form("/home/samson72/sphnx/gammajet_unfold/hists/prior_sensitivity_%s_%s.root", systag.c_str(), ana::rnames[ir]);
+  string pdfPath  = (ir == 2) ? Form("%s/pdfs/draw_prior_sensitivity_%s.pdf", ana::dir(), systag.c_str())
+                              : Form("%s/pdfs/draw_prior_sensitivity_%s_%s.pdf", ana::dir(), systag.c_str(), ana::rnames[ir]);
+  string rootPath = (ir == 2) ? Form("%s/hists/prior_sensitivity_%s.root", ana::dir(), systag.c_str())
+                              : Form("%s/hists/prior_sensitivity_%s_%s.root", ana::dir(), systag.c_str(), ana::rnames[ir]);
 
   // Response matrix + purity-corrected Data - same construction as draw_refolding.C/
   // draw_purity_corrected.C.

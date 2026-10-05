@@ -1,3 +1,5 @@
+#include "../src/ana.h"
+R__LOAD_LIBRARY(libgammajet_unfold.so);
 // Standalone helper: reads the response-matrix-toy and Data-toy chi2/NDF graphs (each
 // written to its own small ROOT file by toy_resp_iterations.C / toy_data_iterations.C)
 // and renders all of: response-matrix toy, Data toy, their quadrature sum, and the real
@@ -23,9 +25,9 @@
 // root -b -l -q plot_toy_chi2_combined.C. For a systematic variation, pass its three
 // paths explicitly (as toy_resp/data_iterations.C's own gSystem->Exec calls already do).
 void plot_toy_chi2_combined(
-    const char * respFile = "/home/samson72/sphnx/gammajet_unfold/pdfs/.toy_resp_chi2_data_nominal.root",
-    const char * dataFile = "/home/samson72/sphnx/gammajet_unfold/pdfs/.toy_data_chi2_data_nominal.root",
-    const char * outPdf   = "/home/samson72/sphnx/gammajet_unfold/pdfs/toy_iterations_chi2_nominal.pdf",
+    const char * respFile = ana::path("pdfs/.toy_resp_chi2_data_nominal.root"),
+    const char * dataFile = ana::path("pdfs/.toy_data_chi2_data_nominal.root"),
+    const char * outPdf   = ana::path("pdfs/toy_iterations_chi2_nominal.pdf"),
     const char * subtitle = "Jet R=0.4") {
   gStyle->SetOptStat(0);
   gStyle->SetOptTitle(0);

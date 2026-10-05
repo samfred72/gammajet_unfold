@@ -1,6 +1,6 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "../src/ana.h"
+#include "../src/drawer.h"
+#include "../src/unfold_utility.h"
 #include "RooUnfoldResponse.h"
 #include "RooUnfoldBayes.h"
 // The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
@@ -277,10 +277,10 @@ void draw_systematics(int jetRadiusIndex = 2) {
   gStyle->SetOptStat(0);
 
   ir = jetRadiusIndex;
-  pdfPathStr  = (ir == 2) ? "/home/samson72/sphnx/gammajet_unfold/pdfs/draw_systematics.pdf"
-                          : Form("/home/samson72/sphnx/gammajet_unfold/pdfs/draw_systematics_%s.pdf", ana::rnames[ir]);
-  rootPathStr = (ir == 2) ? "/home/samson72/sphnx/gammajet_unfold/hists/systematics.root"
-                          : Form("/home/samson72/sphnx/gammajet_unfold/hists/systematics_%s.root", ana::rnames[ir]);
+  pdfPathStr  = (ir == 2) ? ana::path("pdfs/draw_systematics.pdf")
+                          : Form("%s/pdfs/draw_systematics_%s.pdf", ana::dir(), ana::rnames[ir]);
+  rootPathStr = (ir == 2) ? ana::path("hists/systematics.root")
+                          : Form("%s/hists/systematics_%s.root", ana::dir(), ana::rnames[ir]);
   pdfPath  = pdfPathStr.c_str();
   rootPath = rootPathStr.c_str();
 
@@ -312,8 +312,8 @@ void draw_systematics(int jetRadiusIndex = 2) {
   // than reprocessing anything - see the header comment and drawing/draw_prior_sensitivity.C.
   // Must match the CURRENT radius (ir) - draw_prior_sensitivity.C's own response matrices
   // are radius-specific, so its output file is too (ir==2 keeps the un-suffixed name).
-  string priorSensPathStr = (ir == 2) ? "/home/samson72/sphnx/gammajet_unfold/hists/prior_sensitivity_nominal.root"
-                                      : Form("/home/samson72/sphnx/gammajet_unfold/hists/prior_sensitivity_nominal_%s.root", ana::rnames[ir]);
+  string priorSensPathStr = (ir == 2) ? ana::path("hists/prior_sensitivity_nominal.root")
+                                      : Form("%s/hists/prior_sensitivity_nominal_%s.root", ana::dir(), ana::rnames[ir]);
   TFile * fPriorSens = TFile::Open(priorSensPathStr.c_str());
   if (!fPriorSens || fPriorSens->IsZombie())
     cout << "WARNING: couldn't open " << priorSensPathStr << " - run "
@@ -721,7 +721,7 @@ void draw_systematics(int jetRadiusIndex = 2) {
     cs->SetTopMargin(.05);
     cs->SetBottomMargin(.12);
     drawSummaryPanel(iptSingle, true);
-    cs->SaveAs(Form("/home/samson72/sphnx/gammajet_unfold/pdfs/syst_total_%s_pt%.0f_%.0f.pdf", ana::rnames[ir],
+    cs->SaveAs(Form("%s/pdfs/syst_total_%s_pt%.0f_%.0f.pdf", ana::dir(), ana::rnames[ir],
                     ana::ptBins[iptSingle], ana::ptBins[iptSingle+1]));
     c->cd();
   }

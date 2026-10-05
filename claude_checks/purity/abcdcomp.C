@@ -1,9 +1,9 @@
 R__LOAD_LIBRARY(libgammajet_unfold.so);
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
+#include "../../src/ana.h"
+#include "../../src/drawer.h"
 void abcdcomp(){
-  TFile*fd=TFile::Open("/home/samson72/sphnx/gammajet_unfold/hists/Data_nominal_unfolding.root");
-  TFile*fj=TFile::Open("/home/samson72/sphnx/gammajet_unfold/hists/Jet12_long_pythia_nominal_unfolding.root");
+  TFile*fd=TFile::Open(ana::path("hists/Data_nominal_unfolding.root"));
+  TFile*fj=TFile::Open(ana::path("hists/Jet12_long_pythia_nominal_unfolding.root"));
   drawer d("pythia","nominal");
   for(int ir: {0,2}){
     TH1D*hd[4],*hj[4],*hjt[4],*hpt[4];

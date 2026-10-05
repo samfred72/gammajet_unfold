@@ -7,6 +7,20 @@ ground rules (xJ is not bounded, asymmetric-systematic combination convention, e
 and plotting conventions this repo follows - this file is about the *procedure*: what
 to run, in what order, and why.
 
+## Setup
+
+Every macro and script finds the repository through `$GAMMAJET_UNFOLD`, and ROOT finds
+`libgammajet_unfold.so` through `LD_LIBRARY_PATH`. Add to `~/.bashrc`, with the path of
+your checkout:
+
+```bash
+export GAMMAJET_UNFOLD=/path/to/gammajet_unfold
+export LD_LIBRARY_PATH=$GAMMAJET_UNFOLD/src${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+```
+
+Then build with `src/make.sh`. ROOT and RooUnfold (with the local patches described in
+`CLAUDE.md`) must be installed.
+
 ## Layout
 
 | Directory | Contents |

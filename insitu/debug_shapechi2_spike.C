@@ -1,5 +1,5 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/insitu_utility.h"
+#include "../src/ana.h"
+#include "../src/insitu_utility.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -28,8 +28,8 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 // insitu/ is split into inputs/ (the raw Data/Photon insitu ntuples, written by
 // unfolder.h's production pipeline) and pdfs/ (this debug macro's own .pdf output,
 // no .root output).
-const char * insitu_input_dir = "/home/samson72/sphnx/gammajet_unfold/insitu/inputs";
-const char * insitu_pdf_dir   = "/home/samson72/sphnx/gammajet_unfold/insitu/pdfs";
+const char * insitu_input_dir = ana::path("insitu/inputs");
+const char * insitu_pdf_dir   = ana::path("insitu/pdfs");
 const int nPtBinsUsed = ana::nPtBinsUsed;
 // Same explicit low-stat-tail exclusion as grid_insitu_shapechi2.C (see that file's
 // header comment / gammajet_unfold/CLAUDE.md's bin-selection ground rule).

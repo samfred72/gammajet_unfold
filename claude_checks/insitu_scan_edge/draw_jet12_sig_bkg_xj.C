@@ -1,9 +1,9 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/pho_object.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/jet_object.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/reweight_utility.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "../../src/ana.h"
+#include "../../src/drawer.h"
+#include "../../src/pho_object.h"
+#include "../../src/jet_object.h"
+#include "../../src/reweight_utility.h"
+#include "../../src/unfold_utility.h"
 // Explicit load; run interpreted, never with ACLiC "+" (sibling libgammajet.so collision).
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
@@ -71,7 +71,7 @@ void draw_jet12_sig_bkg_xj()
   for (int r = 0; r < nR; r++) for (int p = 0; p < nPt; p++) for (int k = 0; k < kN; k++)
     h[r][p][k] = new TH1D(Form("h_%s_r%d_pt%d", cname[k], irs[r], p), ";x_{J#gamma};(1/N) dN/dx_{J#gamma}", ana::nUnfoldXjBins, ana::unfoldXjBins);
 
-  TFile * fin = TFile::Open("/home/samson72/sphnx/gammajet_unfold/trees/gammajet_pythia_Jet12_long.root", "read");
+  TFile * fin = TFile::Open(ana::path("trees/gammajet_pythia_Jet12_long.root"), "read");
   TTree * t = (TTree*)fin->Get("towerntup");
   float vz, cluster_pt, cluster_e, cluster_eta, cluster_phi, cluster_time;
   float cluster_showershape[12], cluster_bdt_scores[11];
@@ -182,7 +182,7 @@ void draw_jet12_sig_bkg_xj()
 
   // ---------------- drawing ----------------
   drawer d("pythia", "nominal");
-  string outdir = "/home/samson72/sphnx/gammajet_unfold/claude_checks/insitu_scan_edge/pdfs";
+  string outdir = ana::path("claude_checks/insitu_scan_edge/pdfs");
   gSystem->mkdir(outdir.c_str(), true);
   string pdf = outdir + "/draw_jet12_sig_bkg_xj.pdf";
   TCanvas * c = new TCanvas("c", "", 1500, 800);

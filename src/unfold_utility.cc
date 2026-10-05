@@ -1,4 +1,4 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "unfold_utility.h"
 #include "RooUnfoldBayes.h"
 using namespace std;
 

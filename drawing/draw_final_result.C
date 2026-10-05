@@ -1,6 +1,6 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "../src/ana.h"
+#include "../src/drawer.h"
+#include "../src/unfold_utility.h"
 #include "RooUnfoldResponse.h"
 #include "RooUnfoldBayes.h"
 // The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
@@ -65,12 +65,12 @@ void draw_final_result(int jetRadiusIndex = 2) {
   gStyle->SetOptStat(0);
 
   ir = jetRadiusIndex;
-  pdfPathStr      = (ir == 2) ? "/home/samson72/sphnx/gammajet_unfold/pdfs/final_result.pdf"
-                              : Form("/home/samson72/sphnx/gammajet_unfold/pdfs/final_result_%s.pdf", ana::rnames[ir]);
-  rootPathStr     = (ir == 2) ? "/home/samson72/sphnx/gammajet_unfold/hists/final_result.root"
-                              : Form("/home/samson72/sphnx/gammajet_unfold/hists/final_result_%s.root", ana::rnames[ir]);
-  systRootPathStr = (ir == 2) ? "/home/samson72/sphnx/gammajet_unfold/hists/systematics.root"
-                              : Form("/home/samson72/sphnx/gammajet_unfold/hists/systematics_%s.root", ana::rnames[ir]);
+  pdfPathStr      = (ir == 2) ? ana::path("pdfs/final_result.pdf")
+                              : Form("%s/pdfs/final_result_%s.pdf", ana::dir(), ana::rnames[ir]);
+  rootPathStr     = (ir == 2) ? ana::path("hists/final_result.root")
+                              : Form("%s/hists/final_result_%s.root", ana::dir(), ana::rnames[ir]);
+  systRootPathStr = (ir == 2) ? ana::path("hists/systematics.root")
+                              : Form("%s/hists/systematics_%s.root", ana::dir(), ana::rnames[ir]);
   pdfPath      = pdfPathStr.c_str();
   rootPath     = rootPathStr.c_str();
   systRootPath = systRootPathStr.c_str();

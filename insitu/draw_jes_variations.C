@@ -1,5 +1,5 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/insitu_utility.h"
+#include "../src/ana.h"
+#include "../src/insitu_utility.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -38,8 +38,8 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 //           are omitted here (see below).
 // Also prints the table. Run after insitu/run_grid.sh (reads only; runs no scan).
 
-const char * insitu_output_dir = "/home/samson72/sphnx/gammajet_unfold/insitu/output";
-const char * insitu_pdf_dir    = "/home/samson72/sphnx/gammajet_unfold/insitu/pdfs";
+const char * insitu_output_dir = ana::path("insitu/output");
+const char * insitu_pdf_dir    = ana::path("insitu/pdfs");
 const double edgeTol = 5e-4; // |p_a - scanLow| below this counts as "at the scan edge"
 
 namespace {

@@ -1,6 +1,6 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "../src/ana.h"
+#include "../src/drawer.h"
+#include "../src/unfold_utility.h"
 #include "RooUnfoldResponse.h"
 #include "RooUnfoldBayes.h"
 #include <map>
@@ -212,8 +212,8 @@ void draw_toy_vs_analytic(string systag = "nominal") {
   gRandom->SetSeed(12345); // same seed toy_data_iterations.C/toy_resp_iterations.C use
 
   drawer d("pythia", systag);
-  string pdfPath = Form("/home/samson72/sphnx/gammajet_unfold/pdfs/toy_vs_analytic_%s.pdf", systag.c_str());
-  string outfilename = Form("/home/samson72/sphnx/gammajet_unfold/hists/toy_vs_analytic_%s.root", systag.c_str());
+  string pdfPath = Form("%s/pdfs/toy_vs_analytic_%s.pdf", ana::dir(), systag.c_str());
+  string outfilename = Form("%s/hists/toy_vs_analytic_%s.root", ana::dir(), systag.c_str());
 
   TH1D * respRecoTemplate  = d.get(Form("hrecoxj%i",ir), 1);
   TH1D * respTruthTemplate = d.get(Form("htruthxj%i",ir), 1);

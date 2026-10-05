@@ -1,7 +1,9 @@
+#include "../../src/ana.h"
+R__LOAD_LIBRARY(libgammajet_unfold.so);
 void j12comp(){
   const char* fs[3]={"gammajet_pythia_Jet12_long","gammajet_pythia_Jet12","gammajet_pythia_Photon10"};
   for(auto fn:fs){
-    TFile*f=TFile::Open(Form("/home/samson72/sphnx/gammajet_unfold/trees/%s.root",fn)); TTree*t=(TTree*)f->Get("towerntup");
+    TFile*f=TFile::Open(Form("%s/trees/%s.root", ana::dir(),fn)); TTree*t=(TTree*)f->Get("towerntup");
     double n=t->GetEntries();
     double nclu=t->GetEntries("cluster_pt>15&&cluster_pt<20&&abs(cluster_eta)<1.1");
     double ntru=t->GetEntries("truth_cluster_pt>15&&truth_cluster_pt<20");

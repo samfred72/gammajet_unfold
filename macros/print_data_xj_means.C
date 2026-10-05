@@ -6,8 +6,8 @@
 // via drawer::get(..., 0). unfold_utility::unflattenXj pulls out one pT slice's
 // ana::nUnfoldXjBins real xJ bins (see src/unfold_utility.h:15-19).
 
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "../src/drawer.h"
+#include "../src/unfold_utility.h"
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
 void print_data_xj_means() {

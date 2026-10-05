@@ -1,12 +1,12 @@
 #ifndef UNFOLDER_H
 #define UNFOLDER_H
 
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/object.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/pho_object.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/jet_object.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/treeuser.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/reweight_utility.h"
+#include "ana.h"
+#include "object.h"
+#include "pho_object.h"
+#include "jet_object.h"
+#include "treeuser.h"
+#include "reweight_utility.h"
 #include <string>
 #include <vector>
 #include "TH1D.h"
@@ -221,8 +221,8 @@ class unfolder : public treeuser {
         // radius it pairs at), so this tree is up to ana::nJetR times longer than the
         // old R=0.4-only tree, not wider.
         const char * insitu_filename = isMC ?
-            Form("/home/samson72/sphnx/gammajet_unfold/insitu/inputs/%s_%s_%s_insitu.root", trigger.c_str(), sim.c_str(), systags[isys].c_str()) :
-            Form("/home/samson72/sphnx/gammajet_unfold/insitu/inputs/%s_%s_insitu.root", trigger.c_str(), systags[isys].c_str());
+            Form("%s/insitu/inputs/%s_%s_%s_insitu.root", ana::dir(), trigger.c_str(), sim.c_str(), systags[isys].c_str()) :
+            Form("%s/insitu/inputs/%s_%s_insitu.root", ana::dir(), trigger.c_str(), systags[isys].c_str());
         insitu_file[isys] = TFile::Open(insitu_filename, "RECREATE");
         insitu_tree[isys] = new TTree("insitutree", "photon-jet pairs (all jet radii) for in-situ test");
         insitu_tree[isys]->Branch("pho_pt", &insitu_pho_pt[isys]);

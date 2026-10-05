@@ -1,7 +1,7 @@
 #ifndef TREEUSER_H
 #define TREEUSER_H
 
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
+#include "ana.h"
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -31,8 +31,8 @@ class treeuser {
       // outside the trees directory in a sibling project - used to have a special-case
       // path here too, but has been retired in favor of Jet12_long.)
       f = (trigger == "Data" ?
-          TFile::Open(Form("/home/samson72/sphnx/gammajet_unfold/trees/gammajet_%s.root",trigger.c_str()),"read") :
-          TFile::Open(Form("/home/samson72/sphnx/gammajet_unfold/trees/gammajet_%s_%s.root",sim.c_str(),trigger.c_str()),"read")
+          TFile::Open(Form("%s/trees/gammajet_%s.root", ana::dir(),trigger.c_str()),"read") :
+          TFile::Open(Form("%s/trees/gammajet_%s_%s.root", ana::dir(),sim.c_str(),trigger.c_str()),"read")
           );
       t = (TTree*)f->Get("towerntup");
       isMC = (trigger != "Data");

@@ -1,12 +1,12 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/pho_object.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/jet_object.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/reweight_utility.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "../../src/ana.h"
+#include "../../src/drawer.h"
+#include "../../src/pho_object.h"
+#include "../../src/jet_object.h"
+#include "../../src/reweight_utility.h"
+#include "../../src/unfold_utility.h"
 // Reuse the production purity solver (leakage-corrected ABCD quadratic + bootstrap) itself
 // rather than a copy of it - combine_hists() is the function macros/puritymaker.C runs.
-#include "/home/samson72/sphnx/gammajet_unfold/macros/puritymaker.C"
+#include "../../macros/puritymaker.C"
 // Explicit load; run interpreted, never with ACLiC "+" (sibling libgammajet.so collision).
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
@@ -81,7 +81,7 @@ void draw_jet12_purity_corrected_xj()
     }
   }
 
-  TFile * fin = TFile::Open("/home/samson72/sphnx/gammajet_unfold/trees/gammajet_pythia_Jet12_long.root", "read");
+  TFile * fin = TFile::Open(ana::path("trees/gammajet_pythia_Jet12_long.root"), "read");
   TTree * t = (TTree*)fin->Get("towerntup");
   float vz, cluster_pt, cluster_e, cluster_eta, cluster_phi, cluster_time;
   float cluster_showershape[12], cluster_bdt_scores[11];
@@ -161,8 +161,8 @@ void draw_jet12_purity_corrected_xj()
 
   // ---------------- purity: production method ----------------
   drawer d("pythia", "nominal");
-  TFile * fcommitted = TFile::Open("/home/samson72/sphnx/gammajet_unfold/hists/Jet12_long_pythia_nominal_unfolding.root", "read");
-  string outdir = "/home/samson72/sphnx/gammajet_unfold/claude_checks/insitu_scan_edge/pdfs";
+  TFile * fcommitted = TFile::Open(ana::path("hists/Jet12_long_pythia_nominal_unfolding.root"), "read");
+  string outdir = ana::path("claude_checks/insitu_scan_edge/pdfs");
   gSystem->mkdir(outdir.c_str(), true);
   TFile * fout = TFile::Open((outdir + "/draw_jet12_purity_corrected_xj.root").c_str(), "recreate");
   float pA[nR][nPt], pAlo[nR][nPt], pAhi[nR][nPt], pC[nR][nPt], pClo[nR][nPt], pChi[nR][nPt];

@@ -1,5 +1,5 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfolder.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/object.h"
+#include "../src/unfolder.h"
+#include "../src/object.h"
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 R__LOAD_LIBRARY(libRooUnfold.so);
 

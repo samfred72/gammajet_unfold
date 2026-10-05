@@ -1,5 +1,5 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "../src/ana.h"
+#include "../src/unfold_utility.h"
 #include <string>
 #include <vector>
 #include "TFile.h"
@@ -35,9 +35,9 @@ const char * systag = "nominal";
 // insitu/ is split into inputs/ (the raw Data/Jet12_long insitu ntuples, written by
 // unfolder.h's production pipeline), output/ (this macro's own .root output), and
 // pdfs/ (its .pdf output).
-const char * insitu_input_dir  = "/home/samson72/sphnx/gammajet_unfold/insitu/inputs";
-const char * insitu_output_dir = "/home/samson72/sphnx/gammajet_unfold/insitu/output";
-const char * insitu_pdf_dir    = "/home/samson72/sphnx/gammajet_unfold/insitu/pdfs";
+const char * insitu_input_dir  = ana::path("insitu/inputs");
+const char * insitu_output_dir = ana::path("insitu/output");
+const char * insitu_pdf_dir    = ana::path("insitu/pdfs");
 // Nominal jet radius index (R=0.4), matching draw_insitu_xj.C - the insitutree files
 // read below now hold every jet radius together (one row per radius an event paired
 // at), so this needs to be filtered on rather than assumed.

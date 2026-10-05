@@ -8,8 +8,8 @@
 // ana::nUnfoldXjBins real xJ bins (see src/unfold_utility.h:15-19) - mirrors
 // print_data_xj_means.C but for MC photon (type=1) instead of Data (type=0).
 
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "../src/drawer.h"
+#include "../src/unfold_utility.h"
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
 void print_mc_photon_xj_means() {

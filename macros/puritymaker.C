@@ -1,5 +1,5 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
+#include "../src/drawer.h"
+#include "../src/ana.h"
 // The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
 // into /home/samson72/root/lib/libgammajet.so, sitting on the same library search path
 // as this project's libgammajet_unfold.so. Without forcing which one loads first, ROOT's
@@ -184,12 +184,12 @@ void puritymaker(string systag = "nominal") {
   string purityOutfile = ana::purityFilename(systag);
   TFile * fout = TFile::Open(purityOutfile.c_str(), "RECREATE");
 
-  string purityPdfPath = Form("/home/samson72/sphnx/gammajet_unfold/pdfs/purity_%s.pdf", systag.c_str());
+  string purityPdfPath = Form("%s/pdfs/purity_%s.pdf", ana::dir(), systag.c_str());
   cu->SaveAs(Form("%s[", purityPdfPath.c_str()));
 
   // MC leakage-fraction (f^X) plot, one page per radius - previously drawn to canvas
   // `cf` but never saved to disk.
-  string leakagePdfPath = Form("/home/samson72/sphnx/gammajet_unfold/pdfs/purity_leakage_%s.pdf", systag.c_str());
+  string leakagePdfPath = Form("%s/pdfs/purity_leakage_%s.pdf", ana::dir(), systag.c_str());
   cf->SaveAs(Form("%s[", leakagePdfPath.c_str()));
 
   for (int ir = 0; ir < ana::nJetR; ir++) {

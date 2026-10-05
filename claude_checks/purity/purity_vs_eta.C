@@ -1,10 +1,10 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/pho_object.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/jet_object.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/reweight_utility.h"
+#include "../../src/ana.h"
+#include "../../src/drawer.h"
+#include "../../src/pho_object.h"
+#include "../../src/jet_object.h"
+#include "../../src/reweight_utility.h"
 // Reuse the production purity solver itself (leakage-corrected ABCD quadratic + bootstrap).
-#include "/home/samson72/sphnx/gammajet_unfold/macros/puritymaker.C"
+#include "../../macros/puritymaker.C"
 // Explicit load; run interpreted, never with ACLiC "+" (sibling libgammajet.so collision).
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
@@ -135,7 +135,7 @@ void purity_vs_eta()
     f->Close();
   };
 
-  const string tdir = "/home/samson72/sphnx/gammajet_unfold/trees/";
+  const string tdir = ana::path("trees/");
   process((tdir + "gammajet_Data.root").c_str(), false, 1, 0, 0);
   cout << "data done" << endl;
   // drawer.h scalemap[isphoton=1] for sim="pythia" (same numbers as grid_insitu.C), and
@@ -146,7 +146,7 @@ void purity_vs_eta()
   cout << "MC done" << endl;
 
   // ---------------- validation of the all-|eta| set ----------------
-  TFile * fData = TFile::Open("/home/samson72/sphnx/gammajet_unfold/hists/Data_nominal_unfolding.root", "read");
+  TFile * fData = TFile::Open(ana::path("hists/Data_nominal_unfolding.root"), "read");
   drawer d("pythia", "nominal");
   printf("\nValidation (all |eta|): counts here vs committed hclusterpt_abcd; leakage c here vs committed\n");
   for (int r = 0; r < nR; r++) {
@@ -163,7 +163,7 @@ void purity_vs_eta()
   }
 
   // ---------------- purity per set ----------------
-  string outdir = "/home/samson72/sphnx/gammajet_unfold/claude_checks/purity/pdfs";
+  string outdir = ana::path("claude_checks/purity/pdfs");
   gSystem->mkdir(outdir.c_str(), true);
   TFile * fout = TFile::Open((outdir + "/purity_vs_eta.root").c_str(), "recreate");
   const int nPt = ana::nPtBinsUsed;

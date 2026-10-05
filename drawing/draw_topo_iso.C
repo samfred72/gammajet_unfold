@@ -1,8 +1,8 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/treeuser.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/pho_object.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/reweight_utility.h"
+#include "../src/ana.h"
+#include "../src/drawer.h"
+#include "../src/treeuser.h"
+#include "../src/pho_object.h"
+#include "../src/reweight_utility.h"
 // The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
 // into /home/samson72/root/lib/libgammajet.so, sitting on the same library search path
 // as this project's libgammajet_unfold.so. Without forcing which one loads first, ROOT's
@@ -22,7 +22,7 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 void draw_topo_iso() {
   gStyle->SetOptStat(0);
   const double vzcut = 30;
-  const char * pdfPath = "/home/samson72/sphnx/gammajet_unfold/pdfs/topo_iso_tight_Photon10.pdf";
+  const char * pdfPath = ana::path("pdfs/topo_iso_tight_Photon10.pdf");
 
   treeuser tu("Photon10", "pythia");
   // MC-only vz/cluster-pT reweighting (reweight/make_vz_pt_reweight.C) - this is a

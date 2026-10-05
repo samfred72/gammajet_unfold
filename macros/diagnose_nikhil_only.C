@@ -8,9 +8,9 @@
 // -> check_pair (xJ floor, photon |eta|, jet |eta|, back-to-back dphi) -> ABCD isolation
 // region -> target pT bin.
 
-#include "/home/samson72/sphnx/gammajet_unfold/src/treeuser.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/pho_object.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/jet_object.h"
+#include "../src/treeuser.h"
+#include "../src/pho_object.h"
+#include "../src/jet_object.h"
 #include <fstream>
 #include <sstream>
 R__LOAD_LIBRARY(libgammajet_unfold.so);

@@ -1,5 +1,5 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/insitu_utility.h"
+#include "../src/ana.h"
+#include "../src/insitu_utility.h"
 #include <string>
 #include <cmath>
 #include "TFile.h"
@@ -23,8 +23,8 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 // Best-fit p_a and its errors come from the same findMin + insitu_utility::findError
 // (chi2_min + 1 crossing) convention as grid_insitu.C's FINAL RESULT printout, over the
 // full-resolution graph. The shaded band is the Delta chi2 < 1 interval.
-const char * scan_output_dir = "/home/samson72/sphnx/gammajet_unfold/insitu/output";
-const char * scan_pdf_dir    = "/home/samson72/sphnx/gammajet_unfold/insitu/pdfs";
+const char * scan_output_dir = ana::path("insitu/output");
+const char * scan_pdf_dir    = ana::path("insitu/pdfs");
 
 void draw_insitu_chi2_scan(string systag = "nominal", int ir = 2) {
   gStyle->SetOptStat(0);

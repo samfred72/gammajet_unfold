@@ -1,5 +1,5 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
+#include "../../src/ana.h"
+#include "../../src/drawer.h"
 
 // Explicit load - the sibling gammajet project's libgammajet.so has same-named classes.
 // Run interpreted (root -b -q draw_timingana_tcal.C), never with ACLiC "+".
@@ -25,8 +25,8 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 
 namespace {
   const int ir = 2; // R = 0.4, must match the TimingAna run
-  const char *inglob = "/home/samson72/sphnx/gammajet_unfold/claude_checks/jet_timing/timingana/tcal/*.root";
-  const char *outpdf = "/home/samson72/sphnx/gammajet_unfold/claude_checks/jet_timing/pdfs/draw_timingana_tcal_r04.pdf";
+  const char *inglob = ana::path("claude_checks/jet_timing/timingana/tcal/*.root");
+  const char *outpdf = ana::path("claude_checks/jet_timing/pdfs/draw_timingana_tcal_r04.pdf");
   const float vzCut = 60;
   const float ptMin = 5;
   const float towerEmin = 0.5; // GeV

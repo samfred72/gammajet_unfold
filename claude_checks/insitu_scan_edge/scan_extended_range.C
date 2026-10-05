@@ -1,9 +1,9 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/pho_object.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/jet_object.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/insitu_utility.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "../../src/ana.h"
+#include "../../src/drawer.h"
+#include "../../src/pho_object.h"
+#include "../../src/jet_object.h"
+#include "../../src/insitu_utility.h"
+#include "../../src/unfold_utility.h"
 // Explicit load; run interpreted, never with ACLiC "+" (sibling libgammajet.so collision).
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
@@ -41,11 +41,11 @@ void scan_extended_range()
   const int nR = 3, nPt = ana::nPtBinsUsed;
   const float paLo = 0.70, paHi = 1.10; const int nPa = 400;
   map<int,double> photon_scale = {{5,146359.3},{10,6944.675},{20,130.4461}}; // = grid_insitu.C
-  const char * inDir = "/home/samson72/sphnx/gammajet_unfold/insitu/inputs";
+  const char * inDir = ana::path("insitu/inputs");
 
   // ---------------- rebuild data A/C events from the tree ----------------
   vector<Ev> evA[nR], evC[nR];
-  TFile * fin = TFile::Open("/home/samson72/sphnx/gammajet_unfold/trees/gammajet_Data.root", "read");
+  TFile * fin = TFile::Open(ana::path("trees/gammajet_Data.root"), "read");
   TTree * t = (TTree*)fin->Get("towerntup");
   float vz, cluster_pt, cluster_e, cluster_eta, cluster_phi, cluster_time;
   float cluster_showershape[12], cluster_bdt_scores[11];
@@ -90,7 +90,7 @@ void scan_extended_range()
 
   // ---------------- scan ----------------
   drawer d("pythia", "nominal");
-  string outdir = "/home/samson72/sphnx/gammajet_unfold/claude_checks/insitu_scan_edge/pdfs";
+  string outdir = ana::path("claude_checks/insitu_scan_edge/pdfs");
   gSystem->mkdir(outdir.c_str(), true);
   string pdf = outdir + "/scan_extended_range.pdf";
   TCanvas * c = new TCanvas("c", "", 1500, 550);

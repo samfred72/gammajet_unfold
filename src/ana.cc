@@ -1,5 +1,22 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
+#include "ana.h"
+#include <cstdlib>
+#include <deque>
 using namespace std;
+
+const char * ana::dir() {
+  static const string d = [] {
+    const char * e = getenv("GAMMAJET_UNFOLD");
+    if (!e || !*e) { cerr << "GAMMAJET_UNFOLD is not set (see README.md)" << endl; exit(1); }
+    return string(e);
+  }();
+  return d.c_str();
+}
+
+const char * ana::path(const string & rel) {
+  static deque<string> store; // push_back never moves existing elements, so returned pointers stay valid
+  store.push_back(string(dir()) + "/" + rel);
+  return store.back().c_str();
+}
 ana::ana() {
 }
 
@@ -167,7 +184,7 @@ Int_t ana::findEmfracBin(double value) {
 }
 
 string ana::purityFilename(const string & systag) {
-  return string(Form("/home/samson72/sphnx/gammajet_unfold/hists/purity_%s.root", systag.c_str()));
+  return string(Form("%s/hists/purity_%s.root", ana::dir(), systag.c_str()));
 }
 
 // getPurity/getPurityC and their ErrorLow/ErrorHigh siblings below used to

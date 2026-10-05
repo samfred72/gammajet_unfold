@@ -1,7 +1,7 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/pho_object.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/jet_object.h"
+#include "../../src/ana.h"
+#include "../../src/drawer.h"
+#include "../../src/pho_object.h"
+#include "../../src/jet_object.h"
 // Explicit load; run interpreted, never with ACLiC "+" (sibling libgammajet.so collision).
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
@@ -50,7 +50,7 @@ void draw_jet_timing_vs_R()
   TH1::SetDefaultSumw2();
   const int nR = ana::nJetR;
 
-  TFile * fin = TFile::Open("/home/samson72/sphnx/gammajet_unfold/trees/gammajet_Data.root", "read");
+  TFile * fin = TFile::Open(ana::path("trees/gammajet_Data.root"), "read");
   TTree * t = (TTree*)fin->Get("towerntup");
   float vz, mbd_time, cluster_pt, cluster_e, cluster_eta, cluster_phi, cluster_time;
   float cluster_showershape[12], cluster_bdt_scores[11];
@@ -159,7 +159,7 @@ void draw_jet_timing_vs_R()
   }
 
   // ---------------- drawing ----------------
-  string outdir = "/home/samson72/sphnx/gammajet_unfold/claude_checks/jet_timing/pdfs";
+  string outdir = ana::path("claude_checks/jet_timing/pdfs");
   gSystem->mkdir(outdir.c_str(), true);
   string pdf = outdir + "/draw_jet_timing_vs_R.pdf";
   TCanvas * c = new TCanvas("c", "", 700, 600);

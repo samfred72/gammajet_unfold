@@ -1,10 +1,10 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/pho_object.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/jet_object.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "../../src/ana.h"
+#include "../../src/drawer.h"
+#include "../../src/pho_object.h"
+#include "../../src/jet_object.h"
+#include "../../src/unfold_utility.h"
 // Reuse the production purity solver itself (leakage-corrected ABCD quadratic + bootstrap).
-#include "/home/samson72/sphnx/gammajet_unfold/macros/puritymaker.C"
+#include "../../macros/puritymaker.C"
 // Explicit load; run interpreted, never with ACLiC "+" (sibling libgammajet.so collision).
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
@@ -63,7 +63,7 @@ void draw_xj_eta07()
     hC[s][p] = new TH1D(Form("hC_s%d_pt%d", s, p), ";x_{J#gamma};(1/N) dN/dx_{J#gamma}", ana::nUnfoldXjBins, ana::unfoldXjBins);
   }
 
-  TFile * fin = TFile::Open("/home/samson72/sphnx/gammajet_unfold/trees/gammajet_Data.root", "read");
+  TFile * fin = TFile::Open(ana::path("trees/gammajet_Data.root"), "read");
   TTree * t = (TTree*)fin->Get("towerntup");
   float vz, cluster_pt, cluster_e, cluster_eta, cluster_phi, cluster_time;
   float cluster_showershape[12], cluster_bdt_scores[11];
@@ -116,7 +116,7 @@ void draw_xj_eta07()
     pA[0][p] = ana::getPurity(lo, hi, "nominal", ir);  pAlo[0][p] = ana::getPurityErrorLow(lo, hi, "nominal", ir);  pAhi[0][p] = ana::getPurityErrorHigh(lo, hi, "nominal", ir);
     pC[0][p] = ana::getPurityC(lo, hi, "nominal", ir); pClo[0][p] = ana::getPurityCErrorLow(lo, hi, "nominal", ir); pChi[0][p] = ana::getPurityCErrorHigh(lo, hi, "nominal", ir);
   }
-  string outdir = "/home/samson72/sphnx/gammajet_unfold/claude_checks/purity/pdfs";
+  string outdir = ana::path("claude_checks/purity/pdfs");
   TFile * fe = TFile::Open((outdir + "/purity_vs_eta.root").c_str(), "read");
   if (!fe || fe->IsZombie()) { cout << "Run purity_vs_eta.C first." << endl; return; }
   TH1D * hd[4], * hm[4], * fp[4];

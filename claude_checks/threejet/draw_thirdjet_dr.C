@@ -1,8 +1,8 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/pho_object.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/jet_object.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/reweight_utility.h"
+#include "../../src/ana.h"
+#include "../../src/drawer.h"
+#include "../../src/pho_object.h"
+#include "../../src/jet_object.h"
+#include "../../src/reweight_utility.h"
 // Explicit load; run interpreted, never with ACLiC "+" (sibling libgammajet.so collision).
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
@@ -129,7 +129,7 @@ void draw_thirdjet_dr()
     f->Close();
   };
 
-  const string tdir = "/home/samson72/sphnx/gammajet_unfold/trees/";
+  const string tdir = ana::path("trees/");
   process((tdir + "gammajet_Data.root").c_str(), false, 1, 0, 0);
   cout << "data done" << endl;
   // drawer.h scalemap[isphoton=1] for sim="pythia", treeuser.h truth-photon windows
@@ -158,7 +158,7 @@ void draw_thirdjet_dr()
   }
 
   // ---------------- drawing ----------------
-  string outdir = "/home/samson72/sphnx/gammajet_unfold/claude_checks/threejet/pdfs";
+  string outdir = ana::path("claude_checks/threejet/pdfs");
   gSystem->mkdir(outdir.c_str(), true);
   TFile * fout = TFile::Open((outdir + "/draw_thirdjet_dr.root").c_str(), "recreate");
   drawer d("pythia", "nominal");

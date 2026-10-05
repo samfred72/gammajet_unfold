@@ -11,9 +11,9 @@
 // dropping the unused `isreco` arg and dead iabcd/commented-out line) so the truth-side
 // cut logic here stays byte-for-byte identical to the production pipeline.
 
-#include "/home/samson72/sphnx/gammajet_unfold/src/treeuser.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/pho_object.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/jet_object.h"
+#include "../src/treeuser.h"
+#include "../src/pho_object.h"
+#include "../src/jet_object.h"
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
 bool check_pair(jet_object jet, int ir, pho_object pho) {

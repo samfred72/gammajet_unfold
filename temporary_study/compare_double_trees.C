@@ -1,6 +1,6 @@
 // Compares the reco-level xJgamma shape between the plain gammajet_pythia_Photon{5,10,20}
 // MC trees and the gammajet_pythia_Photon{5,10,20}_double trees, both in
-// /home/samson72/sphnx/gammajet_unfold/trees/, one page per reported photon-pT bin
+// $GAMMAJET_UNFOLD/trees/, one page per reported photon-pT bin
 // (ana::ptBinsUsed, the 3 "main" bins: 15-20, 20-25, 25-35 GeV).
 //
 // Both sets of trees have the standard (non-temporary_study) branch layout - confirmed by
@@ -16,9 +16,9 @@
 // Both histograms are unit-normalized (independently) before drawing - this is a shape
 // comparison, not an absolute-rate one (the two productions may differ in raw statistics).
 
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/reweight_utility.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
+#include "../src/ana.h"
+#include "../src/reweight_utility.h"
+#include "../src/drawer.h"
 R__LOAD_LIBRARY(libgammajet_unfold.so)
 
 #include <string>
@@ -206,9 +206,9 @@ void compare_double_trees(Long64_t maxEntriesPerFile = -1) {
   }
 
   for (const std::string & trigger : {"Photon5", "Photon10", "Photon20"}) {
-    processFile("/home/samson72/sphnx/gammajet_unfold/trees/gammajet_pythia_" + trigger + ".root",
+    processFile(ana::path("trees/gammajet_pythia_") + trigger + ".root",
         trigger, hxjOrig, accOrig, rw, maxEntriesPerFile);
-    processFile("/home/samson72/sphnx/gammajet_unfold/trees/gammajet_pythia_" + trigger + "_double.root",
+    processFile(ana::path("trees/gammajet_pythia_") + trigger + "_double.root",
         trigger, hxjDouble, accDouble, rw, maxEntriesPerFile);
   }
 
@@ -220,7 +220,7 @@ void compare_double_trees(Long64_t maxEntriesPerFile = -1) {
         (mOrig > 0 && mDouble > 0) ? mDouble / mOrig : 0) << std::endl;
   }
 
-  std::string pdfPath = "/home/samson72/sphnx/gammajet_unfold/temporary_study/compare_double_trees.pdf";
+  std::string pdfPath = ana::path("temporary_study/compare_double_trees.pdf");
   TCanvas * c = new TCanvas("c_compare_double", "", 700, 600);
   c->SetLeftMargin(.13);
   c->SetBottomMargin(.13);

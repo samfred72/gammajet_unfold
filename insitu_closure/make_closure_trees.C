@@ -1,7 +1,7 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/treeuser.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/pho_object.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/jet_object.h"
+#include "../src/ana.h"
+#include "../src/treeuser.h"
+#include "../src/pho_object.h"
+#include "../src/jet_object.h"
 #include <cmath>
 #include <map>
 #include <string>
@@ -48,7 +48,7 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 // files. `treeuser` (unfolder's base class) has no such side effect - it only opens the
 // raw ntuple and sets branch addresses - so it's instantiated directly here instead.
 
-const char * closure_input_dir = "/home/samson72/sphnx/gammajet_unfold/insitu_closure/inputs";
+const char * closure_input_dir = ana::path("insitu_closure/inputs");
 
 // Cross-section weights for stitching the Photon5/10/20 pythia MC samples - same
 // numbers as insitu/grid_insitu.C's photon_scale map / drawer.h's

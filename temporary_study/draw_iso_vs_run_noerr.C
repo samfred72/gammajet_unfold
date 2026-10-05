@@ -4,8 +4,8 @@
 // full selection/binning rationale (basic photon-candidate quality cut only, no ABCD
 // region cut, one point per distinct RunNumber at its true run number).
 
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
+#include "../src/ana.h"
+#include "../src/drawer.h"
 R__LOAD_LIBRARY(libgammajet_unfold.so)
 
 #include <map>
@@ -27,7 +27,7 @@ void draw_iso_vs_run_noerr(Long64_t maxEntries = -1) {
   drawer d("pythia", "nominal");
   gErrorIgnoreLevel = oldErrLevel;
 
-  std::string fname = "/home/samson72/sphnx/gammajet_unfold/trees/gammajet_Data.root";
+  std::string fname = ana::path("trees/gammajet_Data.root");
   TFile * f = TFile::Open(fname.c_str(), "read");
   if (!f || f->IsZombie()) { std::cout << "Could not open " << fname << std::endl; return; }
   TTree * t = (TTree*)f->Get("towerntup");
@@ -103,7 +103,7 @@ void draw_iso_vs_run_noerr(Long64_t maxEntries = -1) {
   TCanvas * c = new TCanvas("c_iso_vs_run_noerr", "", 900, 600);
   c->SetLeftMargin(.12);
   c->SetBottomMargin(.13);
-  std::string pdfPath = "/home/samson72/sphnx/gammajet_unfold/temporary_study/draw_iso_vs_run_noerr.pdf";
+  std::string pdfPath = ana::path("temporary_study/draw_iso_vs_run_noerr.pdf");
   c->SaveAs((pdfPath + "[").c_str());
 
   // ---------- page 1: old + new overlaid ----------

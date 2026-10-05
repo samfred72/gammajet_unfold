@@ -1,5 +1,5 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
+#include "../src/ana.h"
+#include "../src/drawer.h"
 #include "TLegend.h"
 #include "TLine.h"
 #include <algorithm>
@@ -107,7 +107,7 @@ void draw_photonID_efficiency(string systag = "nominal") {
     leg->Draw();
     d.drawAll({"Pythia8 #gamma+jet MC"}, {Form("systag: %s", systag.c_str()), "Truth-matched photons"}, .18, .3, 16, 700);
 
-    const char * pdfPath = Form("/home/samson72/sphnx/gammajet_unfold/pdfs/%s_%s.pdf", src.pdfName, systag.c_str());
+    const char * pdfPath = Form("%s/pdfs/%s_%s.pdf", ana::dir(), src.pdfName, systag.c_str());
     c->SaveAs(pdfPath);
     cout << "Wrote " << pdfPath << endl;
   }

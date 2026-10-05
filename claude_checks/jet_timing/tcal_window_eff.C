@@ -1,8 +1,10 @@
+#include "../../src/ana.h"
+R__LOAD_LIBRARY(libgammajet_unfold.so);
 // Run interpreted: root -l -b -q tcal_window_eff.C (output: tcal_window_eff.log)
 // Window efficiency on t_MBD - t_jet (fixed half-width around each version's overall median),
 // vs jet pT and EM fraction: standard, corrected, corrected with |t_tower| > 9 ns towers dropped.
 void tcal_eff() {
-  TChain T("T"); T.Add("/home/samson72/sphnx/gammajet_unfold/claude_checks/jet_timing/timingana/tcal/*.root");
+  TChain T("T"); T.Add(ana::path("claude_checks/jet_timing/timingana/tcal/*.root"));
   float vz, mbd, pt, eta, emfrac;
   std::vector<int> *tw_calo=0,*em_status=0; std::vector<float> *tw_e=0,*tw_t=0,*tw_ts=0,*em_e=0,*em_t=0,*em_ts=0; std::vector<bool> *em_good=0;
   T.SetBranchAddress("vz",&vz); T.SetBranchAddress("mbd_time",&mbd); T.SetBranchAddress("jet_pt_calib",&pt); T.SetBranchAddress("jet_eta",&eta); T.SetBranchAddress("jet_emfrac",&emfrac);

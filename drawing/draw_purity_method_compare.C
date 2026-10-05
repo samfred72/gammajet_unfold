@@ -1,6 +1,6 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "../src/ana.h"
+#include "../src/drawer.h"
+#include "../src/unfold_utility.h"
 // The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
 // into /home/samson72/root/lib/libgammajet.so, sitting on the same library search path
 // as this project's libgammajet_unfold.so. Without forcing which one loads first, ROOT's
@@ -77,8 +77,8 @@ void draw_purity_method_compare(string systag = "nominal") {
   gStyle->SetOptStat(0);
 
   drawer d("pythia", systag);
-  string rootPath = Form("/home/samson72/sphnx/gammajet_unfold/hists/purity_method_compare_%s.root", systag.c_str());
-  string pdfPath  = Form("/home/samson72/sphnx/gammajet_unfold/pdfs/purity_method_compare_%s.pdf", systag.c_str());
+  string rootPath = Form("%s/hists/purity_method_compare_%s.root", ana::dir(), systag.c_str());
+  string pdfPath  = Form("%s/pdfs/purity_method_compare_%s.pdf", ana::dir(), systag.c_str());
 
   TFile * fout = TFile::Open(rootPath.c_str(), "RECREATE");
   TCanvas * c = new TCanvas("c","",700,700);

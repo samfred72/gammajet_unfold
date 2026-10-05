@@ -1,5 +1,5 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
+#include "../src/ana.h"
+#include "../src/drawer.h"
 
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
@@ -21,7 +21,7 @@ void draw_abcd_2d(double ptLow = ana::ptBinsUsed[0], double ptHigh = ana::ptBins
   gStyle->SetOptStat(0);
   gStyle->SetPalette(kBird);
 
-  TFile * f = TFile::Open("/home/samson72/sphnx/gammajet_unfold/trees/gammajet_Data.root", "read");
+  TFile * f = TFile::Open(ana::path("trees/gammajet_Data.root"), "read");
   TTree * t = (TTree*)f->Get("towerntup");
   Float_t vz, cluster_pt, cluster_eta, cluster_bdt_scores[11], cluster_showershape[12];
   t->SetBranchStatus("*", 0);
@@ -107,7 +107,7 @@ void draw_abcd_2d(double ptLow = ana::ptBinsUsed[0], double ptHigh = ana::ptBins
             .567, .574, 18, 700);
   c->RedrawAxis();
 
-  const char * out = "/home/samson72/sphnx/gammajet_unfold/pdfs/abcd_2d_data.pdf";
+  const char * out = ana::path("pdfs/abcd_2d_data.pdf");
   c->SaveAs(out);
   cout << "Wrote " << out << endl;
 }

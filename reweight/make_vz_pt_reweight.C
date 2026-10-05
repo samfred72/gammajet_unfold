@@ -1,9 +1,9 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/treeuser.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/pho_object.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/jet_object.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "../src/ana.h"
+#include "../src/drawer.h"
+#include "../src/treeuser.h"
+#include "../src/pho_object.h"
+#include "../src/jet_object.h"
+#include "../src/unfold_utility.h"
 // The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
 // into /home/samson72/root/lib/libgammajet.so, sitting on the same library search path
 // as this project's libgammajet_unfold.so. Without forcing which one loads first, ROOT's
@@ -60,8 +60,8 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 // Photon acceptance for the weight's selection - the analysis photon acceptance.
 const double photonEtaMax = ana::photonEtaCut;
 const int reweightIr = 2; // R = 0.4 pairing, the nominal radius
-const char * inputsPath = "/home/samson72/sphnx/gammajet_unfold/reweight/vz_pt_reweight_inputs.root";
-const char * outPath    = "/home/samson72/sphnx/gammajet_unfold/reweight/vz_pt_reweight.root";
+const char * inputsPath = ana::path("reweight/vz_pt_reweight_inputs.root");
+const char * outPath    = ana::path("reweight/vz_pt_reweight.root");
 
 // unfolder::check_pair (without the photon-pT-bin lookup, done by the caller)
 bool pairedR04(const pho_object & pho, const jet_object & jet, int ptbin) {
@@ -324,7 +324,7 @@ void make_vz_pt_reweight(bool refill = false) {
     styleBottomAxes(r, "Data / MC", 0, 1.15*r->GetMaximum());
     r->Draw("e");
     TLine * one = new TLine(r->GetXaxis()->GetXmin(), 1, r->GetXaxis()->GetXmax(), 1); one->SetLineStyle(2); one->Draw();
-    c->SaveAs("/home/samson72/sphnx/gammajet_unfold/pdfs/reweight_vz.pdf");
+    c->SaveAs(ana::path("pdfs/reweight_vz.pdf"));
   }
 
   // ---- plot 2: cluster p_T ----
@@ -366,6 +366,6 @@ void make_vz_pt_reweight(bool refill = false) {
     lb->AddEntry(fDraw, "weight: expo fit (flat below 13 GeV)", "l");
     if (fOld) lb->AddEntry(fOld, "previous weight", "l");
     lb->Draw();
-    c->SaveAs("/home/samson72/sphnx/gammajet_unfold/pdfs/reweight_pt.pdf");
+    c->SaveAs(ana::path("pdfs/reweight_pt.pdf"));
   }
 }

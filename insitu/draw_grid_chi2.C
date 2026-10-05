@@ -1,5 +1,5 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/insitu_utility.h"
+#include "../src/ana.h"
+#include "../src/insitu_utility.h"
 #include <string>
 #include <vector>
 #include <cfloat>
@@ -13,6 +13,7 @@
 #include "TLegend.h"
 #include "TLatex.h"
 #include "TStyle.h"
+R__LOAD_LIBRARY(libgammajet_unfold.so);
 
 // Compares the chi2(-analogue)-vs-p_a scan curves from the five grid_insitu*.C JES-scan
 // methods side by side, for one systag - one page per jet radius, all seven in one
@@ -40,8 +41,8 @@
 // insitu/ is split into output/ (the grid_insitu*.C macros' .root output, which this
 // macro only reads) and pdfs/ (this macro's own .pdf output) - it reads no input
 // ntuples of its own.
-const char * insitu_output_dir = "/home/samson72/sphnx/gammajet_unfold/insitu/output";
-const char * insitu_pdf_dir    = "/home/samson72/sphnx/gammajet_unfold/insitu/pdfs";
+const char * insitu_output_dir = ana::path("insitu/output");
+const char * insitu_pdf_dir    = ana::path("insitu/pdfs");
 
 // Index and chi2 of a TGraph's minimum point - grid_insitu*.C track this inline during
 // their own scan loops; reading the graph back from file after the fact needs its own

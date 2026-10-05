@@ -1,5 +1,5 @@
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/insitu_utility.h"
+#include "../src/ana.h"
+#include "../src/insitu_utility.h"
 #include <string>
 #include <vector>
 #include <set>
@@ -56,8 +56,8 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 // insitu/ is split into output/ (grid_insitu.C's .root output, which this macro reads,
 // plus this macro's own .root output) and pdfs/ (this macro's own .pdf output) - it
 // reads no input ntuples of its own.
-const char * insitu_output_dir = "/home/samson72/sphnx/gammajet_unfold/insitu/output";
-const char * insitu_pdf_dir    = "/home/samson72/sphnx/gammajet_unfold/insitu/pdfs";
+const char * insitu_output_dir = ana::path("insitu/output");
+const char * insitu_pdf_dir    = ana::path("insitu/pdfs");
 
 // Rewrites src/ana.h's jesNominal/jesStatErrLow/jesStatErrHigh/jesBySystag array literals in
 // place with this scan's freshly measured values - this is the "generate, don't
@@ -71,7 +71,7 @@ const char * insitu_pdf_dir    = "/home/samson72/sphnx/gammajet_unfold/insitu/pd
 // linking ana::jesNominal/jesStatErrLow/jesStatErrHigh/jesBySystag to see the new numbers.
 void updateAnaHeader(const float pa[ana::nJetR], const float statLow[ana::nJetR], const float statHigh[ana::nJetR],
     const map<string, vector<float>> & paBySystag) {
-  const char * anaHeaderPath = "/home/samson72/sphnx/gammajet_unfold/src/ana.h";
+  const char * anaHeaderPath = ana::path("src/ana.h");
   ifstream fin(anaHeaderPath);
   if (!fin) {
     cout << "WARNING: could not open " << anaHeaderPath << " to update the JES constants - left unchanged." << endl;

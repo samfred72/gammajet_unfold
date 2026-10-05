@@ -1,3 +1,5 @@
+#include "../../src/ana.h"
+R__LOAD_LIBRARY(libgammajet_unfold.so);
 // Run interpreted: root -l -b -q tcal_runindep.C (output: tcal_runindep.log)
 //
 // Can a run-INDEPENDENT tower-time correction recover the gain from Dading Chen's per-run
@@ -7,7 +9,7 @@
 // fraction for: standard, std + delta (run-independent), corrected (full per-run).
 // Same tower selection as draw_timingana_tcal.C: E > 0.5 GeV, EMCal ZS excluded.
 void tcal_runindep() {
-  const char *dir = "/home/samson72/sphnx/gammajet_unfold/claude_checks/jet_timing/timingana/tcal";
+  const char *dir = ana::path("claude_checks/jet_timing/timingana/tcal");
   std::vector<TString> files;
   TSystemDirectory sd("d", dir); TList *fl = sd.GetListOfFiles(); fl->Sort();
   for (auto o : *fl) { TString n = o->GetName(); if (n.EndsWith(".root")) files.push_back(TString(dir) + "/" + n); }

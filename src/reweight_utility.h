@@ -18,7 +18,7 @@
 // low-statistics to use directly.
 class Reweighter {
   public:
-    Reweighter(const char * filename = "/home/samson72/sphnx/gammajet_unfold/reweight/vz_pt_reweight.root") {
+    Reweighter(const char * filename = ana::path("reweight/vz_pt_reweight.root")) {
       f = TFile::Open(filename, "read");
       if (!f || f->IsZombie()) {
         std::cout << "Reweighter: could not open " << filename << std::endl;

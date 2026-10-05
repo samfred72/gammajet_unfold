@@ -89,10 +89,10 @@
 // see sampleWeight below. This is on top of, not instead of, the per-event vz/cluster-pT
 // Data/MC reweighting (Reweighter, same as unfolder.cc's mcWeight; always 1 for Data).
 
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/reweight_utility.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/drawer.h"
-#include "/home/samson72/sphnx/gammajet_unfold/src/unfold_utility.h"
+#include "../src/ana.h"
+#include "../src/reweight_utility.h"
+#include "../src/drawer.h"
+#include "../src/unfold_utility.h"
 R__LOAD_LIBRARY(libgammajet_unfold.so)
 
 #include <vector>
@@ -217,8 +217,8 @@ void processFile(const std::string & trigger, bool isMC, TH1D * hxjIncl[nCases],
     std::vector<std::vector<Accum>> & accPt, Reweighter & rw, Long64_t maxEntries = -1) {
 
   std::string fname = isMC ?
-      "/home/samson72/sphnx/gammajet_unfold/trees/gammajet_pythia_" + trigger + ".root" :
-      "/home/samson72/sphnx/gammajet_unfold/trees/gammajet_Data.root";
+      ana::path("trees/gammajet_pythia_") + trigger + ".root" :
+      ana::path("trees/gammajet_Data.root");
   TFile * f = TFile::Open(fname.c_str(), "read");
   if (!f || f->IsZombie()) { std::cout << "Could not open " << fname << std::endl; return; }
   TTree * t = (TTree*)f->Get("towerntup");
@@ -693,19 +693,19 @@ void compare_old_new(Long64_t maxEntriesPerFile = -1) {
     processFile(trigger, /*isMC=*/true, mcSet.hxjIncl, mcSet.hxjPt, mcSet.accIncl, mcSet.accPt, rw, maxEntriesPerFile);
   }
   writeComparisonOutput(d, jetFeature, "Pythia8 #gamma+jet MC", mcSet,
-      "/home/samson72/sphnx/gammajet_unfold/temporary_study/compare_old_new.pdf",
-      "/home/samson72/sphnx/gammajet_unfold/temporary_study/compare_old_new_summary.txt");
+      ana::path("temporary_study/compare_old_new.pdf"),
+      ana::path("temporary_study/compare_old_new_summary.txt"));
 
-  std::string dataFname = "/home/samson72/sphnx/gammajet_unfold/trees/gammajet_Data.root";
+  std::string dataFname = ana::path("trees/gammajet_Data.root");
   bool haveData = !gSystem->AccessPathName(dataFname.c_str()); // AccessPathName returns 0 (false) iff the file exists
   if (haveData) {
     ResultSet dataSet = makeResultSet("Data", nb, edges);
     processFile("Data", /*isMC=*/false, dataSet.hxjIncl, dataSet.hxjPt, dataSet.accIncl, dataSet.accPt, rw, maxEntriesPerFile);
     writeComparisonOutput(d, jetFeature, "p+p Run24 Data", dataSet,
-        "/home/samson72/sphnx/gammajet_unfold/temporary_study/compare_old_new_data.pdf",
-        "/home/samson72/sphnx/gammajet_unfold/temporary_study/compare_old_new_data_summary.txt");
+        ana::path("temporary_study/compare_old_new_data.pdf"),
+        ana::path("temporary_study/compare_old_new_data_summary.txt"));
     writeRatioOutput(d, jetFeature, mcSet, dataSet,
-        "/home/samson72/sphnx/gammajet_unfold/temporary_study/compare_old_new_ratio.pdf");
+        ana::path("temporary_study/compare_old_new_ratio.pdf"));
   } else {
     std::cout << "\nData tree not found at " << dataFname
               << " - skipping Data processing and MC/Data ratio plots."

@@ -1,15 +1,15 @@
 R__LOAD_LIBRARY(libgammajet_unfold.so);
-#include "/home/samson72/sphnx/gammajet_unfold/src/ana.h"
+#include "../../src/ana.h"
 // iso4 (showershape[11], topo iso used by pho_object) for tight-BDT (0.8-1.0) clusters, |eta|<1.1, |vz|<60
 void isocomp(){
   struct S { const char* f; const char* sel; };
   const char* base = "abs(vz)<60 && abs(cluster_eta)<1.1 && cluster_bdt_scores[9]>0.8 && cluster_bdt_scores[9]<1.0 && cluster_showershape[11]>-999";
   const char* match = "truth_cluster_pt>0 && sqrt(pow(cluster_eta-truth_cluster_eta,2)+pow(TVector2::Phi_mpi_pi(cluster_phi-truth_cluster_phi),2))<0.1";
   double bins[3][2]={{15,20},{20,25},{25,35}};
-  TFile*fd=TFile::Open("/home/samson72/sphnx/gammajet_unfold/trees/gammajet_Data.root"); TTree*td=(TTree*)fd->Get("towerntup");
-  TFile*f10=TFile::Open("/home/samson72/sphnx/gammajet_unfold/trees/gammajet_pythia_Photon10.root"); TTree*t10=(TTree*)f10->Get("towerntup");
-  TFile*f20=TFile::Open("/home/samson72/sphnx/gammajet_unfold/trees/gammajet_pythia_Photon20.root"); TTree*t20=(TTree*)f20->Get("towerntup");
-  TFile*fj=TFile::Open("/home/samson72/sphnx/gammajet_unfold/trees/gammajet_pythia_Jet12_long.root"); TTree*tj=(TTree*)fj->Get("towerntup");
+  TFile*fd=TFile::Open(ana::path("trees/gammajet_Data.root")); TTree*td=(TTree*)fd->Get("towerntup");
+  TFile*f10=TFile::Open(ana::path("trees/gammajet_pythia_Photon10.root")); TTree*t10=(TTree*)f10->Get("towerntup");
+  TFile*f20=TFile::Open(ana::path("trees/gammajet_pythia_Photon20.root")); TTree*t20=(TTree*)f20->Get("towerntup");
+  TFile*fj=TFile::Open(ana::path("trees/gammajet_pythia_Jet12_long.root")); TTree*tj=(TTree*)fj->Get("towerntup");
   printf("tight-BDT clusters: iso4 [GeV] -- fraction <2 (A-like) | 2-4 (gap) | >4 (B-like) | median\n");
   for(auto&b:bins){
     TTree* tsig = b[0]<20 ? t10 : t20; // Photon10: truth 12-24, Photon20: truth > 24 (treeuser.h windows)

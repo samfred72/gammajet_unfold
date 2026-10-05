@@ -1,7 +1,7 @@
 // Check whether sam's tree-storage-gate rejections (nikhil's "CLUSTER leg failed") are
 // actually explained by the reco cluster pt failing, while the truth cluster pt clears
 // the same threshold via Sam's OR-based accept logic (reco OR truth pt > cut).
-#include "/home/samson72/sphnx/gammajet_unfold/src/treeuser.h"
+#include "../src/treeuser.h"
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
 void check_storage_gate(string trigger = "Photon20", string sim = "pythia") {
