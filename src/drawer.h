@@ -14,10 +14,7 @@ using namespace std;
 class drawer {
   public :
     // Reads unfolder.cc's output (<Trigger>_<sim>_<systag>_unfolding.root for MC,
-    // <Trigger>_<systag>_unfolding.root for Data - see unfolder::end()). systag defaults
-    // to "nominal"; pass e.g. "JERhigh"/"narrowBDT" to read a systematic-variation
-    // reprocessing instead (see the unfolder constructor comment in src/unfolder.h for
-    // the full list).
+    // <Trigger>_<systag>_unfolding.root for Data).
     drawer(string sim = "pythia", string systag = "nominal") : systag(systag) {
       TFile * f = TFile::Open(Form("%s/hists/Data_%s_unfolding.root", ana::dir(), systag.c_str()));
       TFile * f05_p = TFile::Open(Form("%s/hists/%s_%s_%s_unfolding.root", ana::dir(),"Photon5" , sim.c_str(), systag.c_str()));
@@ -92,9 +89,7 @@ class drawer {
     vector<int> jsamples = {8,12,20,30,50,60,80};
 
     string simulation = "";
-    // 0: pythia jets
-    // 1: pythia photon
-    // 2: herwig photon
+    // 0: pythia jets, 1: pythia photon, 2: herwig photon
     map<bool,map<int,double>> scalemap;
 
     TH1D * empty_hist = new TH1D("empty_hist","",25,0,2);

@@ -12,49 +12,25 @@
 #include "TStyle.h"
 using namespace std;
 
-// ana::findPtBin/getPurity/etc. are implemented in ana.cc, compiled into
-// libgammajet_unfold.so - load it explicitly so cling resolves those symbols against
-// the real compiled definitions rather than misbinding (see draw_purity_corrected.C).
+// Load explicitly: the sibling gammajet project's libgammajet.so has same-named classes.
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
-// Nominal jet radius index (R=0.4), matching every other macro in this directory
-// (e.g. grid_insitu.C/grid_insitu_jet12.C's default ir=2) - the insitutree files read
-// below were themselves filled at this fixed R by unfolder.cc.
+// Nominal R=0.4.
 const int ir = 2;
 
-// sPHENIX label block (insitu_utility::drawSPhenixLabel) and other insitu/*.C helpers
-// now shared in src/insitu_utility.h/.cc.
-
-// Reads the insitutree (pho_pt, jet_pt, abcd) written by unfolder.cc into
-// gammajet_unfold/insitu/, and builds x_{J#gamma} = jet_pt/pho_pt histograms for:
-//   1. Region A (signal region) in Data
-//   2. Region A in Pythia8 gamma+jet MC (Photon5+10+20 combined, cross-section weighted)
-//   3. Purity-corrected Data (Region A minus the two-purity background estimate,
-//      unfold_utility::purityCorrect - see src/unfold_utility.h)
-//
-// Physics-level comparison uses only ana::ptBinsUsed (15-35 GeV, ana::firstUsedPtBin
-// through +ana::nPtBinsUsed) - same restriction as drawing/draw_purity_corrected.C,
-// dropping both the 13-15 GeV migration buffer bin and the 35-100 GeV overflow bin
-// (ana::ptBins[0] and [nPtBins-1] respectively - see ana.h's comment).
+// xJ = jet_pt/pho_pt from the insitu trees, per used pT bin: Data region A, Photon5+10+20 MC
+// region A, and purity-corrected Data.
 const int nPtBinsUsed = ana::nPtBinsUsed;
 const char * systag = "nominal";
-// insitu/ is split into inputs/ (the raw Data/Photon insitu ntuples, written by
-// unfolder.h's production pipeline), output/ (this macro's own .root output), and
-// pdfs/ (its .pdf output).
 const char * insitu_input_dir  = ana::path("insitu/inputs");
 const char * insitu_output_dir = ana::path("insitu/output");
 const char * insitu_pdf_dir    = ana::path("insitu/pdfs");
 
-// Cross-section weights for combining the Photon5/10/20 samples - same numbers as
-// drawer.h's scalemap[isphoton=1][sample] for sim="pythia".
+// Photon5/10/20 cross-section weights (drawer.h's scalemap).
 map<int,double> photon_scale = {{5,146359.3},{10,6944.675},{20,130.4461}};
 
-// Fills one x_{J} histogram per photon-pT bin (ana::ptBins binning) from a single
-// insitutree file, selecting only the requested ABCD region, scaled by `weight` (the
-// sample's cross-section weight, 1.0 for Data) times the tree's own "weight" branch
-// (the vz/cluster_pt mcWeight from unfolder.cc - always 1.0 for Data, so this is a
-// no-op there and only reweights MC).
-// Returns nullptr entries (left as empty histograms) if the file/tree is missing.
+// One xJ histogram per pT bin from one insitu tree for one ABCD region, scaled by weight times
+// the tree's weight branch (1 for Data). Empty histograms if the file is missing.
 vector<TH1D*> fillXjByPtBin(const char * filename, int abcdSelect, double weight, const char * tag) {
   vector<TH1D*> h(ana::nPtBins);
   for (int ipt = 0; ipt < ana::nPtBins; ipt++) {
@@ -82,9 +58,7 @@ vector<TH1D*> fillXjByPtBin(const char * filename, int abcdSelect, double weight
   for (Long64_t e = 0; e < nentries; e++) {
     t->GetEntry(e);
     if (abcd != abcdSelect) continue;
-    // insitutree now holds every jet radius together (one row per radius an event
-    // paired at) - filter to this file's fixed ir=2/R=0.4 (see the file-scope `ir`
-    // comment above) instead of silently averaging over all ana::nJetR radii.
+    // The tree holds every radius; keep R=0.4.
     if (evIr != ir) continue;
     int ipt = ana::findPtBin(pho_pt);
     if (ipt < 0) continue;
@@ -94,17 +68,12 @@ vector<TH1D*> fillXjByPtBin(const char * filename, int abcdSelect, double weight
   return h;
 }
 
-// Adds a second sample's per-pT-bin histograms into the first, in place.
+// Adds a second sample's per-pT-bin histograms into the first.
 void addInto(vector<TH1D*> & total, const vector<TH1D*> & add) {
   for (int ipt = 0; ipt < ana::nPtBins; ipt++) {
     total[ipt]->Add(add[ipt]);
   }
 }
-
-// x_{J} bins are non-uniform (ana::unfoldXjBins) - divide by bin width so the
-// comparison plot shows a density, not raw counts with an artificial shelf where the
-// bin width changes.
-// densityForDisplay now lives in unfold_utility - see src/unfold_utility.h.
 
 void draw_insitu_xj() {
   gStyle->SetOptStat(0);
@@ -115,14 +84,14 @@ void draw_insitu_xj() {
   vector<TH1D*> hA_data = fillXjByPtBin(Form("%s/Data_%s_insitu.root", insitu_input_dir, systag), 0, 1.0, "A_data");
 
   // -----------------------------
-  // 2. Region A in Pythia (Photon5+10+20, cross-section weighted)
+  // 2. Region A in Pythia (Photon5+10+20)
   // -----------------------------
   vector<TH1D*> hA_pythia = fillXjByPtBin(Form("%s/Photon5_pythia_%s_insitu.root", insitu_input_dir, systag), 0, photon_scale[5], "A_pythia_p5");
   addInto(hA_pythia, fillXjByPtBin(Form("%s/Photon10_pythia_%s_insitu.root", insitu_input_dir, systag), 0, photon_scale[10], "A_pythia_p10"));
   addInto(hA_pythia, fillXjByPtBin(Form("%s/Photon20_pythia_%s_insitu.root", insitu_input_dir, systag), 0, photon_scale[20], "A_pythia_p20"));
 
   // -----------------------------
-  // 3. Purity-corrected Data (Region A minus the two-purity background estimate)
+  // 3. Purity-corrected Data
   // -----------------------------
   vector<TH1D*> hC_data = fillXjByPtBin(Form("%s/Data_%s_insitu.root", insitu_input_dir, systag), 2, 1.0, "C_data");
 
@@ -142,9 +111,7 @@ void draw_insitu_xj() {
   }
 
   // -----------------------------
-  // Combine the used pT bins (15-35 GeV, ana::ptBinsUsed) into one histogram per
-  // version - hA_data/hA_pythia/hCorrected are indexed by ana::findPtBin's raw
-  // (unrestricted) bin index, so start/iterate from ana::firstUsedPtBin.
+  // Combine the used pT bins (indexed by findPtBin, so start at firstUsedPtBin)
   // -----------------------------
   TH1D * hxjA_data       = (TH1D*)hA_data[ana::firstUsedPtBin]->Clone("hxjA_data");
   TH1D * hxjA_pythia     = (TH1D*)hA_pythia[ana::firstUsedPtBin]->Clone("hxjA_pythia");
@@ -170,8 +137,7 @@ void draw_insitu_xj() {
   cout << "Wrote " << outRootPath << endl;
 
   // -----------------------------
-  // Comparison plot (shape-normalized density, since the three are at different
-  // absolute scales - Data counts vs. MC cross-section-weighted counts).
+  // Comparison plot (shape-normalized densities)
   // -----------------------------
   TH1D * dispA_data       = unfold_utility::densityForDisplay(hxjA_data,       "hxjA_data_disp");
   TH1D * dispA_pythia     = unfold_utility::densityForDisplay(hxjA_pythia,     "hxjA_pythia_disp");
@@ -189,10 +155,7 @@ void draw_insitu_xj() {
   dispA_data->SetLineWidth(2);
   dispA_data->GetXaxis()->SetTitle("x_{J#gamma}");
   dispA_data->GetYaxis()->SetTitle("Shape-normalized counts / bin width");
-  // Extra headroom (vs. the plain-comparison pages elsewhere in this directory) to fit
-  // the sPHENIX label block and the mean-value text below the legend without either
-  // colliding with the curves themselves - both are drawn inside the frame per this
-  // project's plotting convention, never in an outer pad margin.
+  // Headroom for the label block and mean text.
   dispA_data->GetYaxis()->SetRangeUser(0, std::max({dispA_data->GetMaximum(),
         dispA_pythia->GetMaximum(), dispCorrected->GetMaximum()})*1.7);
   dispA_data->Draw("p e");
@@ -216,9 +179,7 @@ void draw_insitu_xj() {
   l->AddEntry(dispCorrected, "Purity-corrected Data (A-C)");
   l->Draw();
 
-  // Means are taken from the raw (non-density-scaled) histograms, not the display
-  // (density) versions above - dividing by the non-uniform bin width reweights the mean
-  // calculation by 1/width per bin and biases it, since ana::unfoldXjBins isn't uniform.
+  // Means from the raw histograms: the bin-width division biases them.
   TLatex * texMean = new TLatex();
   texMean->SetNDC();
   texMean->SetTextFont(43);

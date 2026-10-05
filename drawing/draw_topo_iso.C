@@ -3,35 +3,21 @@
 #include "../src/treeuser.h"
 #include "../src/pho_object.h"
 #include "../src/reweight_utility.h"
-// The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
-// into /home/samson72/root/lib/libgammajet.so, sitting on the same library search path
-// as this project's libgammajet_unfold.so. Without forcing which one loads first, ROOT's
-// implicit symbol autoload can bind drawer/ana calls to the wrong (mismatched-layout)
-// library and segfault - explicit load removes the ambiguity.
+// Load explicitly: the sibling gammajet project's libgammajet.so has same-named classes.
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
-// Diagnostic: topo-isolation energy (cluster_showershape[11], i.e. iso_topo_04 -
-// src/treeuser.h:132) for TIGHT photon clusters only. Tightness reuses the pipeline's own
-// definition, pho_object::get_showershape() == 2 (src/pho_object.cc:6-25) - not
-// re-derived here, so it can't drift from the production selection.
-//
-// pythia_Photon10 only, |v_z| < 30 cm. That vz cut is looser than the pipeline's own
-// ana::vzcut = 60 (src/ana.h:51) - this plot uses the tighter 30 cm value on explicit
-// request, not the standard analysis cut. No other selection (no pT/eta/pairing/purity
-// cuts) - this is a raw, unselected look at the isolation shower-shape variable itself.
+// Topo isolation (iso_topo_04) of tight photon clusters (pho_object::get_showershape() == 2),
+// pythia Photon10, |v_z| < 30 cm (tighter than ana::vzcut, on request), no other selection.
 void draw_topo_iso() {
   gStyle->SetOptStat(0);
   const double vzcut = 30;
   const char * pdfPath = ana::path("pdfs/topo_iso_tight_Photon10.pdf");
 
   treeuser tu("Photon10", "pythia");
-  // MC-only vz/cluster-pT reweighting (reweight/make_vz_pt_reweight.C) - this is a
-  // pythia MC sample, so every Fill below carries this event's weight.
+  // MC vz/cluster-pT weight.
   Reweighter rw;
 
-  // Range covers the full observed spread for tight clusters in this sample (checked
-  // to run roughly -32 to +31 GeV) - a narrower range clipped a large fraction of
-  // entries into the under/overflow bins and silently truncated the plotted shape.
+  // Covers the full spread (about -32 to +31 GeV) so nothing lands in under/overflow.
   TH1D * h = new TH1D("hTopoIsoTight",
       ";Topo-isolation energy, iso_{topo}^{R=0.4} [GeV];Tight clusters", 100, -35, 35);
   h->Sumw2();
@@ -48,8 +34,7 @@ void draw_topo_iso() {
     h->Fill(tu.cluster_showershape[11], rw.GetWeight(tu.vz, tu.cluster_pt));
   }
 
-  // Sanitize NaN/Inf bin content before drawing - NaN poisons ROOT's axis auto-ranging
-  // and silently produces a blank canvas.
+  // Sanitize NaN/Inf before drawing.
   for (int b = 0; b <= h->GetNbinsX() + 1; b++) {
     double content = h->GetBinContent(b);
     if (std::isnan(content) || std::isinf(content)) h->SetBinContent(b, 0);

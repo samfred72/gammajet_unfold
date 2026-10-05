@@ -1,7 +1,6 @@
 #include "treeuser.h"
 
 void treeuser::treesetup() {
-  // Set branch addresses and branch pointers
   cout << "Setting up tree " << t->GetEntries() << endl;
   if (!t) return;
 
@@ -57,33 +56,15 @@ void treeuser::treesetup() {
   }
 }
 
-
-// Turns off deserialization (TTree::SetBranchStatus(...,0)) for branches treesetup()
-// reads into memory - or, for hasthirdjet/thirdjet_eta/thirdjet_phi/thirdjet_dr, never
-// calls SetBranchAddress for at all - that src/unfolder.cc and src/unfolder.h
-// never read (verified by grepping every treeuser member name against both files; every
-// hit traced back to an actual read, not just the member's declaration - RunNumber,
-// ScaledTriggerBit, LiveTriggerBit, Scaledowns, mbd_time, the raw uncalibrated jet_pt
-// array (only jet_pt_calib is read), jet_pt_recalib, jet_pt_smear_reco/high_reco/
-// low_reco, hasthirdjet, thirdjet_eta/phi/dr, and hadron_p all came up empty). Skipping these
-// branches' I/O/decompression entirely is a real win since the underlying towerntup
-// files are large.
-//
-// Opt-in (called explicitly by unfolder's constructor), NOT folded into treesetup()
-// itself - several other treeuser consumers outside the main unfolding pipeline read
-// some of these same branches for one-off checks (e.g. macros/print_truth_photon_pt25_35.C
-// and macros/diagnose_nikhil_only.C both read jet_pt_smear_reco), and each of those
-// builds its own independent treeuser and TTree, so disabling branches on one instance
-// never affects another. If unfolder.cc/.h's cuts ever grow to need one of these
-// branches, re-grep before removing it from the list below.
+// Disable branches unfolder never reads (large inputs). Opt-in from unfolder's constructor:
+// other treeuser consumers read some of these.
 void treeuser::disableBranchesUnusedByUnfolder() {
   if (!t) return;
   t->SetBranchStatus("RunNumber", 0);
   t->SetBranchStatus("mbd_time", 0);
   t->SetBranchStatus("jet_pt", 0);
   t->SetBranchStatus("jet_pt_recalib", 0);
-  // Third-jet branches differ between tree versions (thirdjet_dr before Oct 2026,
-  // thirdjet_eta/phi after) - only disable the ones this tree actually has.
+  // Third-jet branches differ between tree versions; only disable those present.
   for (const char *b : {"hasthirdjet", "thirdjet_eta", "thirdjet_phi", "thirdjet_dr"})
     if (t->GetBranch(b)) t->SetBranchStatus(b, 0);
   if (!isMC) {
@@ -102,18 +83,13 @@ void treeuser::disableBranchesUnusedByUnfolder() {
 vector<bool> treeuser::check_keep_MC(float pt_pho, float pt_reco_pho, float pt_jet[], float pt_reco[], string trigger) {
   bool isphoton = (trigger == "Photon5" || trigger == "Photon10" || trigger == "Photon20");
   vector<bool> keep(ana::nJetR + 1); 
-  // check photon
   keep[keep.size()-1] = (isphoton ? (pt_pho > threshmap[-1][trigger] && pt_pho < threshmap_high[-1][trigger]) : 1);
 
-  // Check the jets
-  //std::cout << "Form keep: " << !isphoton << " " << trigger << " " << pt_reco_pho << std::endl;
   for (int i = 0; i < ana::nJetR; i++) {
     keep[i] = (isphoton ? 1 : (pt_jet[i] > threshmap[i][trigger] && pt_jet[i] < threshmap_high[i][trigger]));// && pt_reco[i] < reco_threshmap_high[i][trigger]));
     if (!isphoton && trigger == "Jet5"  && pt_reco_pho > 12) keep[i] = 0;
-    //if (!isphoton && trigger == "Jet8" && pt_reco_pho > 17) keep[i] = 0;
   }
 
   return keep;
 }
-
 

@@ -10,49 +10,24 @@
 #include "TStyle.h"
 using namespace std;
 
-// ana::findPtBin/etc. are implemented in ana.cc, compiled into libgammajet_unfold.so -
-// load it explicitly so cling resolves those symbols against the real compiled
-// definitions rather than misbinding (see draw_insitu_xj.C).
+// Load explicitly: the sibling gammajet project's libgammajet.so has same-named classes.
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
-// Non-purity-corrected companion to draw_insitu_xj.C: reads the same insitutree
-// (pho_pt, jet_pt, abcd) written by unfolder.cc, and builds x_{J#gamma} = jet_pt/pho_pt
-// histograms for:
-//   1. Region A (signal region) in Data - raw, no A-C background subtraction.
-//   2. Region A in "Jet12_long" (a single Pythia8 QCD-dijet-triggered MC sample, no
-//      truth-level jet-pT cut, at the standard gammajet_unfold/trees path - see
-//      src/treeuser.h) - also raw, no ABCD subtraction on the MC side either.
-//
-// Unlike draw_insitu_xj.C there is no purity-corrected histogram here at all - this
-// macro is the shape-comparison counterpart of grid_insitu_jet12.C's cross-check, and
-// intentionally skips ana::getPurity()/Region C entirely on both sides.
-//
-// Physics-level comparison uses only ana::ptBinsUsed (15-35 GeV, ana::firstUsedPtBin
-// through +ana::nPtBinsUsed) - same restriction as draw_insitu_xj.C and
-// grid_insitu_jet12.C.
+// Non-purity-corrected companion to draw_insitu_xj.C (counterpart of grid_insitu_jet12.C):
+// raw region A xJ in Data and in Jet12_long, used pT bins only.
 const int nPtBinsUsed = ana::nPtBinsUsed;
 const char * systag = "nominal";
-// insitu/ is split into inputs/ (the raw Data/Jet12_long insitu ntuples, written by
-// unfolder.h's production pipeline), output/ (this macro's own .root output), and
-// pdfs/ (its .pdf output).
 const char * insitu_input_dir  = ana::path("insitu/inputs");
 const char * insitu_output_dir = ana::path("insitu/output");
 const char * insitu_pdf_dir    = ana::path("insitu/pdfs");
-// Nominal jet radius index (R=0.4), matching draw_insitu_xj.C - the insitutree files
-// read below now hold every jet radius together (one row per radius an event paired
-// at), so this needs to be filtered on rather than assumed.
+// Nominal R=0.4 (the tree holds every radius).
 const int ir = 2;
 
-// Cross-section weight for the Jet12 pythia sample - same number as drawer.h's
-// scalemap[isphoton=0][12] for sim="pythia" (see grid_insitu_jet12.C).
+// Jet12 cross-section weight (drawer.h's scalemap).
 map<int,double> jet_scale = {{12,3.997e+06}};
 
-// Fills one x_{J} histogram per photon-pT bin (ana::ptBins binning) from a single
-// insitutree file, selecting only the requested ABCD region, scaled by `weight` (the
-// sample's cross-section weight, 1.0 for Data) times the tree's own "weight" branch
-// (the vz/cluster_pt mcWeight from unfolder.cc - always 1.0 for Data, so this is a
-// no-op there and only reweights MC).
-// Returns nullptr entries (left as empty histograms) if the file/tree is missing.
+// One xJ histogram per pT bin from one insitu tree for one ABCD region, scaled by weight times
+// the tree's weight branch (1 for Data). Empty histograms if the file is missing.
 vector<TH1D*> fillXjByPtBin(const char * filename, int abcdSelect, double weight, const char * tag) {
   vector<TH1D*> h(ana::nPtBins);
   for (int ipt = 0; ipt < ana::nPtBins; ipt++) {
@@ -89,28 +64,21 @@ vector<TH1D*> fillXjByPtBin(const char * filename, int abcdSelect, double weight
   return h;
 }
 
-// x_{J} bins are non-uniform (ana::unfoldXjBins) - divide by bin width so the
-// comparison plot shows a density, not raw counts with an artificial shelf where the
-// bin width changes.
-// densityForDisplay now lives in unfold_utility - see src/unfold_utility.h.
-
 void draw_insitu_xj_jet12() {
   gStyle->SetOptStat(0);
 
   // -----------------------------
-  // 1. Region A in Data (raw, no purity correction)
+  // 1. Region A in Data
   // -----------------------------
   vector<TH1D*> hA_data = fillXjByPtBin(Form("%s/Data_%s_insitu.root", insitu_input_dir, systag), 0, 1.0, "A_data");
 
   // -----------------------------
-  // 2. Region A in Pythia8 Jet12_long (raw, no purity correction)
+  // 2. Region A in Jet12_long
   // -----------------------------
   vector<TH1D*> hA_jet12 = fillXjByPtBin(Form("%s/Jet12_long_pythia_%s_insitu.root", insitu_input_dir, systag), 0, jet_scale[12], "A_jet12");
 
   // -----------------------------
-  // Combine the used pT bins (15-35 GeV, ana::ptBinsUsed) into one histogram per
-  // version - hA_data/hA_jet12 are indexed by ana::findPtBin's raw (unrestricted)
-  // bin index, so start/iterate from ana::firstUsedPtBin.
+  // Combine the used pT bins (indexed by findPtBin, so start at firstUsedPtBin)
   // -----------------------------
   TH1D * hxjA_data  = (TH1D*)hA_data[ana::firstUsedPtBin]->Clone("hxjA_data");
   TH1D * hxjA_jet12 = (TH1D*)hA_jet12[ana::firstUsedPtBin]->Clone("hxjA_jet12");
@@ -132,8 +100,7 @@ void draw_insitu_xj_jet12() {
   cout << "Wrote " << outRootPath << endl;
 
   // -----------------------------
-  // Comparison plot (shape-normalized density, since the two are at different
-  // absolute scales - Data counts vs. MC cross-section-weighted counts).
+  // Comparison plot (shape-normalized densities)
   // -----------------------------
   TH1D * dispA_data  = unfold_utility::densityForDisplay(hxjA_data,  "hxjA_data_disp");
   TH1D * dispA_jet12 = unfold_utility::densityForDisplay(hxjA_jet12, "hxjA_jet12_disp");

@@ -18,7 +18,6 @@
 #include <cmath>
 #include "style.h"
 
-
 double FindlargestValue(std::vector<TH1D*> histDetails){
     double maxVal = 0.0;
     for(TH1D* h : histDetails){
@@ -40,7 +39,6 @@ void singleGraph(TH1D* histDetails,const char* fileName  , TDirectory* directory
     histDetails->GetXaxis()->SetNdivisions(510);
     histDetails->GetYaxis()->SetNdivisions(510);
     histDetails->GetYaxis()->SetTitle("Ratio #frac{p_{T,Data}}{p_{T,MC}}");
-    //histDetails->GetYaxis()->SetRangeUser(0.6,1.6);
     
     histDetails->SetLineColor(kRed+1);
     
@@ -49,7 +47,6 @@ void singleGraph(TH1D* histDetails,const char* fileName  , TDirectory* directory
     histDetails->Draw("PE");
 
     
-    //Legend2
     TLegend* leg = new TLegend(0.65,0.80,0.85,0.85);
     leg->AddEntry(histDetails, "Data","l");
     leg->Draw();
@@ -79,7 +76,6 @@ void doubleGraph(TH1D* histDetails,TH1D* PythiaHIST,const char* fileName , const
     PythiaHIST->Draw("HIST");
     histDetails->Draw("HIST SAME");
     
-    //Legend
     TLegend* leg = new TLegend(0.65,0.80,0.85,0.85);
     leg->AddEntry(histDetails, "Data","l");
     leg->AddEntry(PythiaHIST, "Pythia","l");
@@ -106,7 +102,6 @@ void doubleGraphERatio(std::vector<TH1D*> histDetails,std::vector<TH1D*> PythiaH
     PythiaHIST[0]->GetXaxis()->SetNdivisions(510);
     PythiaHIST[0]->GetYaxis()->SetNdivisions(510);
     PythiaHIST[0]->GetYaxis()->SetRangeUser(0,FindlargestValue(histDetails) * 1.3);
-    //histDetails->GetYaxis()->SetRangeUser(0,PythiaHIST->GetMaximum() * 1.3);
 
     
     histDetails[0]->SetLineColor(kRed+1);
@@ -130,7 +125,6 @@ void doubleGraphERatio(std::vector<TH1D*> histDetails,std::vector<TH1D*> PythiaH
     histDetails[0]->Draw("E1 SAME");
     histDetails[1]->Draw("E1 SAME");
 
-    //Legend
     TLegend* leg = new TLegend(0.55,0.65,0.75,0.85);
     leg->AddEntry(histDetails[0], "Leading Data","lep");
     leg->AddEntry(histDetails[1], "SubLeading Data","lep");
@@ -179,7 +173,6 @@ void doubleGraphTripple(std::vector<TH1D*> histDetails,std::vector<TH1D*>  Pythi
         PythiaHIST[index]->Draw("HIST");
         histDetails[index]->Draw("HIST SAME");
         
-        //Legend
         TLegend* leg = new TLegend(0.65,0.80,0.85,0.85);
         leg->AddEntry(histDetails[index], "Data","l");
         leg->AddEntry(PythiaHIST[index], "Pythia","l");
@@ -240,7 +233,6 @@ void xJGraph(TH1D* histDetails,const char* fileName , const char* LLabel , TDire
     
     histDetails->Draw("HIST");
     
-    //latex
     TLatex latex1;
     latex1.SetNDC();
     latex1.SetTextSize(0.03);
@@ -264,7 +256,6 @@ void singleGraph2D(TH2D* histDetails,const char* fileName , const char* LatexLab
     c1->SetLeftMargin(0.15);
     c1->SetTopMargin(0.22);
     
-    //histDetails->SetTitle(newTitle);
     histDetails->GetXaxis()->SetNdivisions(510);
     histDetails->GetYaxis()->SetNdivisions(510);
     
@@ -300,7 +291,6 @@ void trippletGraph2D(std::vector<TH2D*> histDetails,const char* fileName , const
         gStyle->SetPaintTextFormat("4.3f"); // Set to 3 decimal places
         if(logg) c1->SetLogz();
         c1->SetTicks(1,1);
-        //c1->SetLeftMargin(0.05);
         gPad->SetRightMargin(0.17);
         histDetails[index]->GetXaxis()->SetNdivisions(510);
         histDetails[index]->GetYaxis()->SetNdivisions(510);
@@ -327,7 +317,6 @@ void singleGraph3D(TH3D* histDetails,const char* fileName , TDirectory* director
     c1->SetTicks(1,1);
     c1->SetLeftMargin(0.15);
     
-    //histDetails->SetTitle(newTitle);
     histDetails->GetXaxis()->SetNdivisions(510);
     histDetails->GetYaxis()->SetNdivisions(510);
     histDetails->GetZaxis()->SetNdivisions(510);
@@ -348,7 +337,6 @@ void CompGraphxJ(std::vector<TH1D*> histDetails,const char* fileName , const cha
     c1->SetTicks(1,1);
     c1->SetLeftMargin(0.15);
 
-    //gaussian fits
     /*
     TF1* f1 = new TF1("f1", "gaus", 0.05, 1.0);
     histDetails[0]->Fit(f1, "R");   
@@ -375,19 +363,16 @@ void CompGraphxJ(std::vector<TH1D*> histDetails,const char* fileName , const cha
     histDetails[1]->Draw("HIST E1 SAME");
     
 
-    //Legend
     TLegend* leg = new TLegend(0.2,0.7,0.35,0.85);
     leg->SetBorderSize(0);
     leg->AddEntry(histDetails[0], Llabel1,"l");
     leg->AddEntry(histDetails[1], Llabel2,"l");
     leg->Draw();
     
-    //latex
     TLatex latex1;
     latex1.SetNDC();
     latex1.SetTextSize(0.03);
     latex1.DrawLatex(0.64, 0.83,LatexLabel);
-    //for gaussian fit parameters
     double mean1 = histDetails[0]->GetMean();double sigma1 = histDetails[0]->GetMeanError();
     double mean2 = histDetails[1]->GetMean();double sigma2 = histDetails[1]->GetMeanError();
     latex1.SetTextSize(0.025);
@@ -402,7 +387,6 @@ void CompGraphxJ(std::vector<TH1D*> histDetails,const char* fileName , const cha
 }
 
 void CompGraphxJ3x5(std::vector<TH1D*> histDetails, const char* fileName , std::vector<const char*> newTitles ,const char* Llabel1,const char* Llabel2,std::vector<const char*> LatexLabels ,TDirectory* directory, bool print, bool logg ){
-    //gStyle->SetOptStat(0);
     TCanvas* c1 = new TCanvas("c1", "Efficiency", 2400, 1200);
     
     c1->SetTicks(1,1);
@@ -415,13 +399,11 @@ void CompGraphxJ3x5(std::vector<TH1D*> histDetails, const char* fileName , std::
     for(int count = 1; count <= 18; count++ ){
         c1->cd(count);
         if((count) % 6== 0){
-            //latex
             TLatex latex1;
             latex1.SetNDC();
             latex1.SetTextSize(0.05);
             latex1.DrawLatex(0.06, 0.75,LatexLabels[p]);
             
-            //Legend
             TLegend* leg = new TLegend(0.50,0.60,0.85,0.85);
             leg->SetBorderSize(0);
             leg->AddEntry(histDetails[0], Llabel1,"l");
@@ -432,8 +414,6 @@ void CompGraphxJ3x5(std::vector<TH1D*> histDetails, const char* fileName , std::
             continue;
         }
         
-        //if(count ==5) index = 6;
-        //if(count == 9) index = 12;
     
         histDetails[index]->SetTitle(newTitles[k]);
         histDetails[index]->GetXaxis()->SetNdivisions(510);
@@ -446,7 +426,6 @@ void CompGraphxJ3x5(std::vector<TH1D*> histDetails, const char* fileName , std::
         histDetails[index]->Draw("HIST E1");
         histDetails[index+1]->Draw("HIST E1 SAME");
         
-        //for gaussian fit parameters
         double mean1 = histDetails[index]->GetMean();double sigma1 = histDetails[index]->GetMeanError();
         double mean2 = histDetails[index+1]->GetMean();double sigma2 = histDetails[index+1]->GetMeanError();
         TLatex latex1;
@@ -464,7 +443,6 @@ void CompGraphxJ3x5(std::vector<TH1D*> histDetails, const char* fileName , std::
 }
 
 void Comp3x5Pyth_Data(std::vector<TH1D*> histDetails,std::vector<TH1D*> histPythiaDetails, const char* fileName , std::vector<const char*> newTitles ,const char* Llabel1,const char* Llabel2,std::vector<const char*> LatexLabels ,TDirectory* directory, bool print, bool vectorSum,bool logg ){
-    //gStyle->SetOptStat(0);
     TCanvas* c1 = new TCanvas("c1", "Efficiency", 2400, 1200);
     
     
@@ -479,14 +457,12 @@ void Comp3x5Pyth_Data(std::vector<TH1D*> histDetails,std::vector<TH1D*> histPyth
         c1->cd(count);
         gPad->SetTicks(1,1);
         if((count) % 6== 0){
-            //latex
             TLatex latex1;
             latex1.SetNDC();
             latex1.SetTextSize(0.05);
             latex1.DrawLatex(0.06, 0.75,LatexLabels[p]);
             latex1.DrawLatex(0.28, 0.25,"multijet x_{J} = #frac{p_{T,1}}{p_{T,2+3}}");
             
-            //Legend
             TLegend* leg = new TLegend(0.45,0.55,0.85,0.85);
             leg->SetBorderSize(0);
             leg->AddEntry(histDetails[index-2], Llabel1,"l");
@@ -497,7 +473,6 @@ void Comp3x5Pyth_Data(std::vector<TH1D*> histDetails,std::vector<TH1D*> histPyth
             continue;
         }
     
-        //histDetails[index]->SetTitle(newTitles[k]);
         histDetails[index]->GetXaxis()->SetNdivisions(510);histDetails[index]->GetXaxis()->SetRangeUser(0,1.5);
         histDetails[index]->GetYaxis()->SetNdivisions(510); 
         histDetails[index]->GetYaxis()->SetRangeUser(0,histDetails[index]->GetMaximum()*1.3);
@@ -508,7 +483,6 @@ void Comp3x5Pyth_Data(std::vector<TH1D*> histDetails,std::vector<TH1D*> histPyth
         histDetails[index]->Draw("HIST E1");
         histPythiaDetails[index]->Draw("HIST E1 SAME");
         
-        //for gaussian fit parameters
         double mean1 = histDetails[index]->GetMean();double sigma1 = histDetails[index]->GetMeanError();
         double mean2 = histPythiaDetails[index]->GetMean();double sigma2 = histPythiaDetails[index]->GetMeanError(); 
         double ratio = mean1/mean2; double ratioError = ratio * sqrt(pow(sigma1/mean1, 2) + pow(sigma2/mean2, 2));
@@ -517,7 +491,6 @@ void Comp3x5Pyth_Data(std::vector<TH1D*> histDetails,std::vector<TH1D*> histPyth
         latex1.SetTextSize(0.04);
         latex1.DrawLatex(0.13, 0.82,newTitles[k]);
         latex1.DrawLatex(0.13, 0.72,Form("#splitline{#LT x_{J} #GT_{Data} = %.3f #pm %.3f}{#LT x_{J} #GT_{Pythia} = %.3f #pm %.3f}", mean1, sigma1, mean2, sigma2));
-        //latex1.DrawLatex(0.13, 0.52,Form("Ratio = %.3f #pm %.3f", ratio, ratioError));
         std::cout << Form("Count: %d, Standard Deviation %.3f and %.3f",count,  histDetails[index]->GetStdDev(), histPythiaDetails[index]->GetStdDev()) << std::endl << std::endl << std::endl;  
         index+=2; k++;
     }
@@ -530,7 +503,6 @@ void Comp3x5Pyth_Data(std::vector<TH1D*> histDetails,std::vector<TH1D*> histPyth
 }
 
 void Comp1x5Pyth_Data(std::vector<TH1D*> histDetails,std::vector<TH1D*> histPythiaDetails, const char* fileName , std::vector<const char*> newTitles ,const char* Llabel1,const char* Llabel2,std::vector<const char*> LatexLabels ,TDirectory* directory, bool print, bool vectorSum,bool logg ){
-    //gStyle->SetOptStat(0);
     TCanvas* c1 = new TCanvas("c1", "Efficiency", 2700, 400);
     
     c1->SetTicks(1,1);
@@ -545,7 +517,6 @@ void Comp1x5Pyth_Data(std::vector<TH1D*> histDetails,std::vector<TH1D*> histPyth
         c1->cd(count);
         gPad->SetTicks(1,1);
         if(count == 1){
-            //latex
             TLatex latex1;
             latex1.SetNDC();
             latex1.SetTextSize(0.05);
@@ -560,7 +531,6 @@ void Comp1x5Pyth_Data(std::vector<TH1D*> histDetails,std::vector<TH1D*> histPyth
             "#scale[0.75]{Scaled Trigger 22}}"
             "}}}");
             }
-            //Legend
             TLegend* leg = new TLegend(0.45,0.55,0.85,0.85);
             leg->SetBorderSize(0);
             leg->AddEntry(histDetails[index-2], Llabel1,"l");
@@ -571,7 +541,6 @@ void Comp1x5Pyth_Data(std::vector<TH1D*> histDetails,std::vector<TH1D*> histPyth
             continue;
         }
     
-        //histDetails[index]->SetTitle(newTitles[k]);
         histDetails[index]->GetXaxis()->SetNdivisions(510);
         histDetails[index]->GetYaxis()->SetNdivisions(510);
         histDetails[index]->GetYaxis()->SetRangeUser(0,histDetails[index]->GetMaximum()*1.1);
@@ -582,7 +551,6 @@ void Comp1x5Pyth_Data(std::vector<TH1D*> histDetails,std::vector<TH1D*> histPyth
         histDetails[index]->Draw("HIST E1");
         histPythiaDetails[index]->Draw("HIST E1 SAME");
         
-        //for gaussian fit parameters
         double mean1 = histDetails[index]->GetMean();double sigma1 = histDetails[index]->GetMeanError();
         double mean2 = histPythiaDetails[index]->GetMean();double sigma2 = histPythiaDetails[index]->GetMeanError(); 
         TLatex latex1;
@@ -615,7 +583,6 @@ void Comp1x7Pyth_Data(std::vector<TH1D*> histDetails,std::vector<TH1D*> histPyth
         c1->cd(count);
         gPad->SetTicks(1,1);
         if(count == 1){
-            //latex
             TLatex latex1;
             latex1.SetNDC();
             latex1.SetTextSize(0.05); 
@@ -626,7 +593,6 @@ void Comp1x7Pyth_Data(std::vector<TH1D*> histDetails,std::vector<TH1D*> histPyth
             histDetails[index]->SetLineColorAlpha(kOrange+6,0.7); histDetails[index]->SetLineWidth(1);
             histPythiaDetails[index]->SetLineColorAlpha(kCyan+2,0.9); histPythiaDetails[index]->SetLineWidth(1);
 
-            //Legend
             TLegend* leg = new TLegend(0.50,0.55,0.90,0.95);
             leg->SetBorderSize(0);
             leg->AddEntry(histDetails[index], Llabel1,"l");
@@ -642,8 +608,6 @@ void Comp1x7Pyth_Data(std::vector<TH1D*> histDetails,std::vector<TH1D*> histPyth
         histDetails[index]->GetXaxis()->SetNdivisions(510);
         histDetails[index]->GetYaxis()->SetNdivisions(510);
         histDetails[index]->GetYaxis()->SetRangeUser(0,histPythiaDetails[index]->GetMaximum()*1.4);
-        // if(index < 2)histDetails[index]->GetXaxis()->SetRangeUser(0,2.20);
-        // else histDetails[index]->GetXaxis()->SetRangeUser(0,2.70);
         
 
         histDetails[index]->SetLineColorAlpha(kOrange+6,0.7); 
@@ -652,7 +616,6 @@ void Comp1x7Pyth_Data(std::vector<TH1D*> histDetails,std::vector<TH1D*> histPyth
         histDetails[index]->Draw("HIST E1");
         histPythiaDetails[index]->Draw("HIST E1 SAME");
         
-        //fit parameters
         
         double mean1 = histDetails[index]->GetMean();double sigma1 = histDetails[index]->GetMeanError();
         double mean2 = histPythiaDetails[index]->GetMean();double sigma2 = histPythiaDetails[index]->GetMeanError(); 
@@ -684,7 +647,6 @@ void CompGraphpT(std::vector<TH1D*> histDetails,const char* fileName , const cha
     if(logg) c1->SetLogy();
 
     
-    // 3. Set the titles on the frame (since it's the manager now)
     TH1F *hr = c1->DrawFrame(0, 7, 70, FindlargestValue(histDetails)*1.3);
     hr->GetXaxis()->SetTitle("Calibrated p_{T} (GeV)");
     hr->GetYaxis()->SetTitle("Counts");
@@ -706,7 +668,6 @@ void CompGraphpT(std::vector<TH1D*> histDetails,const char* fileName , const cha
     histDetails[2]->Draw("HIST SAME ");
     
 
-    //Legend
     TLegend* leg = new TLegend(0.65,0.45,0.85,0.60);
     leg->SetBorderSize(0);
     leg->SetMargin(0.4);
@@ -750,7 +711,6 @@ void dPhiGraph(std::vector<TH1D*> histDetails,const char* fileName , const char*
     histDetails[2]->Draw("HIST SAME");
     histDetails[3]->Draw("HIST SAME");
 
-    //Legend
     TLegend* leg = new TLegend(0.59,0.65,0.80,0.85);
     leg->SetTextSize(0.028); 
     leg->SetMargin(0.2); 
@@ -761,7 +721,6 @@ void dPhiGraph(std::vector<TH1D*> histDetails,const char* fileName , const char*
     leg->AddEntry(histDetails[3], Llabels[3],"l");
     leg->Draw();
 
-    //latex
     TLatex latex1;
     latex1.SetNDC();
     latex1.SetTextSize(0.03);
@@ -782,7 +741,6 @@ void triggerEfficiency(std::vector<TH1D*> histOG, TH1D* PythiaHist, const char* 
     histOG[0]->GetYaxis()->SetNdivisions(510);
     histOG[0]->GetYaxis()->SetRangeUser(0,2);
 
-    //colors
     histOG[0]->SetMarkerStyle(20);
     histOG[0]->SetMarkerColor(kRed+1);
     histOG[0]->SetLineColor(kRed+1);
@@ -803,7 +761,6 @@ void triggerEfficiency(std::vector<TH1D*> histOG, TH1D* PythiaHist, const char* 
     histOG[1]->Draw("E SAME");
     histOG[2]->Draw("E SAME");
     PythiaHist->Draw("E SAME");
-
 
     TLegend* leg = new TLegend(0.68,0.75,0.84,0.85);
     leg->AddEntry(PythiaHist, "Pythia", "p");
@@ -839,9 +796,7 @@ void makeTGraph(TGraphErrors* graph, TGraphErrors* pythiaGraph, const char* file
     TCanvas *c1 = new TCanvas("c1", "Distribution", 800, 800);
     c1-> SetTicks(1,1);c1->SetLeftMargin(0.15);
     gStyle->SetOptStat(0);
-    //gPad->SetLogy(1);
     
-    //graph->GetYaxis()->SetRangeUser(0.64,1);  
     graph->GetYaxis()->SetTitle("#LT x_{J} #GT"); graph->GetXaxis()->SetTitle("p_{T,1} (GeV)");  
     graph->GetYaxis()->SetRangeUser(1,2.1);
     graph->SetTitle(" "); 
@@ -877,7 +832,6 @@ void RatioTGraph(TGraphErrors* graph,  const char* fileName, const char* LatexLa
     TCanvas *c1 = new TCanvas("c1", "Distribution", 800, 800);
     c1-> SetTicks(1,1);c1->SetLeftMargin(0.15);
     gStyle->SetOptStat(0);
-    //gPad->SetLogy(1);
     
     graph->GetYaxis()->SetRangeUser(0.85,1.1);  
     graph->SetTitle(" ");  
@@ -892,7 +846,6 @@ void RatioTGraph(TGraphErrors* graph,  const char* fileName, const char* LatexLa
     latex1.SetTextSize(0.03); 
     latex1.DrawLatex(0.20, 0.85,LatexLabel);
 
-    //graph->SetTitle("#LT x_{J} #GT Dijet vs Lead Jet p_{T}"); 
     
     directory-> cd();
     graph->Write(fileName);
@@ -905,7 +858,6 @@ void Ratio3TGraph(std::vector<TGraphErrors*> graph,  const char* fileName, const
     TCanvas *c1 = new TCanvas("c1", "Distribution", 800, 800);
     c1-> SetTicks(1,1);c1->SetLeftMargin(0.15);
     gStyle->SetOptStat(0);
-    //gPad->SetLogy(1);
     
     graph[0]->GetYaxis()->SetRangeUser(0.6,1.3);  
     graph[0]->SetTitle(" ");  
@@ -930,7 +882,6 @@ void Ratio3TGraph(std::vector<TGraphErrors*> graph,  const char* fileName, const
     graph[1]->Draw("P SAME");
     graph[2]->Draw("P SAME");
 
-    //Legend
     TLegend* leg = new TLegend(0.20,0.30,0.40,0.45);
     leg->SetBorderSize(0);
     leg->AddEntry(graph[0], "Full Data","p");
@@ -945,10 +896,8 @@ void Ratio3TGraph(std::vector<TGraphErrors*> graph,  const char* fileName, const
 
         
 
-        //graph->SetTitle("#LT x_{J} #GT Dijet vs Lead Jet p_{T}"); 
         
     directory-> cd();
-    //graph->Write(fileName);
     if (print) c1->SaveAs(Form("images/%s.pdf", fileName)); 
     gStyle->SetOptStat(0);
     c1->Close();
@@ -958,7 +907,6 @@ void EMCALtGraph(TGraph* graph, TGraph* pythiaGraph, const char* fileName, const
     TCanvas *c1 = new TCanvas("c1", "Distribution", 800, 800);
     c1-> SetTicks(1,1);c1->SetLeftMargin(0.15);
     gStyle->SetOptStat(0);
-    //gPad->SetLogy(1);
     if (graph->GetN() == 0 && pythiaGraph->GetN() == 0) {
         std::cerr << "Both graphs are empty." << std::endl;
         return;
@@ -966,9 +914,7 @@ void EMCALtGraph(TGraph* graph, TGraph* pythiaGraph, const char* fileName, const
         std::cout << Form("%d %d is the number of e",graph->GetN(),pythiaGraph->GetN()) << std::endl;   
     }
     
-    //graph->GetYaxis()->SetRangeUser(0,pythiaGraph->GetMaximum() * 1.3);  
     graph->GetYaxis()->SetTitle("EMFRAC (units)"); graph->GetXaxis()->SetTitle("Calibrated p_{T}^{Lead}");  
-
 
     graph->SetMarkerStyle(20);
     graph->SetMarkerColor(kBlack);
@@ -1003,7 +949,6 @@ void makeTGraphCOMBINED(std::vector<TGraphErrors*> graph, std::vector<TGraphErro
     c1-> SetTicks(1,1);c1->SetLeftMargin(0.15);
     gStyle->SetOptStat(0);
     
-    //random variables needed for the creation of graphs
     TLegend* leg = new TLegend(0.63,0.60,0.84,0.85);
     leg->SetBorderSize(0);
     std::vector<int> markerColors = {kBlack, kBlue+1, kGreen+1, kViolet+1, kCyan+2, kOrange+7};
@@ -1011,7 +956,6 @@ void makeTGraphCOMBINED(std::vector<TGraphErrors*> graph, std::vector<TGraphErro
     graph[0]->SetTitle("#LT x_{J} #GT multijet vs Lead Jet p_{T}"); graph[0]->GetYaxis()->SetRangeUser(0.68,0.95); graph[0]->GetXaxis()->SetRangeUser(15,65);
     graph[0]->GetYaxis()->SetTitle("#LT x_{J} #GT"); graph[0]->GetXaxis()->SetTitle("p_{T,1} (GeV)");
 
-    //loop
     for(int i = 0 ; i < graph.size() ; i++){
         graph[i]->SetMarkerStyle(20+ i );
         graph[i]->SetMarkerColor(markerColors[i]);

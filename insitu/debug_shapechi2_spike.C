@@ -18,27 +18,17 @@ using namespace std;
 
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
-// Diagnostic for the spike (pa~0.911-0.928) and cliff (pa~0.97) in
-// grid_insitu.C (shape method)'s Region-A-only shape-chi2 curve. Rebuilds exactly the same
-// per-(ptbin,xjbin) bin-fraction chi2 pieces grid_insitu.C (shape method)'s scan loop computes
-// (see that file's referenceShape()/scan-loop comments for the formula/rationale this
-// copies), but frozen at three fixed trial pa values instead of scanned, so the actual
-// Data-vs-MC xJ shape and the per-bin chi2 pull can be looked at directly instead of only
-// the summed curve.
-// insitu/ is split into inputs/ (the raw Data/Photon insitu ntuples, written by
-// unfolder.h's production pipeline) and pdfs/ (this debug macro's own .pdf output,
-// no .root output).
+// Diagnostic for the spike and cliff in grid_insitu.C's region-A shape chi2: the same per-bin
+// pieces at three fixed pa values.
 const char * insitu_input_dir = ana::path("insitu/inputs");
 const char * insitu_pdf_dir   = ana::path("insitu/pdfs");
 const int nPtBinsUsed = ana::nPtBinsUsed;
-// Same explicit low-stat-tail exclusion as grid_insitu.C (shape method) (see that file's
-// header comment / gammajet_unfold/CLAUDE.md's bin-selection ground rule).
+// Same low-stat-tail exclusion as grid_insitu.C.
 const int nXjBinsForChi2 = ana::nUnfoldXjBins - 3;
 
 map<int,double> photon_scale = {{5,146359.3},{10,6944.675},{20,130.4461}};
 
-// Fixed MC reference xJ shape (bin fraction) and its per-bin error - identical
-// computation to grid_insitu.C (shape method)'s referenceShape().
+// MC reference bin fractions and errors, as grid_insitu.C.
 void referenceShape(const vector<pair<string,double>> & samples, int abcdSelect, int ir,
     vector<vector<double>> & refFrac, vector<vector<double>> & refFracErr, const float lowXj[]) {
   vector<vector<double>> sumw(nPtBinsUsed, vector<double>(ana::nUnfoldXjBins, 0.));
@@ -94,8 +84,7 @@ void debug_shapechi2_spike(string systag = "nominal", int ir = 2) {
   vector<DataEvent> dataA = insitu_utility::cacheDataEvents(dataFile.c_str(), 0, ir);
   cout << "Cached Data Region A events: " << dataA.size() << endl;
 
-  // Low-xJ floor per used pT bin - same cut grid_insitu.C (shape method) now applies (see
-  // src/insitu_utility.h's lowXjFloor comment).
+  // Low-xJ floor per used pT bin.
   float lowXj[nPtBinsUsed];
   for (int ipt = 0; ipt < nPtBinsUsed; ipt++) lowXj[ipt] = insitu_utility::lowXjFloor(ir, ana::ptBinsUsed[ipt]);
 
@@ -113,8 +102,7 @@ void debug_shapechi2_spike(string systag = "nominal", int ir = 2) {
   c->SaveAs(Form("%s[", pdfPath));
 
   for (float pa : paValues) {
-    // Per-(ptbin,xjbin) raw Data counts at this pa - identical to the inner loop of
-    // grid_insitu.C (shape method)'s scan, just at one fixed pa instead of every grid point.
+    // Raw Data counts per (pT, xJ) bin at this pa.
     vector<vector<double>> countA(nPtBinsUsed, vector<double>(ana::nUnfoldXjBins, 0.));
     for (auto & ev : dataA) {
       float x = (ev.jet_pt/pa)/ev.pho_pt;
@@ -167,11 +155,7 @@ void debug_shapechi2_spike(string systag = "nominal", int ir = 2) {
            << " pull=" << p.pull << " chi2=" << p.chi2 << endl;
     }
 
-    // ---- Page: nPtBinsUsed columns, each with a fraction-comparison pad on top and a
-    // signed-pull pad on the bottom (pull = (fData-fMC)/errt, the actual per-bin
-    // chi2-sum term's sign+magnitude) - the vertical dashed line marks
-    // ana::unfoldXjBins[nXjBinsForChi2], the edge beyond which bins are dropped from
-    // the chi2 sum (the low-stat tail, same 3 bins every chi2 in this project drops).
+    // ---- Page: per pT bin, fractions (top) and signed pulls (bottom); dashed line at the chi2 cutoff ----
     c->Clear();
     TLatex pageTitle;
     pageTitle.SetNDC();
@@ -181,10 +165,7 @@ void debug_shapechi2_spike(string systag = "nominal", int ir = 2) {
 
     double xcut = ana::unfoldXjBins[nXjBinsForChi2];
     for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
-      // Each column's pads must attach to the canvas itself, not to whichever pad
-      // happened to be current (pBot, from the previous column's cd()) - without this
-      // cd() back to c, TPad::Draw() nests the new pads inside the last column's pBot
-      // instead of placing them side by side.
+      // cd() back to the canvas so the next column's pads are not nested in the last pBot.
       c->cd();
       double x0 = ipt/(double)nPtBinsUsed, x1 = (ipt+1)/(double)nPtBinsUsed;
       TPad * pTop = new TPad(Form("pTop%d",ipt), "", x0, .32, x1, .92);

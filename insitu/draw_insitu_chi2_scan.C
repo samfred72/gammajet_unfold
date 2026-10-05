@@ -13,16 +13,9 @@
 
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
-// Single-panel chi2-vs-p_a scan for the purity-corrected mean(x_J) in-situ JES fit - the
-// method whose result is the nominal Data-to-MC JES (ana::jesNominal). Reads the
-// gchisq_puritycorrected graph grid_insitu.C writes to output/grid_insitu_<systag>.root
-// (one ana::rnames[ir] subdirectory per radius); grid_insitu.C itself never draws it, and
-// draw_grid_chi2.C only shows it inside a six-pad methods comparison. Run grid_insitu.C
-// for `systag` first; this macro does no scanning of its own.
-//
-// Best-fit p_a and its errors come from the same findMin + insitu_utility::findError
-// (chi2_min + 1 crossing) convention as grid_insitu.C's FINAL RESULT printout, over the
-// full-resolution graph. The shaded band is the Delta chi2 < 1 interval.
+// chi2 vs p_a for the purity-corrected mean in-situ fit (the one behind ana::jesNominal), read
+// from grid_insitu.C's gchisq_puritycorrected. Best fit and errors as grid_insitu.C (chi2_min + 1
+// crossings on the full graph); the band is the Delta chi2 < 1 interval.
 const char * scan_output_dir = ana::path("insitu/output");
 const char * scan_pdf_dir    = ana::path("insitu/pdfs");
 
@@ -53,9 +46,7 @@ void draw_insitu_chi2_scan(string systag = "nominal", int ir = 2) {
   float errLow, errHigh;
   insitu_utility::findError(g, ibest, minchisq, errLow, errHigh);
 
-  // Display window: +-halfWindow around the minimum (clipped to the scan range), so the
-  // chi2_min+1 line and the Delta chi2 < 1 band are legible - over the full scan window
-  // chi2 reaches O(100) and both collapse onto the x axis.
+  // Display window +-halfWindow around the minimum, so the chi2_min+1 line is legible.
   const double halfWindow = 0.025;
   double xlow  = std::max((double)insitu_utility::scanLow,  xbest - halfWindow);
   double xhigh = std::min((double)insitu_utility::scanHigh, xbest + halfWindow);
@@ -84,18 +75,15 @@ void draw_insitu_chi2_scan(string systag = "nominal", int ir = 2) {
   frame->GetYaxis()->SetLabelSize(.042);
   frame->GetYaxis()->SetTitleOffset(1.25);
 
-  // Delta chi2 < 1 band first, so the curve and lines draw over it.
-  // Stops at 55% of the frame height so it stays clear of the label block and legend.
+  // Band first, below 55% of the frame height (clear of the labels).
   TBox * band = new TBox(xbest - errLow, 0, xbest + errHigh, 0.55*ymax);
-  // Opaque light fill (not SetFillColorAlpha): the translucent TBox did not render in the
-  // PDF. RedrawAxis() below restores the tick marks the opaque box covers.
+  // Opaque fill (alpha fills do not render in PDF); RedrawAxis() restores the ticks.
   band->SetFillColor(kRed-10);
   band->SetFillStyle(1001);
   band->SetLineWidth(0);
   band->Draw();
 
-  // Display-only thinning, same reason as draw_grid_chi2.C: 1000 points 1e-4 apart
-  // render as a solid line at this canvas width. The minimum/errors above use the full g.
+  // Display-only thinning (as draw_grid_chi2.C).
   const int drawStride = 5;
   TGraph * gDisplay = new TGraph();
   for (int i = 0; i < g->GetN(); i += drawStride) {

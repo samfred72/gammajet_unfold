@@ -7,135 +7,58 @@
 #include "TGraphAsymmErrors.h"
 #include "RooUnfoldResponse.h"
 
-// Shared helpers for the drawing/*.C unfolding macros - previously duplicated
-// (byte-for-byte, for unflattenXj/reflattenXj) across draw_purity_corrected.C,
-// draw_iteration_halfclosure.C, toy_iterations.C.
+// Unfolding helpers shared by the drawing/*.C macros.
 class unfold_utility {
   public:
-    // hrecoxj_abcd[ir][region] (written by unfolder.cc) is a single TH1D whose bin index
-    // flattens (unfoldPtBin, xJ-bin) via ana::findUnfoldBin: bin = ipt*(nUnfoldXjBins+2)+ixj+1,
-    // landing in ROOT bin (that value)+1. Pull out the nUnfoldXjBins real xJ bins for one
-    // pT slice.
+    // hrecoxj-style histograms flatten (pT bin, x_J bin) as bin = ipt*(nUnfoldXjBins+2) + ixj + 1
+    // (ana::findUnfoldBin). Extract one pT slice's nUnfoldXjBins x_J bins.
     static TH1D * unflattenXj(TH1D * flat, int ipt, const char * name);
 
-    // Inverse of unflattenXj: write a per-pT-bin xJ histogram back into its slice of a
-    // full flattened (unfoldPtBin, xJ) histogram, matching the same index convention.
+    // Inverse of unflattenXj.
     static void reflattenXj(TH1D * perPt, int ipt, TH1D * flatOut);
 
-    // Build a RooUnfoldResponse from templates + a (possibly toyed) matrix and unfold
-    // flatMeasured through it once. RooUnfoldResponse recomputes the Fakes histogram from
-    // respRecoTemplate/respTruthTemplate vs. matrix's projection when they're non-empty,
-    // but leaves the Truth/inefficiency accounting fixed to the templates - so toying only
-    // `matrix` isolates the migration-probability fluctuation from also re-randomizing the
-    // separate fakes/efficiency estimate.
-    //
-    // includeSystematics (default true, matching every existing caller's expectations)
-    // enables RooUnfoldBayes's response-matrix-statistics covariance term (see
-    // CLAUDE.md's "Local RooUnfold Patch" section) - real, but expensive: it makes every
-    // single call build and multiply a large covariance matrix (~3s/call measured on this
-    // project's binning, vs a few ms without it), regardless of whether the caller ever
-    // reads the resulting GetBinError(). A toy bootstrap loop only ever reads
-    // GetBinContent() from each toy's result (the error on any ONE toy draw is
-    // meaningless - the toy ENSEMBLE's spread is the point), so it should pass false
-    // here; only pay for this on the one "real" (nominal) unfold whose error actually
-    // gets used. See draw_toy_vs_analytic.C's toy loops for the pattern.
+    // Build a response from the templates and a (possibly toyed) matrix, then unfold once. Fakes are
+    // recomputed from the templates vs the matrix projection; truth/efficiency stay with the templates,
+    // so toying only `matrix` isolates the migration fluctuation.
+    // includeSystematics adds RooUnfold's response-statistics covariance: ~3 s per call vs a few ms.
+    // Toy loops read only bin contents and should pass false.
     static TH1D * unfoldOnce(TH1D * respRecoTemplate, TH1D * respTruthTemplate, TH2D * matrix, TH1D * flatMeasured, int niter, const char * name, bool includeSystematics = true);
 
-    // Unfold flatMeasured through an already-built response. See the other overload's
-    // comment for includeSystematics.
+    // Unfold through an already-built response (includeSystematics as above).
     static TH1D * unfoldOnce(RooUnfoldResponse * response, TH1D * flatMeasured, int niter, const char * name, bool includeSystematics = true);
 
-    // Below this |P_A-P_C|, region C's own purity can't be disentangled from region
-    // A's (the two regions have too similar a composition), and
-    // purityCorrect/purityCorrectBkg/purityCorrectCoeffs fall back to treating region C
-    // as 100% background - see the "Purity-Corrected Background Subtraction" derivation
-    // in the analysis note / project conversation history.
+    // Below this |P_A - P_C| the two regions cannot be separated; region C is then treated as pure background.
     static constexpr float minPurityDiff = 0.03;
 
-    // coeffA, coeffC such that the purity-corrected value of ANY linear quantity q
-    // measured as qA in region A and qC in region C (raw per-bin counts, Sum(x_J),
-    // Sum(x_J^2), or the regions' own totals NA/NC themselves) is coeffA*qA - coeffC*qC.
-    // NA, NC are always the plain region A/C total counts, regardless of which q this is
-    // applied to. This is the single source of truth for the two-purity formula's
-    // coefficients - purityCorrect/purityCorrectBkg below both call this rather than
-    // re-deriving it. Returns false (and the single-purity fallback coefficients,
-    // coeffA=1, coeffC=(1-pA)*NA/NC) if NC<=0 or |P_A-P_C| < minPurityDiff.
+    // Two-purity coefficients: the corrected value of any linear quantity measured as qA, qC in regions
+    // A, C (counts, Sum x_J, Sum x_J^2, NA/NC) is coeffA*qA - coeffC*qC. NA, NC are the region totals.
+    // Returns false with the single-purity fallback (coeffA = 1, coeffC = (1-pA)*NA/NC) if NC <= 0 or
+    // |P_A - P_C| < minPurityDiff.
     static bool purityCorrectCoeffs(float pA, float pC, float NA, float NC, float & coeffA, float & coeffC);
 
-    // Exact two-purity purity-corrected xJ spectrum: solves
-    //   A(xJ) = P_A*N_A*s(xJ) + (1-P_A)*N_A*bkg(xJ)
-    //   C(xJ) = P_C*N_C*s(xJ) + (1-P_C)*N_C*bkg(xJ)
-    // for the shared signal/background shapes s(xJ), bkg(xJ), returning P_A*N_A*s(xJ) -
-    // i.e. region A background-subtracted using both regions' purity, not just region
-    // A's. Falls back to the single-purity (region C = 100% background) formula if
-    // P_A, P_C are too close to disentangle (minPurityDiff).
-    // pA/pAErrLow/pAErrHigh, pC/pCErrLow/pCErrHigh are ana::getPurity/getPurityC's (and
-    // their ErrorLow/ErrorHigh counterparts') asymmetric bootstrap values for this pT
-    // bin. P_A and P_C uncertainty is propagated as two independent two-point sources,
-    // sign-split per bin (see drawing/draw_systematics.C's asymmetricSystematics
-    // convention) since the sign of d(signal)/dP_C can flip bin-to-bin - a fixed
-    // "high variant -> up" mapping, valid for a single monotonic source, would be wrong
-    // here. P_A and P_C are treated as uncorrelated - a simplification, not yet
-    // cross-checked against their true (likely partially shared) bootstrap covariance.
-    // TH1D bins can only hold one symmetric error, so h's bin errors use the larger of
-    // errLow/errHigh (a conservative choice) - that's what feeds RooUnfold, Integral(),
-    // Chi2 calcs, etc. downstream, none of which support asymmetric errors anyway. If
-    // graphOut is non-null, *graphOut receives a TGraphAsymmErrors with the true
-    // asymmetric errors, for display where the asymmetry should actually be visible.
-    // Returns h=nullptr (and *graphOut=nullptr if requested) if region C has no
-    // statistics in this pT bin (N_A/N_C undefined) - callers must check.
-    //
-    // quiet suppresses the "|P_A-P_C| < minPurityDiff" fallback WARNING print (not the
-    // fallback itself, which still applies). Set by callers that purity-correct
-    // ana::ptBins[ana::nPtBins-1] (the high-pT migration-only buffer bin, 35-100 GeV) -
-    // that bin's region B is empty in this data sample (see puritymaker.C's
-    // combine_hists, which then never writes a real point for it into
-    // hists/purity_<systag>.root, leaving ana::getPurity/getPurityC's default read as
-    // pA=pC=0), so the fallback fires every single call there, not just occasionally -
-    // expected and non-actionable, unlike the same warning on a genuinely-purity-bearing
-    // bin.
+    // Two-purity corrected x_J spectrum: solve A = P_A N_A s + (1-P_A) N_A b and
+    // C = P_C N_C s + (1-P_C) N_C b for the shared shapes s, b and return P_A N_A s.
+    // P_A and P_C errors are propagated as two independent two-point sources, sign-split per bin
+    // (the sign of d(signal)/dP_C can change bin to bin; see draw_systematics.C). Bin errors take the
+    // larger side; *graphOut, if given, gets the asymmetric errors for display. Returns nullptr if
+    // region C is empty.
+    // quiet suppresses the minPurityDiff fallback warning (expected every call for the 35-100 GeV
+    // buffer bin, which has no purity point).
     static TH1D * purityCorrect(TH1D * A, TH1D * C, float pA, float pAErrLow, float pAErrHigh,
         float pC, float pCErrLow, float pCErrHigh, const char * name, TGraphAsymmErrors ** graphOut = nullptr,
         bool quiet = false);
 
-    // The background piece subtracted off region A by purityCorrect above (Bkg = A -
-    // signal), for display. Stat-only error propagation from A/C bin errors at fixed
-    // P_A,P_C - the P_A/P_C uncertainty itself is already shown via purityCorrect's
-    // asymmetric graph, not duplicated here since this curve is a secondary/illustrative
-    // display only.
+    // Background subtracted from region A by purityCorrect (A - signal), for display; stat errors only.
     static TH1D * purityCorrectBkg(TH1D * A, TH1D * C, float pA, float pC, const char * name);
 
-    // ana::unfoldXjBins is non-uniform (0.1-wide up to xJ=1.3, then 0.2,0.2,0.3) -
-    // plotting raw bin content directly makes an otherwise-smooth density look like it
-    // has a shelf/cliff right where the bin width changes. Divide by bin width for
-    // display only; histograms used for Integral()/purityCorrect etc. should stay raw.
+    // ana::unfoldXjBins is non-uniform: divide by bin width for display only.
     static TH1D * densityForDisplay(TH1D * h, const char * name);
 
-    // Purity-correct all ana::nPtBins slices (not just the ana::nPtBinsUsed used for
-    // physics results) of flatA/flatC via purityCorrect, and write the result into one
-    // full flattened histogram matching the response matrix's dimensionality, so
-    // RooUnfold sees a complete, consistently-binned "measured" vector - unfolding a 2D
-    // (pT,xJ) measurement needs the whole flattened vector at once because migration
-    // crosses pT-bin boundaries, not just xJ ones. If a pT slice's region C is empty
-    // (can't purity-correct), falls back to raw region A for that slice only.
-    //
-    // ir selects which jet radius's purity curve to read (ana::getPurity/getPurityC's own
-    // ir argument - purity is not a pure photon-ID quantity independent of the jet, see
-    // ana.h's comment on getPurity, so it needs its own value per radius). Defaults to 2
-    // (R=0.4) so every existing caller that doesn't pass it - every one of them still
-    // hardcoded to R=0.4 throughout this project - keeps reading exactly the same purity
-    // curve as before this parameter was added. Callers that now run per-radius
-    // (draw_systematics.C, draw_final_result.C) must pass their own ir explicitly:
-    // omitting it silently purity-corrects with R=0.4's curve regardless of which
-    // radius's response matrix flatA/flatC actually came from.
-    //
-    // quietAll forces purityCorrect's quiet=true (suppress the |P_A-P_C|<minPurityDiff
-    // fallback WARNING) for every pT slice, not just the last one - for callers that run
-    // this many times with the same fixed purity curve (a per-toy bootstrap loop, e.g.
-    // draw_toy_vs_analytic.C's data-side toys), where the warning would otherwise print
-    // identically on every single toy (the |P_A-P_C| check depends only on the fixed
-    // ana::getPurity/getPurityC curve, never on the toyed A/C counts, so if it fires once
-    // it fires every time). Defaults to false so all other callers keep today's behavior.
+    // Purity-correct every ana::nPtBins slice and reflatten into one histogram matching the response
+    // matrix (unfolding needs the full vector: migration crosses pT bins). A slice with empty region C
+    // falls back to raw region A.
+    // ir selects the radius's purity curve (default R = 0.4; per-radius callers must pass it).
+    // quietAll silences the fallback warning for every slice (repeated calls such as toy loops).
     static TH1D * buildFullyCorrected(TH1D * flatA, TH1D * flatC, const char * tag, string systag, int ir = 2, bool quietAll = false);
 };
 

@@ -23,34 +23,14 @@
 #include "RooUnfoldBayes.h"
 using namespace std;
 
-// See the R__LOAD_LIBRARY comment in grid_insitu.C - same reasoning applies here.
+// Load explicitly: the sibling gammajet project's libgammajet.so has same-named classes.
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 R__LOAD_LIBRARY(libRooUnfold.so);
 
-// Unfolded extension of grid_insitu.C's purity-corrected in-situ JES study.
-//
-// grid_insitu.C finds the single overall jet-energy-scale factor pa (jet_pt_corrected =
-// jet_pt/pa) that makes Data's RECO-level mean(x_{J#gamma}) match Pythia8's RECO-level
-// mean, both for Region A alone and for the purity-corrected A-minus-background
-// combination - see that file's header for the full rationale. This macro asks the
-// physically sharper version of the same question: instead of comparing two reco-level
-// means (which both carry the same detector smearing and so can agree even if the
-// underlying truth-level scale is off), it UNFOLDS the purity-corrected Data spectrum
-// through the nominal photon+jet response matrix and compares the unfolded mean(x_J) to
-// the fixed Pythia8 TRUTH-level mean, per photon-pT bin. This is the same background
-// subtraction as grid_insitu.C's "purity-corrected" branch, plus the same
-// unfold-before-compare step already used (at fixed nominal JES only) by
-// drawing/draw_purity_corrected.C - here it's repeated at every trial pa in the scan.
-//
-// Region A and Region C jets are scaled by the same trial pa at every grid point, purity
-// is computed once and held fixed (unaffected by jet energy scale), and the response
-// matrix itself is built at the nominal (uncorrected) MC jet energy scale and held fixed
-// across the whole scan - only the measured (Data) input changes with pa. This mirrors
-// exactly how grid_insitu.C holds its own MC reference fixed while scanning Data alone.
+// Unfolded version of grid_insitu.C's purity-corrected scan: at each trial pa, unfold the
+// purity-corrected Data through the nominal response (fixed) and compare its mean xJ (or xJ
+// shape) with the Pythia8 truth, per photon-pT bin. Purity is fixed across the scan.
 
-// insitu/ is split into inputs/ (the raw Data insitu ntuple, written by unfolder.h's
-// production pipeline), output/ (this and the other grid_insitu*.C macros' own .root
-// output), and pdfs/ (their .pdf output).
 const char * insitu_input_dir  = ana::path("insitu/inputs");
 const char * insitu_output_dir = ana::path("insitu/output");
 const char * insitu_pdf_dir    = ana::path("insitu/pdfs");
@@ -59,41 +39,20 @@ const int nPtBinsUsed = ana::nPtBinsUsed;
 const int nXjBinsForChi2 = ana::nUnfoldXjBins - 3; // shape method: last 3 sparse x_J bins dropped
 bool shapeMethod = false; // set by grid_insitu_unfolded(..., method)
 
-// Bayesian-unfolding iteration count - same "best-iteration scan result" choice
-// drawing/draw_purity_corrected.C uses (see that file's niterate comment /
-// pdfs/purity_corrected_iterations_nominal.pdf), reused here rather than re-deriving it,
-// since it comes from the same response matrix and the same purity-corrected input.
+// Same iteration count as draw_purity_corrected.C.
 const int niterate = 2;
 
-// struct DataEvent and cacheDataEvents now live in src/insitu_utility.h/.cc - unlike
-// grid_insitu.C's default (restrictToUsed=true) usage, this file calls
-// insitu_utility::cacheDataEvents(..., false) below to keep every ana::ptBins bin
-// (0..nPtBins-1, including the low-pT migration buffer and high-pT overflow bins), not
-// just the nPtBinsUsed reported ones - the response matrix's flattened (pT,xJ) measured
-// vector needs a complete input for cross-pT-bin migration to unfold correctly, the same
-// reason drawing/draw_purity_corrected.C's buildFullyCorrected() purity-corrects all
-// ana::nPtBins slices instead of just the used ones.
+// Keep every ana::ptBins bin (restrictToUsed=false): the unfolding needs the full flattened
+// input for cross-bin migration.
 
-// buildXjByPtBin and purityCorrectByPtBin now live in src/insitu_utility.h/.cc
-// (insitu_utility:: namespace) - moved there after being found copy-pasted (differing
-// only in bin count / zero-vs-real purity-error arrays) across all six
-// grid_insitu*.C macros (see that header's comment). This macro always calls them
-// ana::nPtBins-sized with zero-filled purity-error arrays, since purity is held fixed
-// across the whole pa scan (file header) and the asymmetric purity-uncertainty term
-// isn't needed here.
-
-// Purity-correct (all nPtBins), reflatten into the response matrix's dimensionality,
-// unfold through the fixed nominal-JES response, and return mean(x_J)/error per USED
-// photon-pT bin (index 0..nPtBinsUsed-1, offset from ana::firstUsedPtBin) - the unfolded
-// analogue of grid_insitu.C's computeCorrectedMeans(). If unfoldedOut is non-null, it is
-// filled with clones of the per-used-pT-bin unfolded x_J histograms (caller owns them).
+// Purity-correct all pT bins, unfold, and return the mean xJ and error per used pT bin.
+// unfoldedOut (if non-null) gets clones of the unfolded histograms (caller owns them).
 void computeUnfoldedMeans(const vector<DataEvent> & dataA, const vector<DataEvent> & dataC, float pa,
     const float purity[], const float purityC[], RooUnfoldResponse * response, TH1D * respRecoTemplate,
     float mean[], float err[], const float lowXj[], vector<TH1D*> * unfoldedOut = nullptr) {
   vector<TH1D*> hA    = insitu_utility::buildXjByPtBin(dataA, pa, ana::nPtBins, "hUnfA_tmp", lowXj);
   vector<TH1D*> hC    = insitu_utility::buildXjByPtBin(dataC, pa, ana::nPtBins, "hUnfC_tmp", lowXj);
-  // Purity is held fixed across the whole pa scan (file header), so the asymmetric
-  // purity-uncertainty term isn't needed here - zero error arrays.
+  // Purity fixed: zero error arrays.
   float zeroErr[ana::nPtBins] = {0};
   vector<TH1D*> hCorr = insitu_utility::purityCorrectByPtBin(hA, hC, ana::nPtBins,
       purity, zeroErr, zeroErr, purityC, zeroErr, zeroErr, "hUnfCorr_tmp");
@@ -102,13 +61,8 @@ void computeUnfoldedMeans(const vector<DataEvent> & dataA, const vector<DataEven
   flatCorrected->Reset("ICES");
   for (int ipt = 0; ipt < ana::nPtBins; ipt++) unfold_utility::reflattenXj(hCorr[ipt], ipt, flatCorrected);
 
-  // includeSystematics=false: this runs once per pa-scan point (na=insitu_utility::scanN
-  // x ana::nJetR calls total) - the expensive response-matrix-statistics covariance term
-  // (see unfold_utility.h's includeSystematics comment, ~3s/call) made the full scan take
-  // hours. GetMeanError() below still reflects the (cheap, always-on) data-statistics
-  // covariance term, just not the response-matrix contribution - acceptable here since
-  // this method is a cross-check against grid_insitu.C's plain purity-corrected fit (the
-  // one draw_jes_summary.C actually sources ana::jesNominal from), not the headline result.
+  // includeSystematics=false: called at every scan point (~3 s each otherwise). The errors keep
+  // the data-statistics term only; this is a cross-check, not the headline JES.
   TH1D * flatUnfolded = unfold_utility::unfoldOnce(response, flatCorrected, niterate, "flatUnfolded_tmp", false);
 
   for (int k = 0; k < nPtBinsUsed; k++) {
@@ -127,7 +81,7 @@ void computeUnfoldedMeans(const vector<DataEvent> & dataA, const vector<DataEven
   delete flatUnfolded;
 }
 
-// Shape method: chi2 of unfolded vs truth x_J bin fractions per used pT bin.
+// Shape method: chi2 of unfolded vs truth xJ bin fractions per used pT bin.
 float computeUnfoldedShapeChi2(const vector<DataEvent> & dataA, const vector<DataEvent> & dataC, float pa,
     const float purity[], const float purityC[], RooUnfoldResponse * response, TH1D * respRecoTemplate,
     const vector<vector<double>> & truthFrac, const vector<vector<double>> & truthFracErr, const float lowXj[]) {
@@ -141,14 +95,7 @@ float computeUnfoldedShapeChi2(const vector<DataEvent> & dataA, const vector<Dat
   flatCorrected->Reset("ICES");
   for (int ipt = 0; ipt < ana::nPtBins; ipt++) unfold_utility::reflattenXj(hCorr[ipt], ipt, flatCorrected);
 
-  // includeSystematics=false: this is the actual fit criterion below, called once per
-  // pa-scan point (na=insitu_utility::scanN x ana::nJetR calls total) - the expensive
-  // response-matrix-statistics covariance term (see unfold_utility.h's includeSystematics
-  // comment, ~3s/call) made the full scan take hours. errUnf below still reflects the
-  // (cheap, always-on) data-statistics covariance term, just not the response-matrix
-  // contribution - acceptable here since this method is a cross-check against
-  // grid_insitu.C's plain purity-corrected fit (the one draw_jes_summary.C actually
-  // sources ana::jesNominal from), not the headline result.
+  // includeSystematics=false, as above.
   TH1D * flatUnfolded = unfold_utility::unfoldOnce(response, flatCorrected, niterate, "flatUnfoldedShape_tmp", false);
 
   float chisq = 0;
@@ -157,11 +104,7 @@ float computeUnfoldedShapeChi2(const vector<DataEvent> & dataA, const vector<Dat
     TH1D * hU = unfold_utility::unflattenXj(flatUnfolded, ipt, "hUnfoldedShapePt_tmp");
     double N = hU->Integral();
     if (N > 0) {
-      // errt floored at 1/N - same fix and same reason as grid_insitu.C (shape method)'s
-      // scan loop (see its comment): a bin that unfolds to ~0 content can still have
-      // errUnf~0, which understates the real uncertainty and lets one near-empty bin
-      // dominate the chi2 (see debug_shapechi2_spike.C, written against the Region-A
-      // version of this same pathology).
+      // errt floored at 1/N, as in grid_insitu.C.
       double errFloor = 1.0/N;
       for (int ixj = 1; ixj <= nXjBinsForChi2; ixj++) {
         double fUnf   = hU->GetBinContent(ixj)/N;
@@ -183,11 +126,7 @@ float computeUnfoldedShapeChi2(const vector<DataEvent> & dataA, const vector<Dat
   return chisq;
 }
 
-
-// One comparison page: top panel is unfolded mean(x_J) vs pT for Truth (fixed) and raw
-// (pa=1) unfolded Data; bottom panel is the raw ratio and the corrected ratio (evaluated
-// at the scan's best-fit pa) - the latter should sit flat at 1 by construction. Same
-// layout as grid_insitu.C's drawJESPage, with "Data/MC" -> "Unfolded/Truth".
+// Unfolded mean xJ vs pT for truth and raw Data (top); raw and corrected ratios (bottom).
 void drawJESPage(TCanvas * c, const char * pdfPath, const char * label, int ir,
     TGraphErrors * gTruth, TGraphErrors * gUnfoldRaw, TGraphErrors * gRatioRaw, TGraphErrors * gRatioCorr,
     float pa, float paErrLow, float paErrHigh) {
@@ -264,11 +203,7 @@ void drawJESPage(TCanvas * c, const char * pdfPath, const char * label, int ir,
   c->SaveAs(pdfPath);
 }
 
-// x_J shape comparison for one photon-pT bin: fixed truth reference, unfolded Data at
-// raw (pa=1) JES, and unfolded Data at the scan's best-fit pa - all shape-normalized
-// (density, then unit-area) since reco/unfolded/truth sit at different absolute scales
-// from reconstruction efficiency, same convention as
-// drawing/draw_purity_corrected.C's page 2.
+// xJ shape for one pT bin: truth, unfolded Data at pa=1 and at the best-fit pa (unit area).
 void drawXjPage(TCanvas * c, const char * pdfPath, const char * label, int ir, float ptlow, float pthigh,
     TH1D * hTruth, TH1D * hUnfoldRaw, TH1D * hUnfoldCorr) {
   c->Clear();
@@ -323,24 +258,15 @@ void drawXjPage(TCanvas * c, const char * pdfPath, const char * label, int ir, f
   c->SaveAs(pdfPath);
 }
 
-// method = "mean" (mean x_J vs truth) or "shape" (x_J bin fractions vs truth); output
-// grid_insitu_unfolded_<systag> or grid_insitu_unfolded_shapechi2_<systag>.
+// method = "mean" or "shape".
 void grid_insitu_unfolded(string systag = "nominal", int na = insitu_utility::scanN, string method = "mean") {
   if (method != "mean" && method != "shape") { cout << "method must be \"mean\" or \"shape\"" << endl; return; }
   shapeMethod = (method == "shape");
   const char * tag = shapeMethod ? "unfolded_shapechi2" : "unfolded";
-  // Newly created histograms are not registered to any TDirectory, so the ~20
-  // temporaries allocated per pa grid point (computeUnfoldedMeans, called na times) don't
-  // pile up in gROOT's object list or collide on name across iterations - they're freed
-  // by their own explicit `delete` calls instead. This also means the per-pT-bin
-  // histograms that ARE meant to be saved below don't auto-register into whichever
-  // radius subdirectory was left current by the previous iteration's mkdir/cd (see
-  // grid_insitu.C's identical comment) - both are covered by this one call.
+  // No auto-registration: the per-scan-point temporaries are deleted explicitly.
   TH1::AddDirectory(kFALSE);
 
-  // Response-matrix source (see below) and output file/PDF are shared across every
-  // radius - constructed/opened once here, before the per-radius loop, instead of
-  // per-radius as before.
+  // Response source and output shared across radii.
   drawer d("pythia", systag);
 
   string pdfPathStr = Form("%s/grid_insitu_%s_%s.pdf", insitu_pdf_dir, tag, systag.c_str());
@@ -357,16 +283,11 @@ void grid_insitu_unfolded(string systag = "nominal", int na = insitu_utility::sc
   vector<DataEvent> dataC = insitu_utility::cacheDataEvents(dataFile.c_str(), 2, ir, false);
   cout << "Cached Data events: region A=" << dataA.size() << " region C=" << dataC.size() << endl;
 
-  // Low-xJ floor per ana::ptBins bin (all nPtBins, since buildXjByPtBin fills every one
-  // of them, not just the used bins - see the cacheDataEvents comment above) - same cut
-  // unfolder::check_pair applies at floorScale=1 before a reco jet enters hrecoxj/the
-  // response matrix (see src/insitu_utility.h's lowXjFloor comment).
+  // Low-xJ floor for every ana::ptBins bin.
   float lowXj[ana::nPtBins];
   for (int ipt = 0; ipt < ana::nPtBins; ipt++) lowXj[ipt] = insitu_utility::lowXjFloor(ir, ana::ptBins[ipt]);
 
-  // Purity per ana::ptBins bin (all nPtBins, not just the used ones - see
-  // cacheDataEvents comment) - computed once, held fixed across the whole pa scan, same
-  // as grid_insitu.C.
+  // Purity for every ana::ptBins bin, fixed across the scan.
   float purity[ana::nPtBins], purityC[ana::nPtBins];
   for (int ipt = 0; ipt < ana::nPtBins; ipt++) {
     purity[ipt]  = ana::getPurity(ana::ptBins[ipt], ana::ptBins[ipt+1], systag, ir);
@@ -375,20 +296,13 @@ void grid_insitu_unfolded(string systag = "nominal", int na = insitu_utility::sc
          << "): P_A=" << purity[ipt] << " P_C=" << purityC[ipt] << endl;
   }
 
-  // Response matrix: the physically meaningful photon+jet MC response (cross-section-
-  // weighted combination of Photon5/10/20, type=1/isample=-1), built at the nominal
-  // (uncorrected) MC jet energy scale and held fixed across the whole pa scan - only the
-  // trial-pa-rescaled Data measured spectrum changes below. Same source/convention as
-  // drawing/draw_purity_corrected.C's response matrix. (drawer d itself is shared/
-  // hoisted above the radius loop - see top of function.)
+  // Response: Photon5/10/20 combined, nominal MC JES, fixed across the scan.
   TH1D * respRecoTemplate  = d.get(Form("hrecoxj%i", ir), 1);
   TH1D * respTruthTemplate = d.get(Form("htruthxj%i", ir), 1);
   TH2D * respMatrix2D      = d.get2d(Form("hxjresponse%i", ir), 1);
   RooUnfoldResponse * response = new RooUnfoldResponse(respRecoTemplate, respTruthTemplate, respMatrix2D);
 
-  // Fixed Pythia8 gamma+jet TRUTH-level mean(x_J) per used photon-pT bin - the reference
-  // the unfolded Data mean is compared against below (never rescaled: JES is a
-  // reco-level detector effect, truth is untouched by it).
+  // Truth mean xJ per used pT bin (not rescaled).
   float truthMean[nPtBinsUsed], truthMeanErr[nPtBinsUsed];
   vector<vector<double>> truthFrac(nPtBinsUsed), truthFracErr(nPtBinsUsed);
   for (int k = 0; k < nPtBinsUsed; k++) {
@@ -409,11 +323,7 @@ void grid_insitu_unfolded(string systag = "nominal", int na = insitu_utility::sc
   }
 
   // -----------------------------
-  // Grid scan: single overall jet-energy-scale factor pa, no pT-dependence - same scan
-  // window (insitu_utility.h's scanLow/scanHigh) as grid_insitu.C. At each pa,
-  // purity-correct region A/C (all ana::nPtBins slices), unfold through the fixed
-  // response above, and chi2 the unfolded mean(x_J) (used bins only) against the fixed
-  // truth mean.
+  // Grid scan over pa: purity-correct, unfold, chi2 against truth
   // -----------------------------
   const float lowa = insitu_utility::scanLow, higha = insitu_utility::scanHigh;
 
@@ -456,9 +366,7 @@ void grid_insitu_unfolded(string systag = "nominal", int na = insitu_utility::sc
        << " +" << errHighUnfold << "/-" << errLowUnfold << " (chi2=" << minchisqUnfold << ")" << endl;
 
   // -----------------------------
-  // Build final comparison histograms/graphs at pa=1 (raw) and pa=minpaUnfold
-  // (best-fit), and truth - one page for the mean-vs-pT summary, one per used pT bin
-  // for the xJ shape comparison.
+  // Final comparisons at pa=1, the best-fit pa, and truth
   // -----------------------------
   gStyle->SetOptStat(0);
 
@@ -488,7 +396,7 @@ void grid_insitu_unfolded(string systag = "nominal", int na = insitu_utility::sc
   }
 
   // -----------------------------
-  // Save - see grid_insitu.C's identical comment.
+  // Save
   // -----------------------------
   fout->cd();
   fout->mkdir(ana::rnames[ir])->cd();

@@ -6,16 +6,8 @@
 #include "TF1.h"
 #include <iostream>
 
-// Loads the Data/MC v_z and cluster-pT weights written by
-// reweight/make_vz_pt_reweight.C and evaluates them for a given event. Usage:
-//   Reweighter rw;
-//   float w = rw.GetWeight(tu.vz, tu.cluster_pt);
-//
-// v_z uses hVzWeight directly (one lookup per bin, no fit - stats are fine across the
-// whole |v_z| < 60 cm range). Cluster pT uses hPtWeight's first bin (10-11 GeV) as a flat
-// value below 11 GeV, and the fPtWeight "expo" fit (fit over the well-populated 11-25 GeV
-// range, see make_vz_pt_reweight.C) for pT >= 11 - the raw bins above ~25 GeV are too
-// low-statistics to use directly.
+// Data/MC weights from reweight/make_vz_pt_reweight.C: v_z from hVzWeight bins; cluster pT from
+// hPtWeight's first bin below 11 GeV and the fPtWeight expo fit (11-25 GeV) above.
 class Reweighter {
   public:
     Reweighter(const char * filename = ana::path("reweight/vz_pt_reweight.root")) {

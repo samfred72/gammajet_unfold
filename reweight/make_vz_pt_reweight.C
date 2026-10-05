@@ -4,66 +4,30 @@
 #include "../src/pho_object.h"
 #include "../src/jet_object.h"
 #include "../src/unfold_utility.h"
-// The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
-// into /home/samson72/root/lib/libgammajet.so, sitting on the same library search path
-// as this project's libgammajet_unfold.so. Without forcing which one loads first, ROOT's
-// implicit symbol autoload can bind drawer/ana calls to the wrong (mismatched-layout)
-// library and segfault - explicit load removes the ambiguity.
+// Load explicitly: the sibling gammajet project's libgammajet.so has same-named classes.
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
-// Builds the Data/MC reweighting for v_z and photon-cluster p_T applied to every pythia
-// MC event (src/reweight_utility.h, unfolder.cc's mcWeight). Both are ratios of shapes
-// normalized to unit area.
+// Data/MC reweighting in v_z and photon-cluster pT for every pythia MC event
+// (src/reweight_utility.h). Both are ratios of unit-area shapes.
+//   v_z: all Data vs all Photon5/10/20 MC (stitched, cross-section weighted).
+//   Cluster pT: purity-corrected Data region A (two-purity subtraction in 1 GeV bins) over
+//     truth-matched MC region A, both with the analysis pairing (R=0.4, as check_pair), so the
+//     weight corrects the signal spectrum rather than following the fake fraction.
+// Evaluated in the raw cluster_pt (Reweighter's argument). The 1 GeV ratio over [13,35) GeV is fit
+// with expo; empty bins get a one-count variance so a single empty bin cannot drive the fit.
+// hPtWeight's first bin [10,13) holds the fit value at 13 GeV.
 //
-// v_z: all Data events vs all (truth-pT-stitched, cross-section-weighted) Photon5/10/20
-// MC events.
-//
-// Cluster p_T (rederived Sep 28 2026, PPG18 review issue 4): the weight must correct the
-// MC SIGNAL photon spectrum, so it is the ratio of
-//   Data: the PURITY-CORRECTED region-A cluster-pT spectrum, i.e. the same two-purity
-//         subtraction the analysis applies (unfold_utility::purityCorrectCoeffs with the
-//         committed ana::getPurity/getPurityC), done in 1 GeV bins with the coefficients
-//         of the ana::ptBins purity bin each fine bin falls in
-//   MC:   truth-matched (dR < 0.1) region-A cluster pT from Photon5/10/20, stitched and
-//         cross-section weighted, with the v_z weight above applied
-// both in the analysis selection: region A/C paired with an R = 0.4 jet exactly as
-// unfolder::check_pair (jet pT = jet_pt_calib/jesNominal in Data, jet_pt_smear_truth in
-// MC, > jet_calib_pt_cut, xJ floor, jet |eta| < 1.1-R, dphi > 7pi/8), photon |eta| <
-// photonEtaMax. The previous version divided the shape of ALL Data clusters (any BDT or
-// isolation, paired or not) by the leading MC cluster, so its slope followed the fake-
-// photon fraction falling with pT rather than any signal mismodeling.
-//
-// Histogrammed and evaluated in the RAW cluster_pt (no EM-resolution smearing), since
-// that is the argument unfolder.cc passes to Reweighter::GetWeight. The ratio is taken in
-// all 1 GeV bins over the analysis range [13, 35) GeV and fit with "expo" over all of them
-// (stays positive when extrapolated above 35 GeV). In the sparse high-pT bins a
-// purity-corrected bin can have zero region-A counts; its Poisson variance would then be
-// estimated from region C alone and come out near zero, letting a single empty bin drive
-// the fit (30-31 GeV: A = 0, C = 3). Zero-count bins are therefore given a variance of one
-// count (the standard floor for an empty Poisson bin) in both A and C. A fit to the same
-// ratio in merged bins (1 GeV to 20 GeV, then the 20-25 and 25-35 GeV purity bins) is
-// printed as a cross-check.
-//
-// hPtWeight's first bin is [10, 13) set to the fit value at 13 GeV - Reweighter holds the
-// weight flat at hPtWeight's first-bin content below that bin's upper edge (13 GeV) and
-// uses fPtWeight above it, so reweight_utility.h needs no change.
-//
-// Two stages: fillInputs() loops over the trees (~20 min) and writes the raw inputs to
-// vz_pt_reweight_inputs.root; the derivation and plots then run from that file. Run
-// make_vz_pt_reweight(true) to refill after the trees, purities or selection change.
-//
-// Circularity note: the purities (and their Photon-MC leakage templates) were themselves
-// derived with the previous weight applied to MC. The leakage fractions are ratios within
-// a purity bin, so this is a second-order effect; rerun puritymaker after the next
-// unfolder pass and, if the purities move, rerun this macro once more.
+// Stage 1 (make_vz_pt_reweight(true), ~20 min) fills vz_pt_reweight_inputs.root from the trees;
+// stage 2 derives and draws from it. The purities were derived with the previous weight
+// (second-order); rerun once more if they move.
 
-// Photon acceptance for the weight's selection - the analysis photon acceptance.
+// Photon acceptance for the weight's selection.
 const double photonEtaMax = ana::photonEtaCut;
 const int reweightIr = 2; // R = 0.4 pairing, the nominal radius
 const char * inputsPath = ana::path("reweight/vz_pt_reweight_inputs.root");
 const char * outPath    = ana::path("reweight/vz_pt_reweight.root");
 
-// unfolder::check_pair (without the photon-pT-bin lookup, done by the caller)
+// unfolder::check_pair (pT-bin lookup done by the caller)
 bool pairedR04(const pho_object & pho, const jet_object & jet, int ptbin) {
   const int ir = reweightIr;
   if (!(jet.pt > ana::jet_calib_pt_cut[ir])) return false;
@@ -88,7 +52,7 @@ void fillInputs() {
   TH1D * hVzMC   = new TH1D("hVzMC",   ";v_{z} [cm];Events (norm.)", nVzBins, -vzcut, vzcut);
   TH1D * hPtA    = new TH1D("hPtA",    ";Cluster p_{T} [GeV];Clusters", nPtBins, ptLo, ptHi);
   TH1D * hPtC    = new TH1D("hPtC",    ";Cluster p_{T} [GeV];Clusters", nPtBins, ptLo, ptHi);
-  // MC signal filled in (v_z, pT) so the v_z weight can be applied once it is known
+  // MC signal in (v_z, pT) so the v_z weight can be applied later
   TH2D * hVzPtMC = new TH2D("hVzPtMC", ";v_{z} [cm];Cluster p_{T} [GeV]", nVzBins, -vzcut, vzcut, nPtBins, ptLo, ptHi);
   for (TH1 * h : std::initializer_list<TH1*>{hVzData, hVzMC, hPtA, hPtC, hVzPtMC}) h->Sumw2();
 
@@ -112,9 +76,7 @@ void fillInputs() {
     cout << "Data: " << nentries << " entries" << endl;
   }
 
-  // Cross-section weights - same numbers as drawer.h's scalemap[isphoton=1][sample] and
-  // insitu/grid_insitu.C's photon_scale, for sim="pythia". Photon cluster pT for the ABCD
-  // shower-shape class uses the raw cluster pT, like the weight's own argument.
+  // Cross-section weights (drawer.h's scalemap). ABCD uses the raw cluster pT.
   const map<string,double> photonScale = {{"Photon5",146359.3},{"Photon10",6944.675},{"Photon20",130.4461}};
   const vector<string> mcSamples = {"Photon5", "Photon10", "Photon20"};
   for (const string & sample : mcSamples) {
@@ -146,7 +108,7 @@ void fillInputs() {
          << " entries kept (truth_cluster_pt in (" << loThresh << "," << hiThresh << ")), scale=" << scale << endl;
   }
 
-  // MC signal pT spectrum with the v_z weight (Data/MC shape ratio) applied
+  // MC signal pT with the v_z weight applied
   TH1D * hVzW = (TH1D*)hVzData->Clone("hVzW_tmp");
   hVzW->Scale(1.0/hVzData->Integral());
   TH1D * hVzMCn = (TH1D*)hVzMC->Clone("hVzMCn_tmp");
@@ -175,7 +137,6 @@ namespace {
     for (int b = 0; b <= h->GetNbinsX() + 1; b++)
       if (!std::isfinite(h->GetBinContent(b)) || !std::isfinite(h->GetBinError(b))) { h->SetBinContent(b, fill); h->SetBinError(b, 0); }
   }
-  // top (distributions) / bottom (ratio) pads with explicit margins
   void twoPads(TCanvas * c, TPad *& top, TPad *& bot) {
     c->cd();
     top = new TPad(Form("%s_top", c->GetName()), "", 0, 0.32, 1, 1);
@@ -215,7 +176,7 @@ void make_vz_pt_reweight(bool refill = false) {
   fin->Close();
   const int nPtBins = hPtA->GetNbinsX();
 
-  // previous (pre-Sep-28, all-cluster) weight, kept for the comparison curve
+  // previous (all-cluster) weight, for comparison
   TF1 * fOld = nullptr;
   {
     TFile * fprev = TFile::Open(outPath, "read");
@@ -234,7 +195,7 @@ void make_vz_pt_reweight(bool refill = false) {
   hVzWeight->Divide(hVzMC);
   sanitize(hVzWeight); // no data to reweight against - leave MC unweighted there
 
-  // ---- purity-corrected Data spectrum, all 1 GeV bins ----
+  // ---- purity-corrected Data spectrum, 1 GeV bins ----
   TH1D * hPtData = (TH1D*)hPtA->Clone("hPtData");
   hPtData->Reset("ICES");
   hPtData->SetTitle(";Cluster p_{T} [GeV];Clusters (norm.)");
@@ -249,7 +210,7 @@ void make_vz_pt_reweight(bool refill = false) {
     for (int b = b0; b <= b1; b++) {
       double a = hPtA->GetBinContent(b), c = hPtC->GetBinContent(b);
       hPtData->SetBinContent(b, cA*a - cC*c);
-      // counting statistics only; empty bins get a one-count variance (see header)
+      // counting statistics only; empty bins get a one-count variance
       hPtData->SetBinError(b, sqrt(cA*cA*std::max(a, 1.0) + cC*cC*std::max(c, 1.0)));
     }
     printf("  %4.0f-%-4.0f GeV: N_A %6.0f N_C %6.0f  P_A %.3f P_C %.3f%s -> signal %.0f\n", lo, hi, NA, NC, pA, pC,
@@ -270,7 +231,7 @@ void make_vz_pt_reweight(bool refill = false) {
   printf("\nexpo fit, all %d 1-GeV bins over %.0f-%.0f GeV: slope %.4f +- %.4f /GeV, chi2/ndf %.1f/%d, w(15)=%.3f w(20)=%.3f w(35)=%.3f\n",
          nPtBins, ptLo, ptHi, fPtWeight->GetParameter(1), fPtWeight->GetParError(1), fPtWeight->GetChisquare(), fPtWeight->GetNDF(),
          fPtWeight->Eval(15), fPtWeight->Eval(20), fPtWeight->Eval(35));
-  { // cross-check: merged bins (1 GeV to 20 GeV, then the 20-25 and 25-35 GeV purity bins)
+  { // cross-check: merged bins
     const vector<double> e = {13, 14, 15, 16, 17, 18, 19, 20, 25, 35};
     TH1D * d = (TH1D*)hPtData->Rebin(e.size()-1, "hPtDataMerged", e.data());
     TH1D * m = (TH1D*)hPtMC->Rebin(e.size()-1, "hPtMCMerged", e.data());
@@ -282,9 +243,8 @@ void make_vz_pt_reweight(bool refill = false) {
   }
   if (fOld) printf("previous weight (all clusters): w(15)=%.3f w(20)=%.3f w(35)=%.3f\n", fOld->Eval(15), fOld->Eval(20), fOld->Eval(35));
 
-  // hPtWeight in the layout Reweighter expects: bin 1 = [10, 13) at the fit value at 13 GeV
-  // (held flat below 13 GeV), then the measured 1 GeV ratio bins (for display; above 13 GeV
-  // Reweighter evaluates fPtWeight).
+  // hPtWeight as Reweighter expects: bin 1 = [10,13) at the fit value at 13 GeV, then the
+  // measured ratio (display only above 13 GeV).
   vector<double> edges = {ana::cluster_pt_cut};
   for (int b = 0; b <= nPtBins; b++) edges.push_back(ptLo + b);
   TH1D * hPtWeight = new TH1D("hPtWeight", ";Cluster p_{T} [GeV];Data / MC weight", edges.size()-1, edges.data());
@@ -298,7 +258,7 @@ void make_vz_pt_reweight(bool refill = false) {
   fout->Close();
   cout << "Saved " << outPath << endl;
 
-  drawer d("pythia", "nominal"); // ctor args only pick files for other helpers; labels come from drawAll
+  drawer d("pythia", "nominal"); // labels come from drawAll
 
   // ---- plot 1: v_z ----
   {

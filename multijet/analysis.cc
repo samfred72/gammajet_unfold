@@ -22,13 +22,11 @@
 #include <iomanip>
 #include "style.h"
 
-// Multijet balance analysis (from SDCC multiJet_legacy/analysis.cc, Oct 2026).
-// Reads the multiJet analysis trees (multiJet/src/DijetTreeMaker.cc) - the same local
-// copies the in-situ combined mode uses (../trees/multijet_*.root, see insitu/README.md):
-//   Data: multijet_Data.root, MC: multijet_<sim>_Jet{8,12,20,30}.root
-// Build: ./make.sh    Run (from this directory): ./analysis <0=pythia|1=herwig> [tree dir]
-// Writes multijet_analysis_<sim>.root and pdfs/unmatched_event_display_<sim>.pdf; reads the
-// MC reweighting fits aux/ratio<R>_<sim>.root (written by makeratio.C from a previous pass).
+// Multijet balance analysis (from SDCC multiJet_legacy/analysis.cc). Reads the multiJet trees
+// (../trees/multijet_*.root): Data multijet_Data.root, MC multijet_<sim>_Jet{8,12,20,30}.root.
+// Build: ./make.sh    Run: ./analysis <0=pythia|1=herwig> [tree dir]
+// Writes multijet_analysis_<sim>.root; reads the MC reweighting fits aux/ratio<R>_<sim>.root
+// (from makeratio.C on a previous pass).
 
 float deltaPhi(float phi1, float phi2) {
   float dphi = std::fabs(phi1 - phi2);
@@ -99,24 +97,17 @@ int main(int argc, char* argv[]) {
   const char * sim = (isherwig ? "herwig" : "pythia");
   std::cout << "sim is: " << argv[1] << " " << sim << std::endl;
 
-  // All 7 jet radii processed in one pass per sim - each input tree already
-  // carries every radius's branches for a given event, so one GetEntry()
-  // gives us all of them at once.
+  // All 7 radii in one pass.
   const int nRadii = 7;
   const int radii[nRadii] = {2,3,4,5,6,7,8};
-  const int reprRadiusIdx = 2; // radius 4 - representative sample for the debug event display only
+  const int reprRadiusIdx = 2; // radius 4, for the debug event display
 
-  // Only the reco-based JER smear variants: RECO is the central value
-  // (smearing applied directly to the calibrated reco pt), HIGH/LOW are its
-  // systematic envelope. The truth-anchored "smear" variant is intentionally
-  // not produced here.
+  // Reco-based JER variants only: RECO central, HIGH/LOW its envelope.
   const int nsystypes = 3;
   const char * sysNames[nsystypes] = {"RECO","HIGH","LOW"};
   const char * fitFuncNames[nsystypes] = {"ratio_func_JERreco","ratio_func_JERhigh","ratio_func_JERlow"};
 
-  //=====================================
   // file setup
-  //=====================================
   TFile infile(Form("%s/multijet_Data.root", treedir), "READ"); // Data
   TFile f08(Form("%s/multijet_%s_Jet8.root",  treedir, sim), "READ"); //sim
   TFile f12(Form("%s/multijet_%s_Jet12.root", treedir, sim), "READ"); //sim
@@ -129,9 +120,7 @@ int main(int argc, char* argv[]) {
   if (f20.IsZombie()) return 1;
   if (f30.IsZombie()) return 1;
 
-  //====================================
-  // WEIGHTING
-  //====================================
+  // weighting
 
   float leading_pT_Cutoff = 20;
   float subleadingPTCutoff = 7;
@@ -140,14 +129,14 @@ int main(int argc, char* argv[]) {
   float SLDPHI = 3*M_PI/4.0;
 
   double weight8, weight12, weight20, weight30;
-  //pythia weights
+  // pythia weights
   if (!isherwig) {
     weight8  = 1.3013e+07 / 2.5298e+03;// * 10000000.0 / 9998000.0;
     weight12 = 1.4903e+06 / 2.5298e+03;
     weight20 = 6.2623e+04 / 2.5298e+03;
     weight30 = 1;
   }
-  //herwig weights
+  // herwig weights
   else {
     weight8  = 1.8437e+08 / 2.0694e+03;
     weight12 = 1.1324e+06 / 2.0694e+03 * 10000000.0 / 10001000.0;
@@ -158,7 +147,7 @@ int main(int argc, char* argv[]) {
   const int ntrees = nsimtrees + 1;
   double weights[ntrees] = {1, weight8, weight12, weight20, weight30};
 
-  // truth-pT-hat stitching windows, per radius (row) per tree (column: data,Jet8,Jet12,Jet20,Jet30)
+  // truth-pT-hat stitching windows: row = radius, column = data,Jet8,Jet12,Jet20,Jet30
   double cutLow[nRadii][4] = {
     {0,12,20,30}, {0,13,21,31}, {0,14,21,32}, {0,19,27,38},
     {0,22,29,41}, {0,24,32,45}, {0,25,34,47}
@@ -177,10 +166,7 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  //==============================================================
-  // per-radius ratio/fit inputs (produced by makeratio.C from the previous
-  // iteration's leadingJetPT/leadingJetPT_Pyth spectra below)
-  //==============================================================
+  // per-radius reweighting fits (makeratio.C)
   TFile* fRatio[nRadii];
   TF1* myFit[nRadii][nsystypes];
   TH1D* zvtxRatio[nRadii];
@@ -196,16 +182,12 @@ int main(int argc, char* argv[]) {
     zvtxRatio[ir] = (TH1D*)fRatio[ir]->Get(Form("hratio_zvtx%d_%s", radii[ir], sim));
   }
 
-  //==============================================================
-  // OUTPUT FILE - one file for this sim: all radii, all systematics
-  //==============================================================
+  // output file: all radii, all systematics
   TFile * wf = TFile::Open(Form("multijet_analysis_%s.root", sim), "RECREATE");
   wf->cd();
   gStyle->SetOptStat(0);
 
-  //==============================================================
-  // OUTPUT HISTOGRAM SETUP
-  //==============================================================
+  // output histograms
   std::vector<float> pTBins = {20,25,30,35,40,50,60,70};
   const int nPtBins = 7;
 
@@ -251,9 +233,7 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  //==============================================================
-  // OUTPUT TTREE SETUP
-  //==============================================================
+  // output trees
   const char * treenames[ntrees] = {"data", "Jet8", "Jet12", "Jet20", "Jet30"};
 
   TTree* outtree[nRadii][ntrees][nsystypes]; // for data (i=0) only the j=0 slot is used
@@ -290,9 +270,7 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  //==============================================
-  // TREE SETUP
-  //==============================================
+  // tree setup
   TTree* TreeRead = (TTree*) infile.Get("ttree");
   TTree *t08 = (TTree*) f08.Get("ttree");
   TTree *t12 = (TTree*) f12.Get("ttree");
@@ -335,7 +313,6 @@ int main(int argc, char* argv[]) {
         intree[i]->SetBranchAddress(Form("truth_jet_pt_%d", radius), &TRUTH_pt[ir]);
         intree[i]->SetBranchAddress(Form("truth_jet_eta_%d", radius), &TRUTH_eta[ir]);
         intree[i]->SetBranchAddress(Form("truth_jet_phi_%d", radius), &TRUTH_phi[ir]);
-        // DijetTreeMaker names (the old separately-skimmed trees used jet_pt_smearRECO/HIGH/LOW_<R>)
         intree[i]->SetBranchAddress(Form("jet_pt_smear_reco_%d", radius), &jet_pt_smearRECO[ir]);
         intree[i]->SetBranchAddress(Form("jet_pt_smear_high_reco_%d", radius), &jet_pt_smearHIGH[ir]);
         intree[i]->SetBranchAddress(Form("jet_pt_smear_low_reco_%d", radius), &jet_pt_smearLOW[ir]);
@@ -352,7 +329,7 @@ int main(int argc, char* argv[]) {
     intree[i]->SetBranchAddress("mbd_vertex_z", &zvtx);
     intree[i]->SetBranchAddress("mbd_hit", &mbd_hit);
 
-    //////////////////////// TREE ANALYSIS ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // tree analysis
     int matched_events[nRadii] = {0};
     int passed_events[nRadii] = {0};
 
@@ -361,21 +338,18 @@ int main(int argc, char* argv[]) {
       intree[i]->GetEntry(e);
       if (e % 1000 == 0) std::cout << "entry " << e << "/" << nentries << " (" << (float)e/nentries*100. << "%)" << "\t\r" << std::flush;
 
-      // =========================================
-      // Event Level Cuts (radius-independent)
-      // =========================================
+      // event-level cuts (radius-independent)
 
       if (std::fabs(zvtx) > 60) continue;
-      //if (!mbd_hit) continue;
 
       if (!isMC) {
-        // Timing cut
+        // timing cut
         double x = calib_lead_time;
         double y = x - calib_delta_time;
         if (!(fabs(x) < 6 && fabs(y) < 3)) continue; //requiring timing cut
       }
 
-      // Trigger selection
+      // trigger selection
       bool bit[64];
       for (int b = 0; b < 64; b++) {
         bit[b] = (((trigger >> b) & 0x1) == 0x1);
@@ -392,7 +366,7 @@ int main(int argc, char* argv[]) {
         if (jet_pt_calib[ir]->size() <= 2) continue; // requiring three jets
 
         if (isMC) {
-          // Truth selection cuts
+          // truth selection
           if (TRUTH_pt[ir]->size() == 0) continue; // requiring at least one truth jet
 
           std::vector<int> IDXTRUTH = IDXGrab(TRUTH_pt[ir]->size(), *TRUTH_pt[ir]);
@@ -401,9 +375,7 @@ int main(int argc, char* argv[]) {
           leadingJetPT_truth[ir]->Fill(TRUTH_pt[ir]->at(IDXTRUTH[0]), weights[i]);
         }
 
-        //==========================================================
-        // LOOP OVER RECO / HIGH / LOW JER-SMEARED PT VECTORS
-        //==========================================================
+        // loop over RECO / HIGH / LOW smeared pT
 
         std::vector<std::vector<float>*> ptVariations = (!isMC ?
             std::vector<std::vector<float>*>{ jet_pt_calib[ir] } :
@@ -462,13 +434,12 @@ int main(int argc, char* argv[]) {
             bool match2 = (std::fabs(currentPt->at(Idx_Jets[2]) - jet_pt_calib[ir]->at(Idx_Jets[2])) > 0.00001);
 
             if (match0 && match1 && match2) { matched_events[ir]++; }
-            else if (ir == reprRadiusIdx && i == 1 && icount < 100) { // Draw a bad event (radius 4, Jet8 MC, representative sample)
+            else if (ir == reprRadiusIdx && i == 1 && icount < 100) { // bad-event display (radius 4, Jet8 MC)
               c->cd();
 
               TH2D *h = new TH2D(Form("heventdisplay_%d",icount), ";#eta;#phi", 100,-1.5,1.5, 100,-M_PI,M_PI);
               h->Draw();
 
-              // Legend
               TLegend *leg = new TLegend(0.60,0.90,0.90,1.00);
               leg->SetBorderSize(0);
               leg->SetFillStyle(0);
@@ -484,7 +455,6 @@ int main(int argc, char* argv[]) {
               leg->AddEntry(recoLeg,  "Reco jets",  "p");
               leg->AddEntry(truthLeg, "Truth jets", "p");
 
-              // Reco jets
               for (int ijet = 0; ijet < jet_pt_calib[ir]->size(); ijet++) {
                 double eta = jet_eta_det[ir]->at(ijet);
                 double phi = jet_phi[ir]->at(ijet);
@@ -496,7 +466,6 @@ int main(int argc, char* argv[]) {
                 mjet->Draw();
               }
 
-              // Truth jets
               for (int ijet = 0; ijet < TRUTH_pt[ir]->size(); ijet++) {
                 double eta = TRUTH_eta[ir]->at(ijet);
                 double phi = TRUTH_phi[ir]->at(ijet);
@@ -506,7 +475,6 @@ int main(int argc, char* argv[]) {
                 mjet->SetMarkerSize(15);
                 mjet->Draw();
               }
-              // Reco jets
               for (int ijet = 0; ijet < jet_pt_calib[ir]->size(); ijet++) {
                 double eta = jet_eta_det[ir]->at(ijet);
                 double phi = jet_phi[ir]->at(ijet);
@@ -519,7 +487,6 @@ int main(int argc, char* argv[]) {
                 lab->Draw();
               }
 
-              // Truth jets
               for (int ijet = 0; ijet < TRUTH_pt[ir]->size(); ijet++) {
                 double eta = TRUTH_eta[ir]->at(ijet);
                 double phi = TRUTH_phi[ir]->at(ijet);
@@ -572,8 +539,8 @@ int main(int argc, char* argv[]) {
               else       hxj[ir][k][j][1]->Fill(LeadingPT[ir][i][j] / PT23[ir][i][j], w_ratio);
             }
           }
-          if (!isMC) leadingJetPT[ir]->Fill(          LeadingPT[ir][i][j], weights[i]); // This is used to calculate w_ratio, so we don't want to use it here
-          if (isMC)  leadingJetPT_Pyth[ir][j]->Fill(  LeadingPT[ir][i][j], weights[i]); // This is used to calculate w_ratio, so we don't want to use it here
+          if (!isMC) leadingJetPT[ir]->Fill(          LeadingPT[ir][i][j], weights[i]); // used for w_ratio, not here
+          if (isMC)  leadingJetPT_Pyth[ir][j]->Fill(  LeadingPT[ir][i][j], weights[i]); // used for w_ratio, not here
           outtree[ir][i][j]->Fill();
         }
       }
@@ -588,7 +555,7 @@ int main(int argc, char* argv[]) {
     if (i == 1) c->SaveAs(Form("pdfs/unmatched_event_display_%s.pdf]", sim));
   }
 
-  //////////////////////// WRITING ////////////////////////
+  // writing
 
   std::cout << "Writing " << wf->GetName() << std::endl;
   wf->Write();

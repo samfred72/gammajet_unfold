@@ -4,68 +4,24 @@
 #include "RooUnfoldResponse.h"
 #include "RooUnfoldBayes.h"
 #include "TDecompSVD.h"
-// The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
-// into /home/samson72/root/lib/libgammajet.so, sitting on the same library search path
-// as this project's libgammajet_unfold.so. Without forcing which one loads first, ROOT's
-// implicit symbol autoload can bind drawer/ana calls to the wrong (mismatched-layout)
-// library and segfault - explicit load removes the ambiguity.
+// Load explicitly: the sibling gammajet project's libgammajet.so has same-named classes.
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
-// Follow-up to draw_covariance.C: does the correlation found there (mean |off-diagonal|
-// ~0.2-0.25, decaying from niter=1 then levelling off) actually change the chi2/NDF
-// conclusions this whole directory's niter selection rests on, or is the diagonal
-// approximation (Sum (residual/sigma_i)^2, used everywhere else in this directory) good
-// enough in practice? This computes BOTH versions of the SAME comparison - unfolded Data
-// vs the Pythia8 truth prior, the exact reference draw_purity_corrected.C's own
-// best-iteration scan is built on - at every niter in the standard scan, so the two can be
-// read off side by side.
-//
-// Diagonal: Sum_i (residual_i)^2 / sigma_i^2, sigma_i^2 = Eunfold(kCovariance)'s own
-// diagonal element for bin i (equivalent to what every computeChi2NDF-style function
-// elsewhere in this directory already computes, just sourced from the covariance matrix's
-// diagonal directly rather than TH1::GetBinError()).
-// Full covariance: res^T C^-1 res, using the FULL (not diagonal-truncated) covariance
-// submatrix restricted to the same used bins, inverted directly (RooUnfoldT::Chi2()
-// itself does exactly this with TMatrixD::Invert() - not reused here only because it
-// operates over the response's ENTIRE flattened space, including the low-pT/high-pT
-// buffer bins and the low-count high-xJ tail this directory already excludes everywhere
-// else via nXjBinsForChi2 - so the restricted submatrix is built and inverted directly).
-//
-// Only the UNFOLDED result's own covariance is used for both versions - the Pythia truth
-// reference's own (much smaller, weighted-MC-sample) statistical error is not folded in,
-// matching the simplification already used by every chi2 metric in this directory besides
-// draw_purity_corrected.C's original computeChi2NDF (which combines both sides) - keeping
-// this file to ONE side's uncertainty isolates the effect of the correlation itself,
-// rather than mixing in a different error-combination convention too.
-//
-// Shape-normalized per pT bin before comparing, exactly like draw_purity_corrected.C's own
-// unfolded-vs-truth chi2 (each side scaled to unit area over its own pT bin's full
-// nUnfoldXjBins range, THEN restricted to the first nXjBinsForChi2 of those for the actual
-// sum) - Data (raw counts) and the cross-section-weighted Pythia truth are on wildly
-// different absolute scales, so subtracting them directly (as an earlier version of this
-// file did) makes every residual enormous regardless of how correct the covariance
-// treatment is. The unfolded side's normalization constant (1/Integral()) is treated as a
-// fixed scalar here - so the covariance submatrix for a pT bin is scaled by that constant
-// squared - the same level of rigor (not propagating the normalization's own uncertainty)
-// every other shape-normalized comparison in this directory already uses.
+// Does the bin-to-bin correlation (draw_covariance.C) change the niter conclusions? Compares the
+// diagonal chi2 with the full-covariance chi2 (res^T C^-1 res) of unfolded Data vs Pythia8 truth
+// at every niter, per pT bin on the used bins only. Only the unfolded covariance enters.
+// Both sides are shape-normalized over the full pT slice; the normalization is treated as a
+// fixed scalar (covariance scaled by its square).
 
 const int ir = 2; // nominal jet radius index (R=0.4)
-const int nPtBinsUsed = ana::nPtBinsUsed; // physics analysis only uses ana::ptBins[ana::firstUsedPtBin..]
-const int niterate = 2; // matches draw_purity_corrected.C / draw_final_result.C's chosen nominal iteration count
+const int nPtBinsUsed = ana::nPtBinsUsed; // reported bins start at ana::firstUsedPtBin
+const int niterate = 2; // nominal iteration count
 const vector<int> iterationsToScan = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}; // same list as every other niter scan in this directory
 
-// The last 3 xJ bins in each pT bin have very low counts, so chi2/NDF here would be
-// dominated by their noise rather than genuine convergence behavior - excluded from both
-// chi2 metrics below, same exclusion as every other macro in this directory.
+// The last 3 xJ bins per pT bin have too few counts: excluded from both chi2 metrics.
 const int nXjBinsForChi2 = ana::nUnfoldXjBins - 3;
 
-// buildFullyCorrected now lives in unfold_utility (purity-corrects all ana::nPtBins
-// slices via unfold_utility::purityCorrect and reflattens for RooUnfold) - see
-// src/unfold_utility.h.
-
-// flatbin(ipt,ixj), 0-indexed, matching TMatrixD/TVectorD element ordering - identical to
-// draw_covariance.C's own matrixIndex() (and to unfold_utility::unflattenXj's "flatbin"),
-// since RooUnfoldResponse defaults to _overflow=false everywhere in this project.
+// flatbin(ipt,ixj), 0-indexed (TMatrixD order; RooUnfoldResponse has no overflow here).
 int matrixIndex(int ipt, int ixj) {
   return ipt*(ana::nUnfoldXjBins+2) + ixj + 1;
 }
@@ -104,18 +60,14 @@ void draw_covariance_chi2(string systag = "nominal") {
     TH1D * hUnfolded = (TH1D*)((TH1D*)unfold.Hreco())->Clone(Form("hUnfoldedFull_iter%d", iter));
     TMatrixD cov = unfold.Eunfold(RooUnfold::kCovariance);
 
-    // Summed across the nPtBinsUsed pT bins, each normalized (and inverted) separately -
-    // matching draw_purity_corrected.C's own per-pT-bin "combined +=" convention, not one
-    // cross-pT-bin block (shape-normalization is itself a per-pT-bin operation, so a
-    // single combined block would need cross-pT-bin normalization factors that don't
-    // mean anything physical here).
+    // Summed over pT bins, each normalized and inverted separately.
     double chi2DiagSum = 0, chi2FullSum = 0;
     int ndfDiagSum = 0, nKeptSum = 0, nSum = 0;
 
     for (int ipt = ana::firstUsedPtBin; ipt < ana::firstUsedPtBin+nPtBinsUsed; ipt++) {
       TH1D * hUnfoldPt = unfold_utility::unflattenXj(hUnfolded, ipt, Form("hUnfoldPt_iter%d_pt%d", iter, ipt));
       TH1D * hTruthPt  = unfold_utility::unflattenXj(respTruthTemplate, ipt, Form("hTruthPt_iter%d_pt%d", iter, ipt));
-      double cU = hUnfoldPt->Integral() > 0 ? 1.0/hUnfoldPt->Integral() : 0; // over the FULL nUnfoldXjBins range, matching densityForDisplay+Scale(1/Integral()) convention
+      double cU = hUnfoldPt->Integral() > 0 ? 1.0/hUnfoldPt->Integral() : 0; // over the full nUnfoldXjBins range
       double cT = hTruthPt->Integral()  > 0 ? 1.0/hTruthPt->Integral()  : 0;
 
       int n = nXjBinsForChi2;
@@ -126,16 +78,11 @@ void draw_covariance_chi2(string systag = "nominal") {
         res[a] = hUnfoldPt->GetBinContent(a+1)*cU - hTruthPt->GetBinContent(a+1)*cT;
         for (int b = 0; b < n; b++) {
           int ib = matrixIndex(ipt, b);
-          // cU*cU: the normalization constant is treated as a fixed scalar (not itself a
-          // random variable correlated with the bins it's built from) - the same level of
-          // rigor every shape-normalized comparison elsewhere in this directory already
-          // uses. Truth's own covariance isn't folded in - see file header.
           subCov(a,b) = cov(ia, ib) * cU * cU;
         }
       }
 
-      // Diagonal chi2/NDF: same formula as every other computeChi2NDF-style function in
-      // this directory, just reading sigma_i^2 straight off subCov's own diagonal.
+      // Diagonal chi2/NDF from subCov's diagonal.
       double chi2Diag = 0;
       int ndfDiag = 0;
       for (int a = 0; a < n; a++) {
@@ -145,18 +92,8 @@ void draw_covariance_chi2(string systag = "nominal") {
         ndfDiag++;
       }
 
-      // Full-covariance chi2: invert the restricted (shape-normalized) submatrix and form
-      // the proper quadratic form res^T C^-1 res - mirrors what RooUnfoldT::Chi2() does
-      // internally, but via a Moore-Penrose PSEUDO-inverse (SVD, relative cutoff on small
-      // singular values) rather than TMatrixD::Invert() - D'Agostini unfolding ties the
-      // total unfolded yield to the actual measured total at every iteration, which bakes
-      // at least one exact (or near-exact) linear dependency into the covariance. A plain
-      // inverse doesn't degrade gracefully against that: near-zero eigenvalues get
-      // inverted into astronomically large ones, blowing up the quadratic form. This is a
-      // known, documented property of RooUnfold's own covariance matrices -
-      // RooUnfoldT::Chi2()'s own header comment says it "removes rows/cols with all their
-      // elements equal to 0" before inverting for exactly this reason; the SVD cutoff
-      // below is the general version of that same defense.
+      // Full-covariance chi2 via an SVD pseudo-inverse: D'Agostini fixes the total yield, so the
+      // covariance is (near-)singular and a plain inverse blows up.
       TDecompSVD svd(subCov);
       const TVectorD & sigma = svd.GetSig(); // singular values, descending
       const TMatrixD & U = svd.GetU();
@@ -167,7 +104,7 @@ void draw_covariance_chi2(string systag = "nominal") {
       TMatrixD sigmaPInv(n, n);
       for (int i = 0; i < n; i++) {
         if (sigma[i] > relCut*sigmaMax) { sigmaPInv(i,i) = 1.0/sigma[i]; nKept++; }
-        // else: near-null direction, dropped (0) rather than blown up.
+        // else: near-null direction, dropped.
       }
       TMatrixD Ut(TMatrixD::kTransposed, U);
       TMatrixD subCovPInv = V * sigmaPInv * Ut;
@@ -186,9 +123,7 @@ void draw_covariance_chi2(string systag = "nominal") {
       delete hUnfoldPt; delete hTruthPt;
     }
 
-    // NDF is the EFFECTIVE number of independent directions actually used (nKeptSum for
-    // the covariance version), not the raw bin count - directions zeroed out above carry
-    // no constraint, so they shouldn't be counted as degrees of freedom either.
+    // NDF = number of kept directions.
     double chi2NdfDiag = ndfDiagSum > 0 ? chi2DiagSum/ndfDiagSum : 0;
     double chi2NdfFull = nKeptSum   > 0 ? chi2FullSum/nKeptSum   : 0;
     gDiag->SetPoint(k, iter, chi2NdfDiag);

@@ -3,38 +3,19 @@
 #include "../src/unfold_utility.h"
 #include "RooUnfoldResponse.h"
 #include "RooUnfoldBayes.h"
-// The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
-// into /home/samson72/root/lib/libgammajet.so, sitting on the same library search path
-// as this project's libgammajet_unfold.so. Without forcing which one loads first, ROOT's
-// implicit symbol autoload can bind drawer/ana calls to the wrong (mismatched-layout)
-// library and segfault - explicit load removes the ambiguity.
+// Load explicitly: the sibling gammajet project's libgammajet.so has same-named classes.
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
-// Physics-level analysis uses only ana::ptBins[ana::firstUsedPtBin..] (15-20,20-25,25-35
-// GeV) - ana::ptBins also carries a low-pT migration-only buffer bin (13-15 GeV) below that
-// and a high-pT overflow bin (35-100 GeV) above it, neither of which is reported. The
-// response matrix and the flattened (pT,xJ) histograms span all ana::nPtBins bins though -
-// see buildFullyCorrected() below, which corrects all of them to keep the unfold input
-// dimensionally consistent with the response matrix, and only the ana::nPtBinsUsed used
-// ones get displayed.
+// Reported pT bins: ana::ptBins[firstUsedPtBin..]. All nPtBins are corrected and unfolded
+// (the response spans them); only the used ones are drawn.
 const int nPtBinsUsed = ana::nPtBinsUsed;
-const int ir = 2; // nominal jet radius index (R=0.4); change here if a different radius is wanted.
-const int niterate = 2; // best-iteration scan result (see draw_iteration_halfclosure.C / toy_iterations_chi2.pdf)
+const int ir = 2; // nominal R=0.4
+const int niterate = 2; // best-iteration scan result
 
-// The last 3 xJ bins in each pT bin have very low counts, so any chi2/NDF computed
-// against iteration count is dominated by their noise rather than genuine convergence
-// behavior - excluded from computeChi2NDF below, per-bin only (still drawn everywhere else).
+// The last 3 xJ bins per pT bin are low-count noise: excluded from chi2 only (still drawn).
 const int nXjBinsForChi2 = ana::nUnfoldXjBins - 3;
 
-// The two-purity purity-correction formula, error propagation, and near-degenerate
-// (P_A~=P_C) fallback all live in unfold_utility::purityCorrect/purityCorrectBkg now,
-// shared with the insitu/ macros - see src/unfold_utility.h for the full derivation
-// comment (also reproduced in the analysis note's "Purity-Corrected Background
-// Subtraction" section).
-
-// Graph analogue of unfold_utility::densityForDisplay() below: divide y-values and asymmetric y-errors
-// by bin width (from refBinning's axis) for display, since ana::unfoldXjBins is
-// non-uniform. X position/width are left as-is (already set from real bin edges).
+// Graph analogue of densityForDisplay: divide y and its errors by the bin width.
 TGraphAsymmErrors * densityForDisplayGraph(TGraphAsymmErrors * g, TH1D * refBinning, const char * name) {
   TGraphAsymmErrors * gd = (TGraphAsymmErrors*)g->Clone(name);
   for (int i = 0; i < gd->GetN(); i++) {
@@ -48,13 +29,7 @@ TGraphAsymmErrors * densityForDisplayGraph(TGraphAsymmErrors * g, TH1D * refBinn
   return gd;
 }
 
-// densityForDisplay now lives in unfold_utility - see src/unfold_utility.h.
-// buildFullyCorrected now lives in unfold_utility (purity-corrects all ana::nPtBins
-// slices via unfold_utility::purityCorrect and reflattens for RooUnfold) - see
-// src/unfold_utility.h.
-
-// Bayesian-unfolding iteration scan: candidate iteration counts to test the chosen
-// `niterate` above against.
+// Candidate iteration counts.
 const vector<int> iterationsToTest = {1,2,3,4,5,6,8,10,12,15};
 
 double computeChi2NDF(TH1D * h1, TH1D * h2) {
@@ -71,11 +46,8 @@ double computeChi2NDF(TH1D * h1, TH1D * h2) {
   return (ndf > 0) ? chi2/ndf : 0;
 }
 
-// Scans iterationsToTest, scores each by chi2/ndf against the (fixed) photon+jet truth
-// summed over the used pT bins, and picks the iteration count with the lowest combined
-// score. Only that winning iteration's unfolded result gets drawn (not every candidate) -
-// alongside one summary scan page showing where it converged, so the choice is visible.
-// Written to its own pdf (iterationsPdfPath), separate from purity_corrected.pdf.
+// Score each iteration by chi2/ndf against the photon+jet truth (summed over used pT bins) and
+// draw the best one plus a scan page, to iterationsPdfPath.
 void draw_iteration_test(TH1D * flatCorrected, TH1D * flatTruth, RooUnfoldResponse * response,
     const char * label, const char * tag, TCanvas * c, TFile * fout,
     drawer & d, const char * iterationsPdfPath) {
@@ -114,7 +86,7 @@ void draw_iteration_test(TH1D * flatCorrected, TH1D * flatTruth, RooUnfoldRespon
     unfoldedByIter[iter] = perPt;
   }
 
-  // Page 1: chi2/ndf (summed over used pT bins) vs iteration count, marking the winner.
+  // Page 1: chi2/ndf vs iteration count, marking the winner.
   c->Clear();
   c->cd();
   gPad->SetTicks();
@@ -144,7 +116,7 @@ void draw_iteration_test(TH1D * flatCorrected, TH1D * flatTruth, RooUnfoldRespon
   fout->cd();
   gcombined->Write();
 
-  // Pages 2..N: the winning iteration's unfolded result vs truth, per used pT bin.
+  // Pages 2..N: the winner's unfolded result vs truth, per used pT bin.
   for (int ipt = ana::firstUsedPtBin; ipt < ana::firstUsedPtBin+nPtBinsUsed; ipt++) {
     TH1D * hUnfolddisp = unfoldedByIter[bestIter][ipt];
     c->Clear();
@@ -209,21 +181,14 @@ void draw_iteration_test(TH1D * flatCorrected, TH1D * flatTruth, RooUnfoldRespon
   }
 }
 
-// flatTruth is always the photon+jet signal MC's truth-level flattened xJ (same sample
-// the response matrix comes from - see draw_purity_corrected()), regardless of which
-// sample's "measured" spectrum this call is unfolding. Data has no real truth level
-// (unfolder.cc sets truth=reco as a placeholder for non-MC, which is why Data's own
-// stored response matrix is trivially diagonal), and for a background-only sample like
-// Jet MC, that sample's own "truth" would mean truth-level region-A-selected dijet
-// events, not a meaningful physics reference either. The photon+jet truth is the one
-// fixed, physically meaningful expectation to compare every unfolded result against.
+// flatTruth is always the photon+jet MC truth: Data has none, and a Jet MC truth is not a
+// physics reference.
 void draw_one_sample(int type, const char * label, const char * tag, TCanvas * c, TFile * fout, RooUnfoldResponse * response, TH1D * flatTruth,
     drawer & d, const char * iterationsPdfPath, const char * purityPdfPath, string systag) {
   TH1D * flatA = d.get(Form("hrecoxj%i_0",ir), type);
   TH1D * flatC = d.get(Form("hrecoxj%i_2",ir), type);
 
-  // Unfold the purity-corrected (not raw) measured spectrum - the whole point of
-  // correcting before unfolding is that RooUnfold should never see the background.
+  // Unfold the purity-corrected spectrum: RooUnfold never sees the background.
   TH1D * flatCorrected = unfold_utility::buildFullyCorrected(flatA, flatC, tag, systag);
   TH1D * flatUnfolded = unfold_utility::unfoldOnce(response, flatCorrected, niterate, Form("hUnfolded_flat_%s", tag));
 
@@ -245,8 +210,7 @@ void draw_one_sample(int type, const char * label, const char * tag, TCanvas * c
     TGraphAsymmErrors * hcorrGraph = nullptr;
     TH1D * hcorr = unfold_utility::purityCorrect(A, C, pA, pAErrLow, pAErrHigh, pC, pCErrLow, pCErrHigh, Form("hxjcorrected_%s_pt%d", tag, ipt), &hcorrGraph);
 
-    // Page 1: raw A, background subtracted from C (cross-normalized), and the corrected result.
-    // Draw bin-width-normalized clones only - see unfold_utility::densityForDisplay().
+    // Page 1: raw A, background from C, and the corrected result (density clones).
     c->Clear();
     c->cd();
     gPad->SetTicks();
@@ -258,9 +222,7 @@ void draw_one_sample(int type, const char * label, const char * tag, TCanvas * c
     if (hcorr) {
       TH1D * hbkg = unfold_utility::purityCorrectBkg(A, C, pA, pC, Form("hxjbkg_%s_pt%d", tag, ipt));
       TH1D * hbkgdisp  = unfold_utility::densityForDisplay(hbkg,  Form("hxjbkg_%s_pt%d_disp", tag, ipt));
-      // hcorrdisp (TH1D, conservative symmetric error) is kept only for the Mean corr
-      // text below - the actual plotted "purity-corrected signal" curve uses the
-      // asymmetric-error graph so the true bootstrap errors are visible, not collapsed.
+      // hcorrdisp is only used for the mean text; the curve uses the asymmetric-error graph.
       TH1D * hcorrdisp = unfold_utility::densityForDisplay(hcorr, Form("hxjcorrected_%s_pt%d_disp", tag, ipt));
       TGraphAsymmErrors * hcorrGraphDisp = densityForDisplayGraph(hcorrGraph, hcorr, Form("hxjcorrected_%s_pt%d_graphdisp", tag, ipt));
       hbkgdisp->SetLineColor(kAzure+2);
@@ -288,8 +250,7 @@ void draw_one_sample(int type, const char * label, const char * tag, TCanvas * c
     else {
       d.drawText("Region C empty in this p_{T} bin - correction unavailable", .15, .5, kRed, 18);
     }
-    // Info text block sits above the legend with a clear gap (drawAll's 5 lines here
-    // span drawy down to roughly drawy-0.15).
+    // Info text above the legend.
     d.drawAll({label},{Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV",ptlow,pthigh),
         Form("P_{A} = %.3f +%.3f/-%.3f",pA,pAErrHigh,pAErrLow),
         Form("P_{C} = %.3f +%.3f/-%.3f",pC,pCErrHigh,pCErrLow),
@@ -300,11 +261,7 @@ void draw_one_sample(int type, const char * label, const char * tag, TCanvas * c
     A->Write(Form("hxjA_%s_pt%d", tag, ipt));
     C->Write(Form("hxjC_%s_pt%d", tag, ipt));
 
-    // Page 2: purity-corrected (reco) vs unfolded vs truth, with a ratio panel below.
-    // All three shape-normalized to unit area (Integral("width")) - reco/unfolded/truth
-    // sit at different absolute scales due to reconstruction efficiency, so an absolute
-    // comparison isn't meaningful; this matches the normalization convention already
-    // used for this same comparison in drawing/draw_xj_unfold.C.
+    // Page 2: purity-corrected reco vs unfolded vs truth (unit area), with a ratio panel.
     if (hcorr) {
       TH1D * hUnfold = unfold_utility::unflattenXj(flatUnfolded, ipt, Form("hxjunfolded_%s_pt%d", tag, ipt));
       TH1D * hUnfolddisp = unfold_utility::densityForDisplay(hUnfold, Form("hxjunfolded_%s_pt%d_disp", tag, ipt));
@@ -402,21 +359,14 @@ void draw_purity_corrected(string systag = "nominal") {
   c->SaveAs(Form("%s[", purityPdfPath.c_str()));
   c->SaveAs(Form("%s[", iterationsPdfPath.c_str()));
 
-  // Response matrix: Data's own stored response (response_full_jetR2 etc.) is trivially
-  // diagonal - unfolder.cc sets truth=reco as a placeholder for non-MC samples, so it
-  // carries no real migration information. The physically meaningful response comes from
-  // the signal (photon+jet) MC; type=1, isample=-1 gives the cross-section-weighted
-  // combination of Photon5/10/20, matching the exact convention already established in
-  // drawing/draw_xj_unfold.C. This one response is reused for every sample below, since
-  // it characterizes the detector, independent of which "measured" spectrum is unfolded.
+  // Response: Photon5/10/20 combined (Data's stored response is a diagonal placeholder),
+  // reused for every sample.
   TH1D * respRecoTemplate  = d.get(Form("hrecoxj%i",ir), 1);
   TH1D * respTruthTemplate = d.get(Form("htruthxj%i",ir), 1);
   TH2D * respMatrix2D      = d.get2d(Form("hxjresponse%i",ir), 1);
   RooUnfoldResponse * response = new RooUnfoldResponse(respRecoTemplate, respTruthTemplate, respMatrix2D);
 
   draw_one_sample(0, "p+p Run24 Data",     "data",     c, fout, response, respTruthTemplate, d, iterationsPdfPath.c_str(), purityPdfPath.c_str(), systag);
-  //draw_one_sample(1, "Pythia8 #gamma+jet", "photonmc", c, fout, response, respTruthTemplate, d, iterationsPdfPath.c_str(), purityPdfPath.c_str(), systag);
-  //draw_one_sample(2, "Pythia8 Jet",      "jetmc",    c, fout, response, respTruthTemplate, d, iterationsPdfPath.c_str(), purityPdfPath.c_str(), systag);
 
   c->SaveAs(Form("%s]", purityPdfPath.c_str()));
   c->SaveAs(Form("%s]", iterationsPdfPath.c_str()));

@@ -20,19 +20,13 @@
 #include <cmath>
 #include "style.h"
 
-
-
-
-
 void smearcheck() {
 
-  // Local multiJet trees (see analysis.cc's header); was SDCC multiJet_skimmed/TREE_MULTIJET_SKIM_pythia_Jet12.root
+  // Local multiJet trees (see analysis.cc).
   const char * filepath = "../trees";
   TFile f12(Form("%s/multijet_%s_Jet%i.root",filepath, "pythia", 12), "READ"); //sim 
 
-  //==============================================
-  // TREE SETUP
-  //==============================================
+  // tree setup
   const int ntrees = 1;
   TTree *t12 = (TTree*) f12.Get("ttree");
   TTree * intree[ntrees] = {t12};
@@ -84,7 +78,6 @@ void smearcheck() {
       intree[i]->SetBranchAddress("calib_delta_time", &calib_delta_time);
     }
 
-
     intree[i]->SetBranchAddress(Form("jet_pt_calib_%d", radius), &jet_pt_calib);
     intree[i]->SetBranchAddress(Form("jet_eta_det_%d", radius), &jet_eta_det);
     intree[i]->SetBranchAddress(Form("jet_phi_%d", radius), &jet_phi);
@@ -116,7 +109,6 @@ void smearcheck() {
         hct->Fill(jet_pt_calib->at(i), jet_pt_smear->at(i));
         hcr->Fill(jet_pt_calib->at(i), jet_pt_smearRECO->at(i));
         if (jet_pt_calib->at(i) > 7 && fabs(jet_pt_calib->at(i) - jet_pt_smear->at(i)) < 0.00001) {
-          //cout << "Unpaired jet with pt: " << jet_pt_calib->at(i) << endl;
           unpaircount++;
         }
         count++;
@@ -128,7 +120,7 @@ void smearcheck() {
     cout << "Fraction of unmatched jets: " << (float)unpaircount / (float)count << endl;
   }
 
-  //////////////////////// WRITING ////////////////////////
+  // writing
 
   TFile * wf = TFile::Open(Form("checkhists.root"),"RECREATE");
   hcr->Write();
@@ -141,14 +133,6 @@ void smearcheck() {
 
 }
 
-
-//g++ analysis.cc style.cc -std=c++11 \
   `root-config --cflags --libs` \
   -o analysis
-
-
-
-
-
-
 

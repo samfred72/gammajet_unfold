@@ -9,14 +9,14 @@ calibration study (`insitu/`).
 - **xJγ is NOT bounded by construction**, unlike dijet xJ. Never truncate or drop
   high-xJ bins as "unphysical" — that assumption is valid for dijet, not gamma-jet.
 - Low-count bins may still be excluded from chi2, but only with an explicit, stated
-  threshold — see `drawing/draw_covariance_chi2.C:60`, which drops the last 3 xJ bins
+  threshold — see `drawing/draw_covariance_chi2.C:22`, which drops the last 3 xJ bins
   per pT bin for low statistics and documents why in the comment above it. Follow that
   precedent (explicit constant + comment) rather than silently filtering.
 - Asymmetric systematic uncertainties are combined with a **per-source, per-bin sign
   split**, not a symmetric envelope: each two-point (high/low) source contributes its
   own signed value to the "up" quadrature sum if positive, "down" if negative, in each
   bin independently. See `asymmetricSystematics` and the total-uncertainty loop in
-  `drawing/draw_systematics.C:103-390`. Symmetric sources instead contribute their full
+  `drawing/draw_systematics.C:79-356`. Symmetric sources instead contribute their full
   squared magnitude to both totals. Reuse this pattern for any new systematic source.
 - State which of the above assumptions you're relying on before writing new
   uncertainty-combination or bin-selection code — don't import dijet-style conventions
@@ -26,8 +26,8 @@ calibration study (`insitu/`).
 
 - Never combine statistical and systematic uncertainty into one band. Statistical stays
   on the data points' own error bars; systematic is drawn as a separate shape (currently
-  a `TGraphAsymmErrors`-based box via `gSystBox`) — see `drawing/draw_final_result.C:34,
-  132-158`. Follow this split for any new final-result plot.
+  a `TGraphAsymmErrors`-based box via `gSystBox`) — see `drawing/draw_final_result.C:73-83,
+  107-112`. Follow this split for any new final-result plot.
 - Output final results as PDF (written under `pdfs/`) — no HTML dashboards or
   interactive artifacts unless explicitly asked for.
 - Sanitize histograms for NaN/Inf bin content before drawing. NaN poisons ROOT's axis
@@ -35,15 +35,15 @@ calibration study (`insitu/`).
   closure plots.
 - Set pad margins explicitly rather than relying on ROOT defaults, e.g.
   `p1->SetLeftMargin(.15)` / `SetBottomMargin(...)` as done throughout
-  `drawing/draw_final_result.C:169-208`, so axis titles don't get clipped.
+  `drawing/draw_final_result.C:99-136`, so axis titles don't get clipped.
 - The sPHENIX label, data/MC sample name, cut list, and jet radius are drawn together
-  via `drawer::drawAll(samples, features, ...)` (`src/drawer.cc:30-42`), never as ad hoc
+  via `drawer::drawAll(samples, features, ...)` (`src/drawer.cc:29-40`), never as ad hoc
   `TLatex` calls in the macro itself. `samples` is a one-element vector naming the
   dataset (e.g. `"p+p Run24 Data"` or `"Pythia8 #gamma+jet MC"`); `features` lists the
   cuts/kinematics as separate strings, conventionally the pT bin range
   (`"%.0f GeV < p_{T}^{#gamma} < %.0f GeV"`) and jet radius (`"Jet R=%.1f"`, from
   `ana::JetRs[ir]`), optionally with the iteration count appended — see
-  `drawing/draw_final_result.C:202-203` for the canonical call. Reuse this helper and
+  `drawing/draw_final_result.C:130-131` for the canonical call. Reuse this helper and
   format for any new plot rather than hand-rolling label text.
 
 ## Debugging Protocol

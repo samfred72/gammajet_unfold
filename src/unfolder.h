@@ -26,51 +26,16 @@ using namespace std;
 
 class unfolder : public treeuser {
   public:
-    // systags: one or more systematic-variation reprocessings of the SAME input tree
-    // (as opposed to `sim`, which selects a genuinely different input tree/sample -
-    // pythia vs herwig), processed together in a single pass over the tree - fill_matrix()
-    // reads each entry once and, per systag, recomputes that systag's reco-level
-    // quantities and fills that systag's own histogram set (see fill_matrix()'s inner
-    // systag loop). This replaces re-running the whole analysis once per systag (each
-    // re-reading/re-deserializing the same tree from disk) with one read plus cheap
-    // per-systag arithmetic - every systag switch below is a closed-form shift or a
-    // selection among branches already present in a single tree entry (e.g. the JER
-    // high/low variants are pre-computed branches, not fresh random draws), so nothing
-    // requires a second pass. Recognized values: "nominal" (default), "JERhigh", "JERlow",
-    // "emscale_high", "emscale_low", "EMRhigh", "EMRlow" (all six MC-only - Data has no
-    // JER-smearing, EM-scale-shifted, or EM-resolution-smeared variant of itself, since
-    // smearing is applied to MC to match Data's resolution, not something Data itself has;
-    // silently falls back to nominal JES-corrected reco jet pT/cluster pT for Data
-    // regardless of systag), "jes_high", "jes_low" (the reverse - Data-only, varying the
-    // per-radius correction (ana::jesNominal[ir]) by the nominal in-situ fit's statistical
-    // uncertainty (ana::jesStatErrLow/High[ir]) - every other systag instead corrects Data
-    // with its own in-situ p_a (ana::jesForSystag), see src/ana.h and unfolder.cc; MC is
-    // already on-scale and falls back to nominal regardless of systag),
-    // "threejet", "narrowBDT",
-    // "narrowISO", "narrowBDTbkg", "narrowISObkg", "wideISObkg" (the last five each shift
-    // one ABCD sideband boundary - narrowBDT/narrowISO on the signal-side cut, the other
-    // three on the background-side cut - applied identically to Data and MC, unlike the
-    // MC-only/Data-only pairs above; see ana.h's isoBins/isoBinsHigh/bdtGoodLow/bdtBadLow
-    // comment). See fill_matrix() for exactly what each one changes.
-    //
-    // TH1::AddDirectory(kFALSE) below is essential: every systag's histogram set uses the
-    // SAME names (e.g. "hphodr0") as every other systag's, by design - so that end()'s
-    // per-systag Write() calls reproduce exactly today's per-systag output file format
-    // with no renaming. Multiple same-named TH1/TH2 objects living in memory at once is
-    // only safe because AddDirectory(kFALSE) stops them from being auto-registered into
-    // (and colliding within) whatever TFile/TDirectory happens to be "current" at
-    // construction time - each is a free-standing object we explicitly Write() ourselves.
+    // systags: variations of the same input tree, all filled in one pass (fill_matrix reads each entry
+    // once and fills every systag's histogram set). MC only: JERhigh/low, emscale_high/low, EMRhigh/low.
+    // Data only: jes_high/low. Both: threejet and the five ABCD-boundary variations. sim selects a
+    // different input tree (pythia/herwig).
+    // All systags share histogram names, so TH1::AddDirectory(kFALSE) is required.
     unfolder(string trigger, string sim, vector<string> systags) : treeuser(trigger, sim), systags(systags) {
-      // See treeuser::disableBranchesUnusedByUnfolder()'s comment - skips I/O/
-      // decompression for branches this pipeline never reads.
       disableBranchesUnusedByUnfolder();
       gErrorIgnoreLevel = kWarning;
       TH1::AddDirectory(kFALSE);
-      // Every histogram below gets filled with the per-event vz/cluster-pT MC weight
-      // (fill_matrix()'s mcWeight, isMC only - Data always uses weight 1) - Sumw2 makes
-      // GetBinError() reflect that (sqrt(sum w_i^2) instead of sqrt(N)) instead of
-      // silently understating errors on reweighted MC. Applies to every TH1D/TH2D made in
-      // this constructor, so no need to call Sumw2() on each one individually.
+      // MC histograms are filled with the vz/cluster-pT weight, so Sumw2 everywhere.
       TH1::SetDefaultSumw2();
       int nsys = (int)systags.size();
 
@@ -195,12 +160,8 @@ class unfolder : public treeuser {
             hrecoxj_abcd[isys][i][j] = new TH1D(Form("hrecoxj%i_%i",i,j),";reco cluster p_{T}; x_{J#gamma}"      ,nbins,0,nbins);
             htruthxj_abcd[isys][i][j] = new TH1D(Form("htruthxj%i_%i",i,j),";truth cluster p_{T}; x_{J#gamma}"      ,nbins,0,nbins);
             hclusterpt_abcd[isys][i][j] = new TH1D(Form("hclusterpt_abcd%i_%i",i,j),";p_{T}^{lead cluster};Counts",ana::nPtBins,ana::ptBins);
-            // MC-only, truth-matched (photon deltaR<0.1) subset of hclusterpt_abcd above -
-            // see unfolder.cc's fill for why: macros/puritymaker.C's leakage-fraction
-            // templates (fp[i]=hp[i]/hp[0]) need the true-signal-only ABCD ratio the method
-            // is actually defined with, not an all-reconstructed-cluster ratio. Data's own
-            // hclusterpt_abcd (unmatched, all clusters) is untouched and still correct as
-            // the genuine ABCD counts a data-driven method has to work with.
+            // MC only: truth-matched (dR < 0.1) subset of hclusterpt_abcd, for puritymaker.C's leakage
+            // fractions, which are defined for true signal.
             hclusterpt_abcd_truthmatched[isys][i][j] = new TH1D(Form("hclusterpt_abcd_truthmatched%i_%i",i,j),";p_{T}^{lead cluster};Counts",ana::nPtBins,ana::ptBins);
           }
           hrecoxj[isys][i] = new TH1D(Form("hrecoxj%i",i),";reco cluster p_{T}; x_{J#gamma}"      ,nbins,0,nbins);
@@ -212,14 +173,8 @@ class unfolder : public treeuser {
           jet_response_half2D[isys][i] = new RooUnfoldResponse(hrecoxj_half[isys][i], htruthxj_half[isys][i],Form("response_half_jetR%d",i),Form("response_half_%d",i));
         }
 
-        // In-situ test tree: photon pt, jet pt, ABCD region, and jet radius for events
-        // with a valid jet pair at ANY ana::nJetR radius - one tree per systag (not per
-        // radius; an "ir" branch distinguishes rows instead), same naming convention as
-        // the original single-systag file (the systag component of the filename already
-        // makes it unique on disk) - keeps the insitu/ file count at nsys instead of
-        // nsys*ana::nJetR. A single event can Fill() up to ana::nJetR times (once per
-        // radius it pairs at), so this tree is up to ana::nJetR times longer than the
-        // old R=0.4-only tree, not wider.
+        // In-situ tree: one per systag; the ir branch marks the radius (an event fills once per radius it
+        // pairs at).
         const char * insitu_filename = isMC ?
             Form("%s/insitu/inputs/%s_%s_%s_insitu.root", ana::dir(), trigger.c_str(), sim.c_str(), systags[isys].c_str()) :
             Form("%s/insitu/inputs/%s_%s_insitu.root", ana::dir(), trigger.c_str(), systags[isys].c_str());
@@ -244,10 +199,7 @@ class unfolder : public treeuser {
         hphoIDeff_iso[isys] = new TH2D("hphoIDeff_iso", ";truth p_{T}^{#gamma};isolation E_{T} [GeV]", ana::nPtBins, ana::ptBins, 120, -2.0, 10.0);
       }
     }
-    // Convenience overload matching the original single-systag call signature (still
-    // used by macros/unfold.C) - delegates to the vector<string> constructor above with
-    // a single-element list, so a one-systag run goes through exactly the same code path
-    // as a multi-systag one (nsys=1 is the validation baseline for the refactor).
+    // Single-systag constructor (macros/unfold.C).
     unfolder(string trigger, string sim, string systag) : unfolder(trigger, sim, vector<string>{systag}) {}
 
     ~unfolder();
@@ -263,8 +215,7 @@ class unfolder : public treeuser {
     bool check_match(pho_object p1, pho_object p2);
     bool check_match(jet_object j1, jet_object j2);
     void set_dodraw(bool draw) {dodraw = draw; }
-    // Per-event progress line (every 1000 entries). Off for batch/pipeline runs, where it
-    // only bloats the logs (and has previously been mistaken for a slowdown).
+    // Progress line every 1000 entries; off for batch runs.
     void set_progress(bool show) {showProgress = show; }
     bool showProgress = true;
 
@@ -285,18 +236,10 @@ class unfolder : public treeuser {
     int count_isj[ana::nJetR] = { 0 };
     int nentries = 0;
     TRandom rand;
-    // Data/MC vz and cluster-pT reweighting (reweight/make_vz_pt_reweight.C) - applied to
-    // every isMC event in fill_matrix(), regardless of trigger or sim ("pythia"/"herwig"):
-    // it corrects a Data-vs-detector-simulation vertex/threshold mismatch, not something
-    // specific to one generator or trigger sample.
+    // Data/MC vz and cluster-pT reweighting (reweight/make_vz_pt_reweight.C), applied to all MC.
     Reweighter rw;
 
-    // Every member below is indexed [isys][ir] (or [isys][ir][abcdRegion], or just
-    // [isys] for the handful that aren't per-jet-radius) - one full copy per systag in
-    // `systags`, since fill_matrix() computes each systag's reco-level quantities
-    // independently per event (see that function's inner systag loop). This is the
-    // direct multi-systag generalization of what used to be single, unindexed members
-    // when systag was fixed at construction.
+    // Members below are indexed [isys][ir] (some [isys][ir][abcd] or [isys]).
     vector<vector<RooUnfoldResponse*>> pho_response;
     vector<vector<RooUnfoldResponse*>> jet_response;
     vector<vector<RooUnfoldResponse*>> pho_response_half;
@@ -344,15 +287,14 @@ class unfolder : public treeuser {
     vector<vector<TH1D*>> htruthphopt_half;
     vector<vector<TH2D*>> hphoresponse_half;
 
-
     int nbins = (ana::nPtBins) * (ana::nUnfoldXjBins+2); // +2 bins per pT bin for overflow and underflow
     vector<vector<RooUnfoldResponse*>> jet_response2D;
     vector<vector<RooUnfoldResponse*>> jet_response_half2D;
 
     vector<vector<vector<TH1D*>>> hrecoxj_abcd;    // [isys][ir][4] for ABCD
     vector<vector<vector<TH1D*>>> htruthxj_abcd;   // [isys][ir][4]
-    vector<vector<vector<TH1D*>>> hclusterpt_abcd; // [isys][ir][4] - reco cluster pT per ABCD region, what puritymaker.C needs
-    vector<vector<vector<TH1D*>>> hclusterpt_abcd_truthmatched; // [isys][ir][4] - MC-only, truth-matched subset of the above; what puritymaker.C's leakage fractions actually need
+    vector<vector<vector<TH1D*>>> hclusterpt_abcd; // [isys][ir][abcd] reco cluster pT, for puritymaker.C
+    vector<vector<vector<TH1D*>>> hclusterpt_abcd_truthmatched; // [isys][ir][abcd] truth-matched subset, for the leakage fractions
     vector<vector<TH1D*>> hrecoxj;
     vector<vector<TH1D*>> htruthxj;
     vector<vector<TH2D*>> hxjresponse;
@@ -361,20 +303,13 @@ class unfolder : public treeuser {
     vector<vector<TH1D*>> htruthxj_half;
     vector<vector<TH2D*>> hxjresponse_half;
 
-    // ana::ptBinsUsed (not ana::ptBins from index 0): the reported pT bins no longer start
-    // at index 0 now that ana::ptBins has a low-pT migration-only buffer bin at index 0 -
-    // see ana.h.
     vector<TH2D*> hpurity_num;
     vector<TH2D*> hpurity_den;
     vector<TH1D*> hpurity_num_1D;
     vector<TH1D*> hpurity_den_1D;
 
-    // Truth-matched photons' raw BDT/isolation score vs. truth pT, with no ID cut applied
-    // (unlike hphoeffnum/den, which only track reco+match efficiency, also with no ID cut).
-    // Slicing this at any score threshold per pT-bin gives the true-photon efficiency of
-    // that threshold as a function of pT, without rerunning the pipeline per threshold -
-    // used to check whether the fixed nominal cut (ana::bdtGoodLow[0]/ana::isoBins[0])
-    // maps to a pT-dependent efficiency.
+    // Truth-matched photons' raw BDT/isolation score vs truth pT, no ID cut: gives the efficiency of
+    // any threshold vs pT without rerunning.
     vector<TH2D*> hphoIDeff_bdt;
     vector<TH2D*> hphoIDeff_iso;
 

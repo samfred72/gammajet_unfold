@@ -1,16 +1,6 @@
-#/bin/bash
+#!/bin/bash
 # Usage: runall_unfold_allsys.sh [jet|photon|data]
-# One-pass, all-systematics version of runall_unfold.sh: for each trigger/sim
-# combination, calls run_unfold_allsys.sh once - reads that trigger's tree once and
-# fills every systag's histograms in that one pass - instead of runall_unfold.sh's old
-# per-systag loop (one tree read per systag, ten reads total for the full systag list).
-# Produces exactly the same hists/*_unfolding.root and insitu/*_insitu.root files as
-# calling runall_unfold.sh once per systag would (validated bin-for-bin against that
-# approach) - see unfold_allsys.C's header comment for the full systag list.
-#
-# herwig is still nominal-only (only used as the generator-modeling systematic - see
-# runall_unfold.sh's comment), so it stays on the plain single-systag run_unfold.sh
-# rather than the all-systag path - no benefit to batching a single systag.
+# One tree read per trigger fills every systag (run_unfold_allsys.sh). herwig is nominal-only.
 DODATA=0
 DOPHOTON=0
 DOJET=0
@@ -40,14 +30,7 @@ if [[ $DOPHOTON == 1 ]]; then
 fi
 wait
 if [[ $DOJET == 1 ]]; then
-#  bash run_unfold_allsys.sh Jet8 pythia &
   bash run_unfold_allsys.sh Jet12_long pythia &
-#  bash run_unfold_allsys.sh Jet20 pythia &
-#  bash run_unfold_allsys.sh Jet30 pythia &
-#  wait
-#  bash run_unfold_allsys.sh Jet50 pythia &
-#  bash run_unfold_allsys.sh Jet60 pythia &
-#  bash run_unfold_allsys.sh Jet80 pythia &
 fi
 wait
 echo "All Done!"

@@ -3,18 +3,9 @@
 
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
-// BDT score vs isolation of the leading photon cluster in Data, with the nominal ABCD
-// regions drawn on top - a clean version of the ABCD-method figure for talks.
-//
-// Selection: the leading cluster as unfolder.cc builds maxpho (iso = iso_topo_04 =
-// cluster_showershape[11], bdt = cluster_bdt_scores[9]), |vz| < ana::vzcut,
-// |eta| < ana::photonEtaCut, and ptLow <= pT < ptHigh (default: the first reported pT
-// bin, 15-20 GeV). Clusters
-// without a computed topo isolation (iso <= -999, the PhotonClusterBuilder sentinel) are
-// skipped, as ana::findabcdBin does. No jet pairing is required here (that needs the
-// jet calibration chain), so this is the photon selection only; the region boundaries
-// are read straight from ana.h (nominal bin 0), not hard-coded.
-//
+// BDT score vs isolation of the leading Data photon cluster, with the nominal ABCD regions.
+// Selection: unfolder's maxpho, |vz| < ana::vzcut, |eta| < ana::photonEtaCut, ptLow <= pT < ptHigh
+// (default 15-20 GeV); no jet pairing. Clusters without topo iso (<= -999) are skipped.
 // Output: pdfs/abcd_2d_data.pdf
 void draw_abcd_2d(double ptLow = ana::ptBinsUsed[0], double ptHigh = ana::ptBinsUsed[1],
                   bool showProgress = false) {

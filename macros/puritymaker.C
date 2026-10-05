@@ -1,17 +1,9 @@
 #include "../src/drawer.h"
 #include "../src/ana.h"
-// The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
-// into /home/samson72/root/lib/libgammajet.so, sitting on the same library search path
-// as this project's libgammajet_unfold.so. Without forcing which one loads first, ROOT's
-// implicit symbol autoload can bind drawer/ana calls to the wrong (mismatched-layout)
-// library and segfault - explicit load removes the ambiguity. See unfold.C for the same
-// pattern; it never had this problem because it already did this.
+// Load explicitly: the sibling gammajet project's libgammajet.so has same-named classes.
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
-// Writes every object via bare ->Write() (implicit current TDirectory) - the caller is
-// responsible for cd()'ing into the right target (a subdirectory of the shared
-// per-systag purity file, one per jet radius - see puritymaker()) before calling this,
-// so it no longer opens its own output file itself.
+// Writes into the current directory; the caller cd()s into the radius subdirectory.
 TGraphAsymmErrors * combine_hists(TH1D * h[], TH1D * f[], TGraphAsymmErrors ** graphCOut = nullptr) {
   TRandom3 * rand = new TRandom3();
   TH1D * hA = h[0];
@@ -67,12 +59,9 @@ TGraphAsymmErrors * combine_hists(TH1D * h[], TH1D * f[], TGraphAsymmErrors ** g
 
       H[i]->Fill(S/A);
       H2->Fill(i,S/A);
-      // Signal content of region C falls straight out of this same leakage-corrected
-      // solve (n_s^C = c*S, by definition of c as the MC leakage fraction of C relative
-      // to A) - no independent quadratic/MC template needed for region C's purity.
+      // Region-C signal: n_s^C = c*S.
       if (C != 0) HC[i]->Fill(c*S/C);
     }
-    // Non-bootstrap version
     float A = hA->GetBinContent(i+1);
     float B = hB->GetBinContent(i+1);
     float C = hC->GetBinContent(i+1);
@@ -125,10 +114,6 @@ TGraphAsymmErrors * combine_hists(TH1D * h[], TH1D * f[], TGraphAsymmErrors ** g
   func->SetParameter(0,1);
   func->SetParameter(1,13);
   func->SetParameter(2,5);
-  // func itself (fitted here) is what ana::getPurity(val,...) evaluates downstream - no
-  // caller reads the fit's own covariance, so the fit isn't asked to return one ("S"
-  // dropped from the option string below; used to be captured as a TFitResultPtr and
-  // written out as "purityFitResult", but nothing ever read that object back).
   oh->Fit(func,"RIMQ0");
 
   for (int i = 0; i < ana::nPtBins; i++) {
@@ -148,30 +133,11 @@ TGraphAsymmErrors * combine_hists(TH1D * h[], TH1D * f[], TGraphAsymmErrors ** g
 }
 
     
-// systag: nominal (default), JERhigh, JERlow, emscale_high, emscale_low, EMRhigh,
-// EMRlow, jes_high, jes_low, threejet, narrowBDT, narrowISO, narrowBDTbkg,
-// narrowISObkg, wideISObkg - selects which reprocessing of
-// hclusterpt_abcd (both Data and the Photon MC leakage fractions)
-// this purity curve is derived from. See the unfolder constructor comment in
-// src/unfolder.h for what each one means.
-//
-// Loops every jet radius internally (hclusterpt_abcd%i_%i is already filled per radius,
-// gated on ispaired[ir] - see unfolder.cc) and writes all seven into ONE
-// ana::purityFilename(systag) file, one ana::rnames[ir] subdirectory per radius - purity
-// is "of paired photons", and pairing genuinely differs by jet radius, so it needs its
-// own value per radius, not one number reused everywhere (see src/ana.h's getPurity ir
-// parameter). drawer/canvases are constructed once and reused/Clear()'d each radius
-// rather than rebuilt, since drawer's own file opens and TCanvas's fixed names would
-// otherwise be repeated 7x pointlessly (drawer) or warn on collision (TCanvas) within
-// one process.
+// Builds the purity curves for one systag, every jet radius (pairing differs per radius), into
+// ana::purityFilename(systag), one ana::rnames[ir] subdirectory each.
 void puritymaker(string systag = "nominal") {
   const char * histname = "hclusterpt_abcd";
-  // MC leakage-fraction templates (fp[i] below) are read from the truth-matched (photon
-  // deltaR<0.1) subset instead of histname - the method's own definition is
-  // f^X=N_sig^X/N_sig^A, a true-signal ratio, not an all-reconstructed-cluster ratio.
-  // Data's own ABCD counts (h[] below) still read histname unchanged: Data has no truth
-  // info, and its raw ABCD counts are genuinely what the data-driven method has to work
-  // with regardless.
+  // MC leakage fractions f^X = N_sig^X/N_sig^A use the truth-matched subset; Data uses all clusters.
   const char * histname_truthmatched = "hclusterpt_abcd_truthmatched";
   drawer d("pythia", systag);
   gStyle->SetOptStat(0);
@@ -187,8 +153,7 @@ void puritymaker(string systag = "nominal") {
   string purityPdfPath = Form("%s/pdfs/purity_%s.pdf", ana::dir(), systag.c_str());
   cu->SaveAs(Form("%s[", purityPdfPath.c_str()));
 
-  // MC leakage-fraction (f^X) plot, one page per radius - previously drawn to canvas
-  // `cf` but never saved to disk.
+  // MC leakage-fraction plot, one page per radius.
   string leakagePdfPath = Form("%s/pdfs/purity_leakage_%s.pdf", ana::dir(), systag.c_str());
   cf->SaveAs(Form("%s[", leakagePdfPath.c_str()));
 
@@ -206,9 +171,6 @@ void puritymaker(string systag = "nominal") {
   cf->Clear();
   gPad->SetTicks();
   gPad->SetLeftMargin(.15);
-  // DrawFrame (rather than relying on the first "same"-drawn histogram to create an
-  // axis frame) so the axes reliably render on every page of the multi-page save below -
-  // same pattern as cu's frameu further down.
   TH1F * framef = cf->DrawFrame(ana::ptBinsUsed[0], 0, ana::ptBinsUsed[ana::nPtBinsUsed], 1.2);
   framef->GetXaxis()->SetTitle("Leading cluster p_{T} [GeV]");
   framef->GetYaxis()->SetTitle("f^{X} = N^{X}_{sig}/N^{A}_{sig}");
@@ -225,8 +187,6 @@ void puritymaker(string systag = "nominal") {
   lf->Draw();
   d.drawAll({"Pythia8 #gamma+jet MC"},{Form("systag: %s",systag.c_str()),Form("Jet R=%.1f",ana::JetRs[ir]),"truth-matched leakage fractions"},.5,.55,16,700);
   cf->SaveAs(leakagePdfPath.c_str());
-  //return;
-
 
   TGraphAsymmErrors * odC = nullptr;
   fout->cd();
@@ -239,7 +199,6 @@ void puritymaker(string systag = "nominal") {
   func->SetParameter(1,13);
   func->SetParameter(2,5);
   od->Fit(func,"RIMQ0");
-  //od->Draw();
   co->cd();
   co->Clear();
   od->SetLineColor(kBlack);
@@ -259,16 +218,10 @@ void puritymaker(string systag = "nominal") {
   d.drawAll({},{Form("systag: %s",systag.c_str()),Form("Jet R=%.1f",ana::JetRs[ir]),"paired clusters","leakage correction applied"},0.15,0.8,20,700);
   d.drawText(Form("P(p_T) = erf((x - %.2f)/%.2f)",func->GetParameter(1), func->GetParameter(2)), .5, .8,1);
 
-  // Purity vs. photon pT, restricted to the ana::nPtBinsUsed reported bins (15-20,
-  // 20-25, 25-35 GeV) - `od` above also carries the low-pT migration-only buffer bin
-  // (13-15 GeV) and the high-pT overflow bin (35-100 GeV), which are diagnostic only,
-  // not reported physics bins (see ana.h's ptBins/ptBinsUsed/firstUsedPtBin comment), so
-  // they're excluded here. Same bootstrap points/asymmetric errors as od, just a subset.
+  // Purity vs. photon pT, reported bins only (ana::nPtBinsUsed).
   TGraphAsymmErrors * odUsed = new TGraphAsymmErrors(ana::nPtBinsUsed);
   odUsed->SetName("combined_used");
-  // Same subset, region C - plotted alongside odUsed below purely as a sanity check
-  // that P_C comes out sensible (e.g. much lower than P_A, since C is the background-
-  // enriched sideband) before it's used anywhere downstream.
+  // Region C alongside, as a sanity check (P_C well below P_A).
   TGraphAsymmErrors * odCUsed = new TGraphAsymmErrors(ana::nPtBinsUsed);
   odCUsed->SetName("combined_C_used");
   for (int k = 0; k < ana::nPtBinsUsed; k++) {
@@ -308,9 +261,7 @@ void puritymaker(string systag = "nominal") {
   lu->AddEntry(odUsed,  "P_{A} (region A)");
   lu->AddEntry(odCUsed, "P_{C} (region C)");
   lu->Draw();
-  // label block in the empty band on the right (pT > ~25 GeV, purity ~0.45-0.72),
-  // between P_C (<= ~0.4) and P_A (>= ~0.77); at (.18,.3) it ran through the
-  // 15-25 GeV P_C points
+  // Label in the empty band between P_C and P_A.
   d.drawAll({"p+p Run24 Data"},{Form("systag: %s",systag.c_str()),Form("Jet R=%.1f",ana::JetRs[ir]),"paired clusters","leakage correction applied"},.55,.6,16,700);
   cu->SaveAs(purityPdfPath.c_str());
 

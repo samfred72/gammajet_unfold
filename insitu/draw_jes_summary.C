@@ -18,57 +18,18 @@ using namespace std;
 
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
-// Final in-situ JES scale factor per jet radius, with full systematic uncertainty -
-// reads grid_insitu.C's purity-corrected best-fit p_a ("results" tree,
-// pa_puritycorrected/errLow_puritycorrected/errHigh_puritycorrected) for every
-// (systag, jet radius) in ana::systags x ana::JetRs (src/ana.h) - the same systag set
-// unfolder.cc/unfold_allsys.C already produce an insitu_tree for, and the same
-// asymmetric/symmetric sign-split combination rule drawing/draw_systematics.C uses
-// (gammajet_unfold/CLAUDE.md's ground rule): each ana::asymmetricSystagPairs member
-// contributes its own signed (p_a_systag-p_a_nominal)/p_a_nominal to the "up" total if
-// positive or "down" if negative; every other non-nominal systags entry is symmetric,
-// contributing its full magnitude to both. Adding a systag to ana::systags (and, if it's
-// a two-point pair, to ana::asymmetricSystagPairs) is the only thing needed for it to
-// show up here automatically - see src/ana.h's comment on those two members.
-//
-// What goes into src/ana.h (PPG18 review issue 5, Sep 28 2026): the nominal p_a, its
-// STATISTICAL uncertainty only (jesStatErrLow/High, used by jes_high/jes_low), and the
-// full per-systag p_a table (jesBySystag), which unfolder.cc uses to correct Data in each
-// systag with that systag's own p_a. The quadrature "syst" sum of the systag shifts below
-// is still computed and drawn as the box in the summary plot, as the spread of the
-// in-situ result under the variations - but it is no longer fed back into jes_high/
-// jes_low, because each of those variations already carries its JES effect inside its
-// own systematic source (feeding it into JES as well counted it twice).
-//
-// Scoped to grid_insitu.C's purity-corrected mean(x_J) fit specifically (not the shape-
-// chi2 or unfolded methods) - it's the most statistically robust of the four in-situ
-// methods (see the shape-chi2 spike/sawtooth investigation this session), and it's the
-// one unfolder.cc's jesCorrection is actually derived from.
-//
-// Plot style matches gammajet/drawing/newdraw_all.C's final xj_vs_R.pdf page (systematic
-// band as a semi-transparent TBox per radius, statistical uncertainty as a black
-// TGraphAsymmErrors point+bar) rather than this project's usual band-graph convention,
-// per explicit request to match that macro's look.
-//
-// Run insitu/run_grid.sh for every radius/systag first - this macro only reads existing
-// grid_insitu_<systag>_<rname>.root files, it does not run any scan itself.
+// Final in-situ JES p_a per jet radius, from grid_insitu.C's purity-corrected mean fit for every
+// (systag, radius). Systematics combine as in draw_systematics.C (asymmetricSystagPairs sign-split
+// per source, others symmetric). Writes into src/ana.h the nominal p_a, its statistical error
+// (jesStatErrLow/High, used by jes_high/low) and the per-systag table jesBySystag. The quadrature
+// systematic is drawn but not fed back: each variation already carries its JES effect.
+// Run insitu/run_grid.sh first.
 
-// insitu/ is split into output/ (grid_insitu.C's .root output, which this macro reads,
-// plus this macro's own .root output) and pdfs/ (this macro's own .pdf output) - it
-// reads no input ntuples of its own.
 const char * insitu_output_dir = ana::path("insitu/output");
 const char * insitu_pdf_dir    = ana::path("insitu/pdfs");
 
-// Rewrites src/ana.h's jesNominal/jesStatErrLow/jesStatErrHigh/jesBySystag array literals in
-// place with this scan's freshly measured values - this is the "generate, don't
-// hand-copy" replacement for what used to be a manual transcription of this macro's
-// own console table into ana.h after every in-situ re-scan. Only touches the numeric
-// literal inside each "= {...};" - the variable name, alignment padding before "=",
-// and everything else in the file is left byte-for-byte untouched. Does NOT rebuild
-// libgammajet_unfold.so itself (see CLAUDE.md's Build & Run section on why driver-style
-// side effects like a full recompile aren't triggered automatically here) - the caller
-// (run_grid.sh) or the user still needs to run src/make.sh afterward for anything
-// linking ana::jesNominal/jesStatErrLow/jesStatErrHigh/jesBySystag to see the new numbers.
+// Rewrites the jesNominal/jesStatErrLow/jesStatErrHigh/jesBySystag literals in src/ana.h in
+// place. Does not rebuild; run src/make.sh afterwards.
 void updateAnaHeader(const float pa[ana::nJetR], const float statLow[ana::nJetR], const float statHigh[ana::nJetR],
     const map<string, vector<float>> & paBySystag) {
   const char * anaHeaderPath = ana::path("src/ana.h");
@@ -115,8 +76,7 @@ void updateAnaHeader(const float pa[ana::nJetR], const float statLow[ana::nJetR]
   replaceArrayLiteral("jesStatErrLow",  formatArray(statLow));
   replaceArrayLiteral("jesStatErrHigh", formatArray(statHigh));
 
-  // Regenerate the whole jesBySystag block (between its BEGIN/END marker comments), in
-  // ana::systags order, so the table can never drift out of step with the systag list.
+  // Regenerate the whole jesBySystag block (between its markers) in ana::systags order.
   {
     const string beginTag = "    // BEGIN jesBySystag\n", endTag = "    // END jesBySystag\n";
     size_t b = content.find(beginTag), e = content.find(endTag);
@@ -154,9 +114,6 @@ struct PaResult { bool ok = false; float pa = 0, errLow = 0, errHigh = 0; };
 
 PaResult readPa(const string & systag, int ir) {
   PaResult r;
-  // grid_insitu.C now writes one file per systag (all seven jet radii inside, one
-  // ana::rnames[ir] subdirectory each) instead of one file per (systag,radius) - see
-  // that macro's header comment.
   const char * filename = Form("%s/grid_insitu_%s.root", insitu_output_dir, systag.c_str());
   TFile * f = TFile::Open(filename, "READ");
   if (!f || f->IsZombie()) {
@@ -179,8 +136,6 @@ PaResult readPa(const string & systag, int ir) {
 void draw_jes_summary() {
   gStyle->SetOptStat(0);
 
-  // Flatten ana::asymmetricSystagPairs into a lookup set of individual systag names -
-  // derived, not duplicated, so a new pair added there is picked up here automatically.
   set<string> asymmetricSystags;
   for (auto & pr : ana::asymmetricSystagPairs) {
     asymmetricSystags.insert(pr.first);
@@ -189,9 +144,7 @@ void draw_jes_summary() {
 
   cout << Form("%-6s %10s %12s %12s %12s\n", "radius", "p_a", "stat -/+", "syst -/+", "total -/+");
 
-  // Captured as a string immediately: the many Form() calls inside readPa() (called up
-  // to 70 times below) rotate through and overwrite Form()'s static buffer pool long
-  // before outfilename is used again at the very end of this function.
+  // Copy now: readPa()'s Form() calls overwrite Form()'s buffer pool.
   string outfilename = Form("%s/draw_jes_summary.root", insitu_output_dir);
   TFile * fout = TFile::Open(outfilename.c_str(), "RECREATE");
   TTree * wt = new TTree("jes_summary", "in-situ JES scale factor per jet radius, with full systematic uncertainty");
@@ -206,19 +159,12 @@ void draw_jes_summary() {
   wt->Branch("totalLow", &wtotalLow);
   wt->Branch("totalHigh", &wtotalHigh);
 
-  // Per-radius results, collected here and used for both the tree and the plot below -
-  // avoids re-deriving systLow/systHigh from the graphs after the fact.
   vector<float> vR, vPa, vStatLow, vStatHigh, vSystLow, vSystHigh, vTotalLow, vTotalHigh;
 
-  // Per-systag coverage count across the radius loop below - used to gate the ana.h
-  // auto-update at the end: a partial sweep (e.g. run_grid.sh --systag nominal, or a
-  // radius/systag combination that just hasn't been scanned yet) must never silently
-  // bake an underestimated systematic into ana.h, so every non-nominal systag needs a
-  // valid result at every radius, not just "some".
+  // Per-systag radius coverage: ana.h is updated only from a complete sweep.
   map<string,int> systagCoverage;
   for (const string & systag : ana::systags) if (systag != "nominal") systagCoverage[systag] = 0;
-  // p_a per (systag, radius) for ana.h's jesBySystag - "nominal" included, so the table
-  // has one row per ana::systags entry.
+  // p_a per (systag, radius) for jesBySystag, nominal included.
   map<string, vector<float>> paBySystag;
   for (const string & systag : ana::systags) paBySystag[systag] = vector<float>(ana::nJetR, 0);
 
@@ -278,12 +224,7 @@ void draw_jes_summary() {
     return;
   }
 
-  // Auto-update ana.h's jesNominal/jesStatErrLow/jesStatErrHigh/jesBySystag iff this was a
-  // complete sweep: every radius has a nominal result AND every ana::systags entry has a
-  // result at every radius. Anything short of that is a partial/quick-check run (e.g.
-  // run_grid_nominal.sh, or --systag) that would leave holes in jesBySystag - which
-  // unfolder.cc uses to correct Data in every systag - so report what's missing instead
-  // of overwriting real physics constants with an incomplete table.
+  // Update ana.h only if every ana::systags entry has a result at every radius.
   bool complete = (nOk == ana::nJetR);
   vector<string> incompleteSystags;
   for (auto & kv : systagCoverage) if (kv.second != ana::nJetR) incompleteSystags.push_back(kv.first);
@@ -305,11 +246,7 @@ void draw_jes_summary() {
   }
 
   // -----------------------------
-  // Summary plot: JES scale factor vs jet radius - same box(syst)+point(stat) style as
-  // gammajet/drawing/newdraw_all.C's xj_vs_R.pdf - directly answers whether the in-situ
-  // correction is consistent across radii (it was previously only ever measured at
-  // R=0.4 and applied uniformly to every radius - see this session's weakness-finding
-  // discussion).
+  // Summary plot: JES scale vs jet radius (box = syst, point = stat)
   // -----------------------------
   TGraphAsymmErrors * gStat = new TGraphAsymmErrors(nOk);
   gStat->SetName("gJES_stat_vs_radius");
@@ -331,12 +268,7 @@ void draw_jes_summary() {
   frame->SetTitle(";Jet R;Data-to-MC JES Correction");
   frame->GetXaxis()->SetNdivisions(8);
 
-  // Systematic uncertainty boxes - one per radius, centered on its point. Solid fill,
-  // not SetFillColorAlpha - this ROOT build's batch-mode PNG/PDF output silently drops
-  // alpha-blended fills entirely (verified with a standalone test), so
-  // newdraw_all.C's semi-transparent style isn't reproducible here. SetFillStyle(1001)
-  // is likewise required explicitly - a fresh TBox's default fill style renders as
-  // fully hollow regardless of SetFillColor until this is set.
+  // Solid fill: batch-mode output drops alpha fills. SetFillStyle(1001) is required for a TBox.
   const float boxHalfWidth = 0.04;
   vector<TBox*> boxes;
   for (int i = 0; i < nOk; i++) {
@@ -348,7 +280,7 @@ void draw_jes_summary() {
     boxes.push_back(b);
   }
 
-  // Statistical uncertainty points+bars, drawn on top of the systematic boxes.
+  // Statistical points on top of the boxes.
   gStat->SetMarkerStyle(20);
   gStat->SetMarkerSize(1.2);
   gStat->SetLineWidth(2);
@@ -370,10 +302,7 @@ void draw_jes_summary() {
   c->SaveAs(pdfPath);
   cout << "Wrote " << pdfPath << endl;
 
-  // readPa()'s many TFile::Open()/Close() calls during the loop above leave gDirectory
-  // pointing at gROOT ("Rint"), not fout, once the last of those files closes - cd()
-  // back explicitly or Write() silently no-ops with a "not associated with a file" error
-  // instead of writing into fout.
+  // The TFile::Open/Close calls in readPa() leave gDirectory at gROOT; cd() back before Write().
   fout->cd();
   gStat->Write();
   wt->Write();

@@ -3,63 +3,20 @@
 #include "../src/unfold_utility.h"
 #include "RooUnfoldResponse.h"
 #include "RooUnfoldBayes.h"
-// The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
-// into /home/samson72/root/lib/libgammajet.so, sitting on the same library search path
-// as this project's libgammajet_unfold.so. Without forcing which one loads first, ROOT's
-// implicit symbol autoload can bind drawer/ana calls to the wrong (mismatched-layout)
-// library and segfault - explicit load removes the ambiguity.
+// Load explicitly: the sibling gammajet project's libgammajet.so has same-named classes.
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
-// Covariance/correlation matrix of the unfolded Data result, at every scanned iteration
-// count. Every chi2/NDF metric built elsewhere in this directory (draw_purity_corrected.C,
-// draw_iteration_halfclosure.C, toy_iterations.C,
-// draw_refolding.C, draw_nonclosure.C, draw_prior_sensitivity.C) sums (residual/sigma_i)^2
-// bin by bin - i.e. assumes a DIAGONAL covariance matrix. Bayesian unfolding doesn't
-// produce one: every iteration redistributes weight across bins through the same
-// migration matrix, so a fluctuation in one bin systematically pulls its neighbors too.
-// The ATLAS dijet-xJ paper's own toy-based covariance shows exactly this structure
-// (Phys. Lett. B 774 (2017) 379, referenced earlier this session): "Nearby xJ bins show a
-// strong positive correlation that diminishes for bins separated in xJ... Bins well
-// separated in xJ show an anti-correlation attributable to the normalisation of
-// (1/N)dN/dxJ." This macro checks whether that structure is present here, and how it
-// changes with niter (more iterations couple bins more - the covariance's off-diagonal
-// growth is the other side of the same regularization tradeoff niter already balances
-// against statistical noise and prior bias throughout this directory).
-//
-// The covariance itself isn't something toy-computed here - RooUnfoldBayes already
-// computes it analytically on every single unfoldOnce() call (it's what the
-// "Calculating covariances..." console line, silenced everywhere else via SetVerbose(-1),
-// refers to). unfold_utility::unfoldOnce() only ever keeps Hreco()'s diagonal (via
-// TH1D::Clone(), which carries just GetBinError()), so a RooUnfoldBayes object is built
-// directly here (not through that helper) specifically to also call
-// Eunfold(RooUnfold::kCovariance), which returns the full TMatrixD.
-//
-// Displayed as a CORRELATION matrix (cov(i,j)/sqrt(cov(i,i)*cov(j,j)), range [-1,1]), not
-// raw covariance - correlation is scale-free, so it's comparable across pT bins with very
-// different absolute yields. Restricted to one pT bin's own xJ x xJ block per page (the
-// full flattened matrix also carries cross-pT-bin correlations, from the response matrix's
-// migration crossing pT-bin boundaries, but the ATLAS quote above - and the physical
-// intuition for it - is specifically about correlations WITHIN a measured xJ spectrum).
-//
-// A self-check is printed for every bin: this macro's own extracted diagonal
-// (sqrt(cov(i,i))) is compared to Hreco()'s own GetBinError() for the identical bin at
-// the identical niter - they MUST match (both come from the same RooUnfoldBayes error
-// propagation, just read out two different ways), so a mismatch means the flat-index
-// bookkeeping below is wrong, not that anything about the unfolding itself is.
+// Correlation matrix of the unfolded Data at every scanned niter, per pT bin's xJ block. The
+// chi2 metrics elsewhere assume a diagonal covariance; Bayesian unfolding correlates neighbors
+// (ATLAS PLB 774 (2017) 379). RooUnfoldBayes is built directly to read Eunfold(kCovariance).
+// Self-check: sqrt(cov(i,i)) must equal Hreco()'s bin error.
 
 const int ir = 2; // nominal jet radius index (R=0.4)
-const int nPtBinsUsed = ana::nPtBinsUsed; // physics analysis only uses ana::ptBins[ana::firstUsedPtBin..]
-const int niterate = 2; // matches draw_purity_corrected.C / draw_final_result.C's chosen nominal iteration count
+const int nPtBinsUsed = ana::nPtBinsUsed; // reported bins start at ana::firstUsedPtBin
+const int niterate = 2; // nominal iteration count
 const vector<int> iterationsToScan = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}; // same list as every other niter scan in this directory
 
-// densityForDisplay now lives in unfold_utility - see src/unfold_utility.h.
-// buildFullyCorrected now lives in unfold_utility (purity-corrects all ana::nPtBins
-// slices via unfold_utility::purityCorrect and reflattens for RooUnfold) - see
-// src/unfold_utility.h.
-
-// Blue (corr=-1) - white (corr=0) - red (corr=+1) diverging palette, the standard
-// convention for correlation-matrix heatmaps (a sequential palette like ROOT's default
-// kBird would make zero-correlation and strong-correlation regions hard to tell apart).
+// Blue-white-red diverging palette for correlations.
 void setDivergingPalette() {
   const int nStops = 3;
   double stops[nStops] = {0.0, 0.5, 1.0};
@@ -70,11 +27,7 @@ void setDivergingPalette() {
   gStyle->SetNumberContours(255);
 }
 
-// flatbin(ipt,ixj), 0-indexed, matching TMatrixD/TVectorD element ordering: identical to
-// unfold_utility::unflattenXj's own "flatbin" (ipt*(nUnfoldXjBins+2)+ixj+1), since
-// RooUnfoldResponse defaults to _overflow=false (never enabled anywhere in this project),
-// so TVectorD element i <-> ROOT histogram bin i+1, with no extra offset from
-// under/overflow bins being folded in.
+// flatbin(ipt,ixj), 0-indexed: TVectorD element i is histogram bin i+1 (no overflow).
 int matrixIndex(int ipt, int ixj) {
   return ipt*(ana::nUnfoldXjBins+2) + ixj + 1;
 }
@@ -87,8 +40,7 @@ void draw_covariance(string systag = "nominal") {
   string pdfPath  = Form("%s/pdfs/draw_covariance_%s.pdf", ana::dir(), systag.c_str());
   string rootPath = Form("%s/hists/covariance_%s.root", ana::dir(), systag.c_str());
 
-  // Response matrix + purity-corrected Data - same construction as draw_refolding.C/
-  // draw_prior_sensitivity.C.
+  // Response and purity-corrected Data, as in draw_refolding.C.
   TH1D * respRecoTemplate  = d.get(Form("hrecoxj%i",ir), 1);
   TH1D * respTruthTemplate = d.get(Form("htruthxj%i",ir), 1);
   TH2D * respMatrix2D      = d.get2d(Form("hxjresponse%i",ir), 1);
@@ -108,9 +60,7 @@ void draw_covariance(string systag = "nominal") {
   for (unsigned k = 0; k < iterationsToScan.size(); k++) {
     int iter = iterationsToScan[k];
 
-    // Built directly (not via unfold_utility::unfoldOnce) so the RooUnfoldBayes object -
-    // and its Eunfold() - stays alive long enough to read the covariance out of, not just
-    // the diagonal-only clone that helper returns.
+    // Built directly so Eunfold() is available.
     RooUnfoldBayes unfold(response, flatMeasured, iter, 0, 1);
     unfold.SetVerbose(-1);
     TH1D * hUnfolded = (TH1D*)((TH1D*)unfold.Hreco())->Clone(Form("hUnfoldedFull_iter%d", iter));
@@ -131,10 +81,7 @@ void draw_covariance(string systag = "nominal") {
         int idxI = matrixIndex(ipt, ixj);
         double covII = cov(idxI, idxI);
 
-        // Self-check: this bin's diagonal covariance element must reproduce Hreco()'s own
-        // bin error for the SAME bin at the SAME niter (both come from the same
-        // RooUnfoldBayes error propagation) - a mismatch means matrixIndex() is wrong,
-        // not that anything about the unfolding is.
+        // Self-check against Hreco()'s bin error; a mismatch means the index bookkeeping is wrong.
         double diagErr = sqrt(std::max(covII, 0.0));
         double histErr = hUnfoldPt->GetBinError(ixj+1);
         if (fabs(diagErr-histErr) > 1e-3*std::max(histErr,1.0))
@@ -177,10 +124,7 @@ void draw_covariance(string systag = "nominal") {
     delete hUnfolded;
   }
 
-  // Bonus page: mean |off-diagonal correlation| (averaged over used pT bins) vs iteration
-  // count - the other side of the niter tradeoff already explored throughout this
-  // directory (statistical noise and prior bias both generally SHRINK with more
-  // iterations; this should generally GROW, since more iterations couple bins more).
+  // Bonus page: mean |off-diagonal correlation| vs iteration count.
   c->Clear();
   c->cd();
   gPad->SetTicks(1,1);

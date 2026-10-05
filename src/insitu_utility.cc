@@ -117,8 +117,7 @@ void insitu_utility::drawSPhenixLabel(vector<string> samples, vector<string> fea
   }
 }
 
-// ----- Computational helpers shared by the six grid_insitu*.C JES-scan macros -----
-// See insitu_utility.h's comment above these declarations.
+// ----- Shared helpers for the grid_insitu*.C JES scans -----
 
 vector<double> insitu_utility::coarsenSum(const vector<double> & fine, int startBin, int nBinsForFit, int groupSize) {
   int nGroups = (nBinsForFit - startBin + groupSize - 1) / groupSize;
@@ -333,11 +332,7 @@ vector<TH1D*> insitu_utility::purityCorrectByPtBin(const vector<TH1D*> & hA, con
     const char * prefix) {
   vector<TH1D*> h(nBins);
   for (int ipt = 0; ipt < nBins; ipt++) {
-    // ipt indexes directly into ana::ptBins (callers passing nBins=ana::nPtBins loop
-    // the full pT range; callers passing nBins=ana::nPtBinsUsed never reach nPtBins-1
-    // at all, so this comparison is a no-op there). Last bin (ipt==nPtBins-1, the
-    // 35-100 GeV migration-only buffer) has an empty region B in this data sample -
-    // see unfold_utility::purityCorrect's quiet parameter comment.
+    // Last pT bin (35-100 GeV migration buffer) has an empty region B.
     bool quiet = (ipt == ana::nPtBins - 1);
     TH1D * hcorr = unfold_utility::purityCorrect(hA[ipt], hC[ipt],
         purity[ipt], purityErrLow[ipt], purityErrHigh[ipt],

@@ -17,26 +17,12 @@ using namespace std;
 
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
-// In-situ JES scale factor p_a under every systematic variation, per jet radius.
-//
-// Reads grid_insitu.C's purity-corrected best fit (results tree: pa_puritycorrected,
-// errLow/errHigh_puritycorrected) from insitu/output/grid_insitu_<systag>.root for every
-// ana::systags entry - the same numbers draw_jes_summary.C writes into ana.h's
-// jesBySystag table, which unfolder.cc uses to correct Data in each variation (each
-// variation is propagated with its own p_a - see ana.h). This plot shows those values
-// directly:
-//   page 1  one pad per radius: p_a for each systag (point = fit, bar = its own
-//           statistical Delta chi2 = 1 error), the nominal value +- its statistical error
-//           (grey band), and the lower edge of the scan range (red dashed). A value within
-//           edgeTol of the scan edge is drawn open red: the fit's minimum is at or beyond
-//           the range, so the number is a bound, not a measurement.
-//   page 2  fractional shift (p_a_systag - p_a_nominal)/p_a_nominal vs jet radius, one
-//           series per variation (high/low pairs share a colour: filled up-triangle =
-//           high/first, open down-triangle = low/second), with the nominal statistical
-//           uncertainty as the grey band. Points where the variation or the nominal fit is
-//           at the scan edge are ringed (their shift is not meaningful). jes_high/jes_low
-//           are omitted here (see below).
-// Also prints the table. Run after insitu/run_grid.sh (reads only; runs no scan).
+// In-situ p_a under every variation, per jet radius, from grid_insitu.C's purity-corrected fit
+// (the values in ana.h's jesBySystag). Run after insitu/run_grid.sh.
+//   page 1: one pad per radius, p_a per systag with the nominal +- stat band; values within
+//           edgeTol of the scan edge are open red (a bound, not a measurement).
+//   page 2: fractional shift vs R per variation (high filled up-triangle, low open down-triangle);
+//           edge points are ringed.
 
 const char * insitu_output_dir = ana::path("insitu/output");
 const char * insitu_pdf_dir    = ana::path("insitu/pdfs");
@@ -174,10 +160,8 @@ void draw_jes_variations() {
   fr2->Draw("axis same");
   TLegend * l2 = new TLegend(0.75, 0.12, 0.99, 0.95); l2->SetBorderSize(0); l2->SetFillStyle(0); l2->SetTextSize(0.028);
   int k = 0;
-  // jes_high/jes_low are left out: they vary the JES correction applied in the unfolding,
-  // not any input of the in-situ scan (which uses the uncorrected jet pT), so their scan
-  // results differ from nominal only by scan noise - and unfolder.cc does not use them.
-  TGraph * gEdge = new TGraph(); // ring around every point where var or nominal is at the scan edge
+  // jes_high/low vary the correction applied in unfolding, not the scan input: omitted.
+  TGraph * gEdge = new TGraph(); // ring points at the scan edge
   for (const string & t : tags) {
     if (t == "nominal" || t == "jes_high" || t == "jes_low") continue;
     TGraph * g = new TGraph();

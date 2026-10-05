@@ -20,16 +20,7 @@ class treeuser {
     treeuser(string trigger, string sim = "pythia") {
       this->trigger = trigger;
       this->sim = sim;
-      // Raw trees are large input data - kept in this repo's trees/ directory
-      // (gitignored, not committed).
-      // "Jet12_long" is a separate production at the generic
-      // gammajet_unfold/trees/gammajet_<sim>_<trigger>.root path (no special-case branch
-      // needed below) with no truth-level jet-pT cut, following the (0,100) "wide
-      // open" threshmap/threshmap_high/reco_threshmap_high convention below rather
-      // than "Jet12"'s narrow pT-hat-slice window. (A legacy "Jet12_full" sample - a
-      // 10x-higher-statistics copy of the same Jet12 towerntup production, kept
-      // outside the trees directory in a sibling project - used to have a special-case
-      // path here too, but has been retired in favor of Jet12_long.)
+      // Raw trees live in trees/ (gitignored). Jet12_long has no truth jet-pT cut (wide-open window).
       f = (trigger == "Data" ?
           TFile::Open(Form("%s/trees/gammajet_%s.root", ana::dir(),trigger.c_str()),"read") :
           TFile::Open(Form("%s/trees/gammajet_%s_%s.root", ana::dir(),sim.c_str(),trigger.c_str()),"read")
@@ -37,17 +28,7 @@ class treeuser {
       t = (TTree*)f->Get("towerntup");
       isMC = (trigger != "Data");
       treesetup();
-      // -1: cluster
-      //  0: jet R=0.2
-      //  1: jet R=0.3
-      //  2: jet R=0.4
-      //  3: jet R=0.5
-      //  4: jet R=0.6
-      //  5: jet R=0.7
-      //  6: jet R=0.8
-      // Truth-jet (photon: truth-cluster) pT-hat slice windows per radius/sample - see
-      // truthSliceLow/truthSliceHigh below (static so other code, e.g. the in-situ
-      // multijet reference, can use the same tables without opening any trees).
+      // ir: -1 cluster, 0..6 jet R=0.2..0.8.
       threshmap = truthSliceLow(sim);
       threshmap_high = truthSliceHigh(sim);
       reco_threshmap_high = std::map<int, std::map<std::string, int>>{
@@ -61,9 +42,8 @@ class treeuser {
         { 6,{{"Jet5",12},{"Jet8",20},{"Jet12",30},{"Jet12_long",100},{"Jet20",42},{"Jet30",60},{"Jet50",83},{"Jet70",200},{"Photon5", 0},{"Photon10", 0},{"Photon20", 0}}}
       };
     }
-    // Lower/upper pT-hat slice edges (GeV): an MC event from sample `trigger` is kept for
-    // jet radius index ir (-1 = photon) only if the truth pT is inside (low, high) - see
-    // check_keep_MC. -1: cluster; 0..6: jet R=0.2..0.8.
+    // pT-hat slice window (GeV): an MC event from `trigger` is kept for radius ir only if its truth pT
+    // is inside (low, high). Static so other code can use the tables without trees.
     static std::map<int, std::map<std::string, int>> truthSliceLow(const std::string & sim) {
       return (sim == "pythia" ? 
       std::map<int, std::map<std::string, int>>{
@@ -126,8 +106,6 @@ class treeuser {
     map<int, map<string,int>> threshmap_high;
     map<int, map<string,int>> reco_threshmap_high;
 
-
-    // TTree variables
     Int_t           RunNumber;
     Float_t         vz;
     Bool_t          ScaledTriggerBit[64];
@@ -166,9 +144,8 @@ class treeuser {
     Float_t         jet_emfrac[nJetR];
     Float_t         jet_time[nJetR]; 
 
-    // Highest-pT in-time jet outside the photon cone other than the leading recoil jet:
-    // jet_pt_calib for Data, nominal jet_pt_smear_truth for MC (treemaking from Oct 2026;
-    // older trees store the raw pT here). Feeds the threejet veto in unfolder.cc.
+    // Leading in-time jet outside the photon cone other than the recoil jet (jet_pt_calib for Data,
+    // nominal jet_pt_smear_truth for MC). Feeds the threejet veto.
     Float_t         thirdjet_pt[nJetR];
 
     Float_t         hadron_p[nJetR];
@@ -178,7 +155,6 @@ class treeuser {
     Float_t         truth_jet_eta[nJetR];
     Float_t         truth_jet_phi[nJetR];
 
-    // List of branches
     TBranch        *b_RunNumber;   //!
     TBranch        *b_vz;   //!
     TBranch        *b_ScaledTriggerBit;   //!

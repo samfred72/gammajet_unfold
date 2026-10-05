@@ -14,39 +14,21 @@
 #include "TStyle.h"
 using namespace std;
 
-// Load explicitly so cling binds ana/insitu_utility symbols to this project's library
-// (see draw_purity_corrected.C).
+// Load explicitly: the sibling gammajet project's libgammajet.so has same-named classes.
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
-// All-radii, all-pT-bin version of draw_insitu_xj.C: reco-level x_Jgamma from the same
-// insitutree files the in-situ JES scan reads (insitu/inputs/*_insitu.root), for
-//   1. Region A in Data
-//   2. Region A in Pythia8 gamma+jet MC (Photon5+10+20, cross-section weighted)
-//   3. Purity-corrected Data (unfold_utility::purityCorrect, two-purity subtraction)
-// shape-normalized, with a ratio-to-Pythia8 panel. One page per jet radius, one column
-// per used photon-pT bin (ana::ptBinsUsed).
-//
-// Data jets here carry NO in-situ correction (insitutree's jet_pt is the pre-JES
-// calibrated pT the scan then multiplies by trial p_a) - this is what the scan sees at
-// p_a = 1.
-//
-// Every bin is drawn. The printed means are computed only above the in-situ scan's
-// low-x_J floor (insitu_utility::lowXjFloor(ir, ptLow), marked by the dashed vertical
-// line), the same cut grid_insitu.C applies to every mean it compares - below it the
-// jet-pT threshold, not the physics, shapes the distribution. Note draw_insitu_xj.C's
-// means apply no floor, so its numbers differ from these. Means use the raw-count
-// histograms, not the bin-width-scaled display clones.
-//
-// Purity: each radius's own P_A/P_C curve (ana::getPurity(..., systag, ir)).
+// All-radii version of draw_insitu_xj.C: reco xJ for Data region A, Photon5+10+20 region A and
+// purity-corrected Data, shape-normalized with a ratio to Pythia8; one page per radius, one
+// column per used pT bin. Data jets are uncorrected (the scan at p_a = 1). Means are taken above
+// insitu_utility::lowXjFloor (dashed line), as grid_insitu.C does, from the raw histograms.
 //
 // Usage: root -b -l -q 'draw_insitu_xj_allR.C("nominal")'
-// Output: insitu/pdfs/insitu_xj_allR_<systag>.pdf, insitu/output/insitu_xj_allR_<systag>.root
 
 const char * insitu_input_dir  = ana::path("insitu/inputs");
 const char * insitu_output_dir = ana::path("insitu/output");
 const char * insitu_pdf_dir    = ana::path("insitu/pdfs");
 
-// Same cross-section weights as draw_insitu_xj.C / drawer.h's scalemap for sim="pythia".
+// Cross-section weights (drawer.h's scalemap).
 map<int,double> photon_scale = {{5,146359.3},{10,6944.675},{20,130.4461}};
 
 typedef vector<vector<TH1D*>> HistGrid; // [ir][ipt]
@@ -63,9 +45,7 @@ HistGrid makeGrid(const char * tag) {
   return h;
 }
 
-// One pass over an insitutree fills every radius at once (the tree holds one row per
-// radius an event paired at, tagged by its "ir" branch). Same selection and weighting
-// as draw_insitu_xj.C's fillXjByPtBin: ABCD region, ana::findPtBin, weight*mcWeight.
+// One pass fills every radius (the tree's ir branch).
 void fillGrid(HistGrid & h, const string & filename, int abcdSelect, double weight) {
   TFile * f = TFile::Open(filename.c_str(), "READ");
   if (!f || f->IsZombie()) {
@@ -92,7 +72,7 @@ void fillGrid(HistGrid & h, const string & filename, int abcdSelect, double weig
   f->Close();
 }
 
-// NaN/Inf bins poison ROOT's axis auto-ranging (blank canvas) - zero them before drawing.
+// Zero NaN/Inf bins before drawing.
 void sanitize(TH1D * h) {
   for (int b = 0; b <= h->GetNbinsX()+1; b++) {
     if (!std::isfinite(h->GetBinContent(b)) || !std::isfinite(h->GetBinError(b))) {
@@ -110,8 +90,7 @@ TH1D * shapeDisplay(TH1D * h, const char * name) {
   return d;
 }
 
-// Mean and its error over bins whose lower edge is >= floor (bin-center approximation,
-// counts weighted by content; error from the bin errors).
+// Mean and error over bins with lower edge >= floor.
 void meanAboveFloor(TH1D * h, double floor, double & mean, double & err) {
   double sw = 0, swx = 0;
   for (int b = 1; b <= h->GetNbinsX(); b++) {

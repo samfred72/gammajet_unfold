@@ -7,12 +7,8 @@
 #include "TStyle.h"
 #include "TMath.h"
 
-
-// Mean multijet balance x_j = pT,lead/|pT,sub + pT,subsub| vs leading-jet pT, Data vs MC,
-// from analysis.cc's multijet_analysis_<sim>.root (hxj_r<R>_<ptlow>_data and
-// hxj_r<R>_<ptlow>_<sys>_sim, sys = RECO/HIGH/LOW JER smearing).
-// (Was written for an older hists/hists_<R>_pythia.root layout - hxj_<pt>_0_data /
-// hxj_<pt>_<itype>_sim - that analysis.cc no longer produces.)
+// Mean multijet balance x_j = pT,lead/|pT,sub + pT,subsub| vs leading-jet pT, Data vs MC, from
+// analysis.cc's multijet_analysis_<sim>.root (sys = RECO/HIGH/LOW).
 void draw_xj(int radius = 4, const char * sys = "RECO", const char * sim = "pythia") {
 
   gStyle->SetOptStat(0);
@@ -58,8 +54,7 @@ void draw_xj(int radius = 4, const char * sys = "RECO", const char * sim = "pyth
 
   for (int i = 0; i < nPtBins; i++) {
 
-    // Assumes pt bin labels are:
-    // 20,25,30,35,40,50,60 ...
+    // pT bin labels: 20,25,30,35,40,50,60 ...
     int pt = (int)ptBins[i];
 
     TString hnameData = Form("hxj_r%d_%i_data", radius, pt); // data has no JER variations

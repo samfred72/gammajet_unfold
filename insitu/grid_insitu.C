@@ -21,93 +21,44 @@
 #include "TStyle.h"
 using namespace std;
 
-// ana::findPtBin/getPurity/etc. live in ana.cc, compiled into libgammajet_unfold.so -
-// load it explicitly (see draw_purity_corrected.C / draw_insitu_xj.C) so cling resolves
-// the real compiled definitions instead of misbinding against the sibling gammajet
-// project's own ana/drawer classes on the same library path.
+// Load explicitly: the sibling gammajet project's libgammajet.so has same-named classes.
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
-// In-situ jet-energy-scale study, in the style of gammajet/macros/run_grid.sh's
-// grid_insitu.C, but reading this project's insitutree files (see draw_insitu_xj.C)
-// instead of the sibling gammajet project's tree_Data.root.
-//
-// Two modes (second argument):
-//   "gammajet" (default) - the study described below: one constant scale pa. Its
-//       output (output/grid_insitu_<systag>.root, pdfs/grid_insitu_<systag>.pdf) is what
-//       draw_jes_summary.C turns into ana.h's jesNominal/jesBySystag.
-//   "combined" - gamma+jet plus the multijet balance from multijet/analysis.cc's output
-//       (multijet/multijet_analysis_pythia.root - its per-radius event trees carry that
-//       analysis's selection and MC weights, see insitu_utility.h), fitting a linear
-//       JES f(pT) = pa + pb*pT on a 2D grid, as the old sibling-project grid_insitu.C did.
-//       A constant scale cancels in the multijet balance, so multijet constrains the
-//       slope and gamma+jet the normalization. Cross-check only: written to
-//       grid_insitu_combined_<systag>.root/.pdf and never read by draw_jes_summary.C.
-//       See runCombined() below.
-//
-// Scans a single overall jet-energy-scale factor pa (jet_pt_corrected = jet_pt/pa,
-// no pT-dependence) and finds the value that makes Data's mean(x_{J#gamma}) match the
-// fixed Pythia8 gamma+jet MC reference mean, per photon-pT bin, two ways:
-//   1. Region A alone (the naive fit - background-contaminated).
-//   2. The purity-corrected combination of Region A and Region C, since the physical
-//      photon signal is what the JES should actually be tuned against.
-// Comparing the two best-fit scales is the actual "insitu correction study": it shows
-// how much the region-C background pulls a naive region-A-only JES fit away from the
-// purity-corrected answer.
-//
-// Region A and Region C jets are scaled by the *same* trial pa at every grid point
-// ("scale all the jets in regions A and C, then do the correction"). The purity P is
-// computed once, outside the pa loop, and held fixed across the whole scan - jet energy
-// scale doesn't move photon isolation/BDT, so it can't move which events fall in A vs.
-// C, or the measured purity fraction itself ("the purity is independent of jet energy
-// scale, so we can use the same purity the whole way through").
+// In-situ JES scan on the insitu trees.
+//   mode "gammajet" (default): one constant scale pa (jet_pt/pa) chosen so Data's mean xJ (or xJ
+//     shape) matches the Pythia8 reference per photon-pT bin, for region A alone and for the
+//     purity-corrected A/C combination. draw_jes_summary.C turns this into ana.h's constants.
+//   mode "combined": gamma+jet plus multijet/analysis.cc's balance, fitting f(pT) = pa + pb*pT
+//     on a 2D grid (multijet fixes the slope, gamma+jet the normalization). Cross-check only.
+// Regions A and C are scaled by the same pa; the purity is held fixed (the JES does not move
+// isolation/BDT).
 
-// insitu/ is split into inputs/ (the raw Data/Photon insitu ntuples, written by
-// unfolder.h's production pipeline), output/ (this and the other grid_insitu*.C
-// macros' own .root output), and pdfs/ (their .pdf output).
+// insitu/: inputs/ (insitu trees), output/ (.root), pdfs/.
 const char * insitu_input_dir  = ana::path("insitu/inputs");
 const char * insitu_output_dir = ana::path("insitu/output");
 const char * insitu_pdf_dir    = ana::path("insitu/pdfs");
 
-// Only ana::ptBinsUsed (15-20, 20-25, 25-35 GeV) is used for every calculation and
-// plot below - both the low-pT migration-only buffer bin (13-15 GeV, ana::ptBins[0])
-// and the high-pT overflow bin (35-100 GeV) are excluded, since neither is a reported
-// physics bin (see ana.h's ptBins/ptBinsUsed/firstUsedPtBin comment) and the top one
-// also has too few Data events for a meaningful in-situ point.
+// Reported pT bins only (ana::ptBinsUsed).
 const int nPtBinsUsed = ana::nPtBinsUsed;
-// Shape method: x_J bin fractions instead of means; last 3 sparse x_J bins dropped and
-// pT bin 2 merged in pairs of x_J bins (low-statistics spikes in that bin).
+// Shape method: xJ bin fractions; last 3 sparse xJ bins dropped, pT bin 2 merged in pairs.
 const int nXjBinsForChi2 = ana::nUnfoldXjBins - 3;
 const int coarseRebinPtBin = 2;
 const int coarseGroupSize = 2;
 bool shapeMethod = false; // set by grid_insitu(..., method)
 
-// Cross-section weights for combining the Photon5/10/20 MC samples - same numbers as
-// drawer.h's scalemap[isphoton=1][sample] for sim="pythia".
+// Photon5/10/20 cross-section weights (drawer.h's scalemap).
 map<int,double> photon_scale = {{5,146359.3},{10,6944.675},{20,130.4461}};
 
-// Combined mode only: directory holding multijet/analysis.cc's output
-// (multijet_analysis_pythia.root). The multijet event selection and MC weighting
-// (cross sections, pT-hat stitching, leading-pT and z-vertex reweighting) are all
-// analysis.cc's - this macro only reads its per-radius trees.
+// Combined mode: directory of multijet/analysis.cc's output (selection and weights are its).
 string multijet_analysis_dir = ana::path("multijet"); // non-const so a test can point it elsewhere
-// Linear-JES grid (combined mode): pa over the same window as the 1D scan but coarser
-// (2D grid cost), pb over +-0.005/GeV (1e-4 steps). 1-sigma region: delta-chi2 < 2.30
-// (two parameters).
+// Combined-mode grid: pa coarser than the 1D scan, pb over +-0.005/GeV. 1 sigma: delta-chi2 < 2.30.
 const int combinedNa = 200;
 const int combinedNb = 100;
-const float combinedLowb = -0.005, combinedHighb = 0.005; // widened from the old macro's +-0.002: a first test fit sat at +0.002
+const float combinedLowb = -0.005, combinedHighb = 0.005; // a first test fit sat at +0.002
 const float combinedDchi2 = 2.30;
 
-// referenceMeans, computeRegionAMeans, computeCorrectedMeans, buildXjByPtBin,
-// buildMCXjByPtBin, and purityCorrectByPtBin now live in src/insitu_utility.h/.cc
-// (insitu_utility:: namespace) - moved there after being found copy-pasted
-// byte-for-byte across all six grid_insitu*.C macros (see that header's comment).
-
-// One comparison page: top panel is mean(x_J) vs pT for MC and raw Data; bottom panel
-// is the raw ratio (raw Data/MC) and the corrected ratio (best-fit-scaled Data/MC) -
-// the latter should sit flat at 1 by construction, since pa was fit to make it so.
-// pa/paErrLow/paErrHigh are the best-fit in-situ jet-energy-scale factor for this page
-// (Region A or purity-corrected), stamped on the bottom panel in red.
+// Mean xJ vs pT for MC and raw Data (top); raw and corrected Data/MC ratios (bottom). The
+// corrected ratio is flat at 1 by construction.
 void drawJESPage(TCanvas * c, const char * pdfPath, const char * label, int ir,
     TGraphErrors * gMC, TGraphErrors * gDataRaw, TGraphErrors * gRatioRaw, TGraphErrors * gRatioCorr,
     float pa, float paErrLow, float paErrHigh, const char * extraText = "") {
@@ -185,14 +136,9 @@ void drawJESPage(TCanvas * c, const char * pdfPath, const char * label, int ir,
   c->SaveAs(pdfPath);
 }
 
-// One xJ-distribution comparison page, for a single photon-pT bin: the fixed MC
-// reference, the raw (uncorrected) Data distribution, and the Data distribution at the
-// study's best-fit jet-energy-scale (and, for the purity-corrected study, also
-// background-subtracted) - all shape-normalized and divided by bin width for display,
-// since ana::unfoldXjBins is non-uniform (same densityForDisplay convention as
-// draw_insitu_xj.C/draw_purity_corrected.C). The purity-corrected histograms can go
-// bin-by-bin negative (region C oversubtracting a noisy bin) - Integral() is only used
-// to normalize when positive.
+// xJ for one pT bin: MC reference, raw Data, and Data at the best-fit pa; shape-normalized
+// densities. Purity-corrected histograms can go negative; normalize only when the integral
+// is positive.
 void drawXjPage(TCanvas * c, const char * pdfPath, const char * label, int ir, float ptlow, float pthigh,
     TH1D * hMC, TH1D * hDataRaw, TH1D * hDataCorr, const char * dataRawLabel, const char * dataCorrLabel) {
   c->Clear();
@@ -252,8 +198,7 @@ void runCombined(TCanvas * c, const char * pdfPath, TFile * fout, int ir, const 
     const float refMean[], const float refMeanErr[], const float purity[], const float purityC[],
     const float lowXj[]);
 
-// onlyIr >= 0 restricts the run to one jet radius (quick tests); -1 = all radii.
-// method = "mean" or "shape" (gammajet mode only); shape output is grid_insitu_shapechi2_<systag>.
+// onlyIr >= 0: one radius only. method = "mean" or "shape" (gammajet mode only).
 void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr = -1, string method = "mean") {
   if (mode != "gammajet" && mode != "combined") {
     cout << "ERROR: mode must be \"gammajet\" or \"combined\", got \"" << mode << "\"" << endl;
@@ -264,24 +209,10 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
   shapeMethod = (method == "shape");
   if (shapeMethod && combined) { cout << "ERROR: the shape method is gammajet-mode only" << endl; return; }
   const string tag = combined ? "combined_" + systag : (shapeMethod ? "shapechi2_" + systag : systag);
-  // Newly created histograms are not auto-registered to whatever TDirectory happens to
-  // be gDirectory at construction time - without this, buildXjByPtBin/buildMCXjByPtBin's
-  // fixed-name per-pT-bin histograms would auto-register into (and "Replacing existing
-  // TH1" warn against) whichever radius subdirectory was left current by the *previous*
-  // iteration's mkdir/cd below, since they're built before this iteration's own mkdir/cd
-  // runs. Every actual save still goes through this file's explicit ->Write() calls
-  // (unaffected by this setting), same precedent as grid_insitu_unfolded.C.
+  // Don't auto-register new histograms into whichever radius directory is current.
   TH1::AddDirectory(kFALSE);
 
-  // One file/one PDF for the whole systag, all seven jet radii inside - opened/created
-  // here, before the per-radius loop, instead of grid_insitu.C's old per-radius
-  // filenames. Each radius's objects land in their own ana::rnames[ir] subdirectory of
-  // fout (mkdir/cd'd right before that radius's own "Save" block below - a TTree binds
-  // to whatever TDirectory is current at construction time, so this has to happen
-  // before "results" is constructed, not just before its Write()); each radius's pages
-  // become one more page in the same multi-page PDF via the standard "file.pdf["/
-  // "file.pdf"/"file.pdf]" SaveAs bracket already used per-pT-bin below, just wrapped
-  // one level higher.
+  // One file and one PDF per systag; each radius in its ana::rnames[ir] subdirectory.
   string pdfPathStr = Form("%s/grid_insitu_%s.pdf", insitu_pdf_dir, tag.c_str());
   TCanvas * c = new TCanvas("c","",700,700);
   c->SaveAs(Form("%s[", pdfPathStr.c_str()));
@@ -297,11 +228,7 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
   vector<DataEvent> dataC = insitu_utility::cacheDataEvents(dataFile.c_str(), 2, ir);
   cout << "Cached Data events: region A=" << dataA.size() << " region C=" << dataC.size() << endl;
 
-  // Low-xJ floor per used pT bin - same cut unfolder::check_pair applies at floorScale=1
-  // before a reco jet enters hrecoxj/the response matrix (see src/insitu_utility.h's
-  // lowXjFloor comment). Applied below to every mean(x_J)/shape computation (Data and
-  // MC reference alike) so this scan excludes exactly the events the main unfolding
-  // pipeline would exclude at the same jet radius.
+  // Low-xJ floor per pT bin, as unfolder::check_pair applies (insitu_utility::lowXjFloor).
   float lowXj[nPtBinsUsed];
   for (int ipt = 0; ipt < nPtBinsUsed; ipt++) lowXj[ipt] = insitu_utility::lowXjFloor(ir, ana::ptBinsUsed[ipt]);
 
@@ -319,10 +246,7 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
          << "): " << refMean[ipt] << " +/- " << refMeanErr[ipt] << endl;
   }
 
-  // Purity per photon-pT bin (region A and region C) - computed once, held fixed across
-  // the whole pa scan. Error arrays are only needed by purityCorrectByPtBin's asymmetric
-  // purity-uncertainty term below; the scalar-moment grid scan/computeCorrectedMeans use
-  // only the central values (purity has always been held fixed, not scanned, here).
+  // Purity per pT bin, fixed across the scan.
   float purity[nPtBinsUsed], purityErrLow[nPtBinsUsed], purityErrHigh[nPtBinsUsed];
   float purityC[nPtBinsUsed], purityCErrLow[nPtBinsUsed], purityCErrHigh[nPtBinsUsed];
   for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
@@ -341,10 +265,7 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
   }
 
   // -----------------------------
-  // Grid scan: single overall jet-energy-scale factor pa, no pT-dependence - matches
-  // run_grid.sh's gammajet-only mode (nb=1, pb=0). Scan window/step live in
-  // insitu_utility.h (scanLow/scanHigh/scanN) so they're shared across every
-  // grid_insitu*.C.
+  // Grid scan over pa (window in insitu_utility.h)
   // -----------------------------
   const int na = insitu_utility::scanN;
   const float lowa = insitu_utility::scanLow, higha = insitu_utility::scanHigh;
@@ -386,9 +307,7 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
         double NA = 0;
         for (double n : countA[ipt]) NA += n;
 
-        // pT bin 2 fits on coarsened bins (see coarseRebinPtBin above); every other pT
-        // bin uses the native fine binning, i.e. useA/useRefFrac/useRefFracErr are just
-        // the original per-bin arrays and nBins is nXjBinsForChi2 (unchanged behavior).
+        // pT bin 2 uses the coarsened bins.
         vector<double> useA, useC, useRefFrac, useRefFracErr;
         int nBins;
         if (ipt == coarseRebinPtBin) {
@@ -404,21 +323,8 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
           nBins = nXjBinsForChi2;
         }
 
-        // Region A only (naive, background-contaminated fit): pull-squared per xJ bin
-        // between Data's raw bin fraction and the fixed MC reference fraction, summed
-        // over the first nBins bins (low-stat tail dropped, see nXjBinsForChi2 above).
-        //
-        // errt is floored at 1/NA: sqrt(countA)/NA is the usual Poisson error on a bin
-        // fraction, but it goes to exactly 0 when countA=0, understating what a zero-count
-        // observation actually leaves open - a Poisson process with a real, nonzero rate
-        // routinely produces a handful of zero-count bins (e.g. rate~9 in the 25-35 GeV
-        // pT slice's sparsest bins - Region A there has only NA~100 events total), so an
-        // exactly-zero error is never justified. 1/NA is the coarsest resolvable step in
-        // a bin fraction built from NA raw counts, so no bin can claim to be known finer
-        // than that regardless of what the naive sqrt(count) formula says. Without this,
-        // a single zero-count bin sitting next to a well-populated MC reference bin can
-        // produce a pull of -70+ from one event's worth of statistical noise (see
-        // debug_shapechi2_spike.C).
+        // Region A: pull^2 per xJ bin between Data's and MC's bin fractions. errt is floored at 1/NA
+        // (a zero-count bin otherwise has zero error and gives huge pulls).
         if (NA > 0) {
           double errFloor = 1.0/NA;
           for (int ib = 0; ib < nBins; ib++) {
@@ -431,13 +337,8 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
           }
         }
 
-        // Purity-corrected (two-purity method, both regions scaled by the same pa) - same
-        // coeffA/coeffC as grid_insitu.C's computeCorrectedMeans(), now applied to the
-        // per-xJ-bin counts instead of Sum(x_J)/Sum(x_J^2) (still linear, see
-        // unfold_utility::purityCorrectCoeffs). Stat error on the corrected fraction comes
-        // from A/C counting stats alone (Poisson on the raw counts before the linear
-        // combination) - purity's own uncertainty is held fixed across this scan, same
-        // simplification as grid_insitu.C's mean-based chi2.
+        // Purity-corrected: the same linear coeffA/coeffC on per-bin counts; error from A/C counting
+        // only (purity fixed).
         double NC = 0;
         for (double n : countC[ipt]) NC += n;
         if (NA > 0 && NC > 0) {
@@ -445,9 +346,7 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
           unfold_utility::purityCorrectCoeffs(purity[ipt], purityC[ipt], NA, NC, coeffA, coeffC);
           double Ncorr = coeffA*NA - coeffC*NC;
           if (Ncorr > 0) {
-            // Same 1/Ncorr error floor as the Region A block above, and for the same
-            // reason - a zero-count bin in either region can drive errCorr to 0 even
-            // though it says nothing more than "at most 1/Ncorr of the corrected sample".
+            // Same 1/Ncorr floor.
             double errFloor = 1.0/Ncorr;
             for (int ib = 0; ib < nBins; ib++) {
               double corrCount = coeffA*useA[ib] - coeffC*useC[ib];
@@ -485,7 +384,7 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
       for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
         if (refMean[ipt] <= 0) continue;
 
-        // Region A only (naive, background-contaminated fit).
+        // Region A only.
         if (countA[ipt] > 0) {
           double mean = sumA[ipt]/countA[ipt];
           double var  = sumA2[ipt]/countA[ipt] - mean*mean;
@@ -496,8 +395,7 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
           if (errt > 0) chisqA += diff*diff/(errt*errt);
         }
 
-        // Purity-corrected (two-purity method, both regions scaled by the same pa) - see
-        // unfold_utility::purityCorrectCoeffs for the coeffA/coeffC derivation.
+        // Purity-corrected.
         if (countA[ipt] > 0 && countC[ipt] > 0) {
           double NA = countA[ipt], NC = countC[ipt];
           float coeffA, coeffC;
@@ -536,11 +434,7 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
        << " +" << errHighCorr << "/-" << errLowCorr << " (chi2=" << minchisqCorr << ")" << endl;
 
   // -----------------------------
-  // Build x_J histograms per photon-pT bin: the fixed MC reference, Data at pa=1 (raw)
-  // and at each study's own best-fit pa (corrected) - same non-uniform binning as
-  // draw_insitu_xj.C. Also used to build the inclusive (summed-over-pT-bin) histograms
-  // saved to the output ROOT file below, for continuity with earlier versions of this
-  // macro.
+  // xJ histograms per pT bin: MC reference, raw Data, Data at each best-fit pa
   // -----------------------------
   vector<TH1D*> hxjMC_pt       = insitu_utility::buildMCXjByPtBin(mcSamples, 0, ir, "hxjA_pythia", lowXj);
   vector<TH1D*> hxjA_raw_pt    = insitu_utility::buildXjByPtBin(dataA, 1.0,       nPtBinsUsed, "hxjA_data_raw", lowXj);
@@ -548,8 +442,7 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
   vector<TH1D*> hxjC_raw_pt    = insitu_utility::buildXjByPtBin(dataC, 1.0,       nPtBinsUsed, "hxjC_data_raw", lowXj);
   vector<TH1D*> hxjA_atCorr_pt = insitu_utility::buildXjByPtBin(dataA, minpaCorr, nPtBinsUsed, "hxjA_data_atCorrScale", lowXj);
   vector<TH1D*> hxjC_atCorr_pt = insitu_utility::buildXjByPtBin(dataC, minpaCorr, nPtBinsUsed, "hxjC_data_atCorrScale", lowXj);
-  // Purity-corrected (two-purity method), once raw (pa=1) and once at the
-  // purity-corrected study's best-fit pa - purity is fixed either way (file header).
+  // Purity-corrected, at pa=1 and at the best-fit pa.
   vector<TH1D*> hxjcorr_raw_pt  = insitu_utility::purityCorrectByPtBin(hxjA_raw_pt,    hxjC_raw_pt, nPtBinsUsed,
       purity, purityErrLow, purityErrHigh, purityC, purityCErrLow, purityCErrHigh, "hxjcorrected_data_raw");
   vector<TH1D*> hxjcorr_best_pt = insitu_utility::purityCorrectByPtBin(hxjA_atCorr_pt, hxjC_atCorr_pt, nPtBinsUsed,
@@ -567,9 +460,7 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
   TH1D * hxjcorrected_data_bestscale = sumPtBins(hxjcorr_best_pt, "hxjcorrected_data_bestscale");
 
   // -----------------------------
-  // Mean(x_J) vs pT comparison plots - top: MC vs raw Data; bottom: raw ratio vs
-  // corrected ratio (evaluated at each study's own best-fit pa). One page for Region A
-  // alone, one page for the purity-corrected combination.
+  // Mean xJ vs pT pages (region A and purity-corrected)
   // -----------------------------
   gStyle->SetOptStat(0);
 
@@ -605,9 +496,7 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
   }
 
   // -----------------------------
-  // Save - into this radius's own subdirectory of the shared, once-opened fout (see
-  // top of function). mkdir/cd has to happen before "results" (a TTree) is
-  // constructed below, not just before its Write().
+  // Save (mkdir/cd before the TTree is constructed)
   // -----------------------------
   fout->cd();
   fout->mkdir(ana::rnames[ir])->cd();
@@ -662,8 +551,7 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
 // Combined mode: gamma+jet + multijet balance, linear JES f(pT) = pa + pb*pT.
 // =============================================================================
 
-// Gamma+jet sums of x = (jet_pt/f(jet_pt))/pho_pt per used pT bin, with the same low-xJ
-// floor as the constant-scale scan above (same formula with f = pa).
+// Gamma+jet sums of x = (jet_pt/f(jet_pt))/pho_pt per pT bin, with the low-xJ floor.
 static void gammaSumsLinear(const vector<DataEvent> & ev, double pa, double pb, const float lowXj[],
     vector<double> & sum, vector<double> & sum2, vector<int> & count) {
   sum.assign(nPtBinsUsed, 0); sum2.assign(nPtBinsUsed, 0); count.assign(nPtBinsUsed, 0);
@@ -674,9 +562,7 @@ static void gammaSumsLinear(const vector<DataEvent> & ev, double pa, double pb, 
   }
 }
 
-// Region-A and purity-corrected mean(x_J) per used pT bin from those sums - the same
-// two calculations the constant-scale chi2 loop above does inline (two-purity method via
-// unfold_utility::purityCorrectCoeffs for the corrected one).
+// Region-A and purity-corrected mean xJ per pT bin from those sums.
 static void gammaMeansLinear(const vector<DataEvent> & dataA, const vector<DataEvent> & dataC,
     double pa, double pb, const float purity[], const float purityC[], const float lowXj[],
     float meanA[], float errA[], float meanCorr[], float errCorr[]) {
@@ -703,7 +589,7 @@ static void gammaMeansLinear(const vector<DataEvent> & dataA, const vector<DataE
   }
 }
 
-// chi2 of measured means against a reference - same per-bin formula as the 1D scan.
+// chi2 of measured means against a reference.
 static double meanChi2(const float mean[], const float err[], const float ref[], const float refErr[], int n) {
   double chi2 = 0;
   for (int i = 0; i < n; i++) {
@@ -715,8 +601,7 @@ static double meanChi2(const float mean[], const float err[], const float ref[],
   return chi2;
 }
 
-// Mean multijet balance vs leading-jet pT: MC reference and raw Data on top, raw and
-// JES-corrected Data/MC on the bottom.
+// Mean multijet balance vs leading-jet pT (top); raw and corrected Data/MC (bottom).
 static void drawMultijetPage(TCanvas * c, const char * pdfPath, int ir,
     const float mcMean[], const float mcErr[], const float rawMean[], const float rawErr[],
     const float corrMean[], const float corrErr[], float pa, float pb) {
@@ -785,8 +670,7 @@ void runCombined(TCanvas * c, const char * pdfPath, TFile * fout, int ir, const 
     const float lowXj[]) {
   const int nMJ = insitu_utility::nMultijetPtBins;
 
-  // Multijet inputs: analysis.cc's per-radius trees (Data weight 1; MC weight from
-  // analysis.cc). JERhigh/JERlow use its HIGH/LOW smear variants, everything else RECO.
+  // Multijet inputs: Data weight 1, MC weight from analysis.cc. JERhigh/low use its HIGH/LOW smear.
   const int radius = (int)std::lround(ana::JetRs[ir]*10);
   const string sys = insitu_utility::multijetSysName(systag);
   string mjFile = insitu_utility::multijetAnalysisFilename(multijet_analysis_dir.c_str(), "pythia");
@@ -834,8 +718,7 @@ void runCombined(TCanvas * c, const char * pdfPath, TFile * fout, int ir, const 
     }
   }
 
-  // Best point and delta-chi2 < 2.30 region for each total chi2: marginal pa/pb ranges
-  // and the envelope of f(pT) over the region (old grid_insitu.C's fLow/fHigh band).
+  // Best point and delta-chi2 < 2.30 region: pa/pb ranges and the f(pT) envelope.
   struct Fit { float pa, pb, chi2, paLo, paHi, pbLo, pbHi; TGraph * band[3]; bool edge; };
   auto fit = [&](float Pt::*chi, const char * name) {
     Fit r; r.chi2 = FLT_MAX;
@@ -867,7 +750,7 @@ void runCombined(TCanvas * c, const char * pdfPath, TFile * fout, int ir, const 
     if (r.edge) cout << "  WARNING: the delta-chi2 < 2.30 region touches the grid edge - widen the scan" << endl;
   }
 
-  // Pages: gamma+jet at the combined best fits, multijet balance, f(pT) band, chi2 map.
+  // Pages: gamma+jet at the best fits, multijet balance, f(pT) band, chi2 map.
   float rawA[ana::nPtBinsUsed], rawEA[ana::nPtBinsUsed], rawC[ana::nPtBinsUsed], rawEC[ana::nPtBinsUsed];
   float bA[ana::nPtBinsUsed], bEA[ana::nPtBinsUsed], bC[ana::nPtBinsUsed], bEC[ana::nPtBinsUsed], dum[ana::nPtBinsUsed], dumE[ana::nPtBinsUsed];
   gammaMeansLinear(dataA, dataC, 1.0, 0.0, purity, purityC, lowXj, rawA, rawEA, rawC, rawEC);
@@ -894,8 +777,7 @@ void runCombined(TCanvas * c, const char * pdfPath, TFile * fout, int ir, const 
   insitu_utility::multijetMeans(mjData, fitC.pa, fitC.pb, mjCorr, mjCorrE);
   drawMultijetPage(c, pdfPath, ir, mjRef, mjRefErr, mjRaw, mjRawE, mjCorr, mjCorrE, fitC.pa, fitC.pb);
 
-  // f(pT) bands, with the gammajet-only constant scale (same systag) for comparison if
-  // that output exists.
+  // f(pT) bands, with the gammajet-only scale for comparison if present.
   c->Clear(); c->cd(); gPad->SetLeftMargin(.15); gPad->SetBottomMargin(.12); gPad->SetTicks(1,1);
   TH1F * fr = gPad->DrawFrame(5, 0.75, 60, 1.05);
   fr->GetXaxis()->SetTitle("p_{T}^{jet} [GeV]");

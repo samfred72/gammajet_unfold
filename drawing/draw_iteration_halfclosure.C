@@ -3,51 +3,22 @@
 #include "../src/unfold_utility.h"
 #include "RooUnfoldResponse.h"
 #include "RooUnfoldBayes.h"
-// The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
-// into /home/samson72/root/lib/libgammajet.so, sitting on the same library search path
-// as this project's libgammajet_unfold.so. Without forcing which one loads first, ROOT's
-// implicit symbol autoload can bind drawer/ana calls to the wrong (mismatched-layout)
-// library and segfault - explicit load removes the ambiguity.
+// Load explicitly: the sibling gammajet project's libgammajet.so has same-named classes.
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
-// Iteration scan on real Data, unfolded through the full (non-half) combined Photon MC
-// response matrix.
-//
-// This started as a half-closure test (see git history / prior discussion): unfolder.cc's
-// per-event use_half coin flip splits each MC sample into two independent halves, letting
-// you unfold one half's reco spectrum through a response trained on the other half and
-// compare to that half's own truth - a genuine closure test, immune to the circularity of
-// testing a response against the same sample's own prior. That version answered "does more
-// iterations help or just add noise" cleanly: 1 iteration won, monotonically, because two
-// halves of the same MC sample share the same expectation value - there's no real bias for
-// extra iterations to remove, only variance for them to add.
-//
-// This version instead unfolds Data's purity-corrected xJ spectrum
-// (unfold_utility::purityCorrect/buildFullyCorrected below) through the full, properly
-// cross-section-weighted Photon5/10/20 response (same response construction as
-// drawing/draw_purity_corrected.C too), comparing to the fixed #gamma+jet MC truth as a
-// reference. Since Data has no real truth level, this is no longer a strict closure
-// test - Data can genuinely differ from the MC prior for real physics reasons, not just
-// noise - but it shows how Data's unfolded result actually depends on iteration count,
-// using the same purity-corrected input the real analysis result is built from.
+// Iteration scan on Data: the purity-corrected xJ unfolded through the combined Photon5/10/20
+// response, compared between consecutive iterations (and with the MC truth for reference).
+// Not a strict closure test (Data has no truth). The half-MC closure version preferred 1
+// iteration, since two halves of one sample share the same expectation.
 
 const int ir = 2; // nominal jet radius index (R=0.4)
-const int nPtBinsUsed = ana::nPtBinsUsed; // physics analysis only uses ana::ptBins[ana::firstUsedPtBin..]
+const int nPtBinsUsed = ana::nPtBinsUsed; // reported bins start at ana::firstUsedPtBin
 const vector<int> iterationsToTest = {1,2,3,4,5,6,7,8,9,10};
 
-// The last 3 xJ bins in each pT bin have very low counts, so any chi2/NDF computed
-// against iteration count is dominated by their noise rather than genuine convergence
-// behavior - excluded from errorScore/pairBiasScore below (still drawn everywhere else).
+// The last 3 xJ bins per pT bin are low-count noise: excluded from chi2 only (still drawn).
 const int nXjBinsForChi2 = ana::nUnfoldXjBins - 3;
 
-// densityForDisplay now lives in unfold_utility - see src/unfold_utility.h.
-// buildFullyCorrected now lives in unfold_utility (purity-corrects all ana::nPtBins
-// slices via unfold_utility::purityCorrect and reflattens for RooUnfold) - see
-// src/unfold_utility.h.
-
-// Rainbow gradient from red (i=0) to purple (i=n-1) - HSV hue 0 is red, 270 is
-// violet/purple; sweeping only that range (not the full 360, which would wrap back to
-// red) gives the ROYGBIV ordering rather than a color wheel.
+// Red (i=0) to purple (i=n-1): HSV hue 0-270.
 int rainbowColor(int i, int n) {
   float hue = (n > 1) ? 270.0 * i / (n - 1) : 0;
   float r, g, b;
@@ -61,40 +32,25 @@ void draw_iteration_halfclosure(string systag = "nominal") {
   drawer d("pythia", systag);
   string pdfPath = Form("%s/pdfs/iteration_halfclosure_%s.pdf", ana::dir(), systag.c_str());
 
-  // Response matrix: the full, cross-section-weighted combination of Photon5/10/20
-  // (type=1, isample=-1 default), same construction as drawing/draw_purity_corrected.C -
-  // this is the response that would actually be used to unfold the real result, unlike
-  // Data's own trivially-diagonal stored response (unfolder.cc sets truth=reco as a
-  // placeholder for non-MC).
+  // Response: Photon5/10/20 combined (Data's stored response is a diagonal placeholder).
   TH1D * respRecoTemplate  = d.get(Form("hrecoxj%i",ir), 1);
   TH1D * respTruthTemplate = d.get(Form("htruthxj%i",ir), 1);
   TH2D * respMatrix2D      = d.get2d(Form("hxjresponse%i",ir), 1);
   RooUnfoldResponse * response = new RooUnfoldResponse(respRecoTemplate, respTruthTemplate, respMatrix2D);
 
-  // Measured: Data's purity-corrected xJ spectrum (region A minus the two-purity
-  // background estimate, per pT bin - see buildFullyCorrected above / unfold_utility::purityCorrect),
-  // matching what drawing/draw_purity_corrected.C actually feeds into unfolding for the
-  // real result. Unfolding raw region-A reco (background and all) would answer a
-  // different question than the one this scan is meant to inform. Truth reference: the
-  // same fixed #gamma+jet MC truth the response was built from - Data has no truth of
-  // its own.
+  // Measured: Data's purity-corrected xJ; truth reference: the MC truth.
   TH1D * flatA = d.get(Form("hrecoxj%i_0",ir), 0);
   TH1D * flatC = d.get(Form("hrecoxj%i_2",ir), 0);
   TH1D * flatMeasured = unfold_utility::buildFullyCorrected(flatA, flatC, "data", systag);
   TH1D * flatTruth = respTruthTemplate;
 
-  // Per iteration: error = mean fractional uncertainty of the unfolded result itself,
-  // tracking noise amplification directly. (The convergence/"bias" metric is computed
-  // separately below, once all iterations are unfolded - see pairBiasScore.)
+  // Per iteration: mean fractional uncertainty of the unfolded result (noise amplification).
   vector<int> iters;
   vector<double> errorScore;
   vector<vector<TH1D*>> unfoldedByIter; // [iterIdx][ipt]
 
   for (unsigned k = 0; k < iterationsToTest.size(); k++) {
     int iter = iterationsToTest[k];
-    // unfold_utility::unfoldOnce clones Hreco() before returning - RooUnfoldBayes owns
-    // that histogram internally and goes out of scope at the end of this loop body, so a
-    // raw Hreco() pointer stored below would otherwise dangle.
     TH1D * hUnfoldFull = unfold_utility::unfoldOnce(response, flatMeasured, iter, Form("hUnfoldData_iter%d", iter));
 
     double fracErrSum = 0;
@@ -114,13 +70,8 @@ void draw_iteration_halfclosure(string systag = "nominal") {
     unfoldedByIter.push_back(perPt);
   }
 
-  // Convergence metric: chi2/ndf of the RELATIVE CHANGE between consecutive iterations,
-  // (u_{n+1} - u_n)/u_n per bin, summed over all used pT bins - this asks "has the
-  // result stabilized" using only Data's own output at successive iteration counts,
-  // rather than comparing to the MC truth reference (which, for real Data, isn't a
-  // trustworthy enough "ground truth" to score bias against - see prior discussion).
-  // Only defined for a pair of iterations, so the first tested iteration has no partner
-  // to compare against and this starts at the SECOND tested iteration.
+  // Convergence metric: chi2/ndf of the relative change between consecutive iterations, summed
+  // over used pT bins (defined from the second tested iteration on).
   vector<int> pairIters;
   vector<double> pairBiasScore;
   for (unsigned k = 1; k < iters.size(); k++) {
@@ -142,10 +93,7 @@ void draw_iteration_halfclosure(string systag = "nominal") {
     pairBiasScore.push_back(ndf > 0 ? chi2/ndf : 0);
   }
 
-  // Combined score: min-max normalize both metrics to [0,1] and sum, so neither metric's
-  // arbitrary absolute scale dominates the other - the minimum is "best" by both at once.
-  // Only over pairIters' range (iteration 2 onward), since pairBiasScore isn't defined
-  // for the first tested iteration.
+  // Combined score: both metrics min-max normalized and summed; minimum is best.
   double biasMin = *min_element(pairBiasScore.begin(), pairBiasScore.end());
   double biasMax = *max_element(pairBiasScore.begin(), pairBiasScore.end());
   double errMin  = *min_element(errorScore.begin()+1, errorScore.end());
@@ -159,21 +107,18 @@ void draw_iteration_halfclosure(string systag = "nominal") {
     if (combined < bestCombined) { bestCombined = combined; bestPairIdx = k; }
   }
   int bestIter = pairIters[bestPairIdx];
-  int bestIdx = bestPairIdx + 1; // index into iters/unfoldedByIter/errorScore (offset by the dropped first iteration)
+  int bestIdx = bestPairIdx + 1; // offset by the dropped first iteration
   cout << "Data iteration scan: best iteration = " << bestIter
        << " (relative-change chi2=" << pairBiasScore[bestPairIdx] << ", mean frac. error=" << errorScore[bestIdx] << ")" << endl;
 
   TCanvas * c = new TCanvas("c","",700,900);
   c->SaveAs(Form("%s[", pdfPath.c_str()));
 
-  // Pages 1..N: sanity check - the winning iteration's unfolded Data result vs the
-  // #gamma+jet MC truth reference, per used pT bin.
+  // Pages 1..N: the chosen iteration's unfolded Data vs MC truth per used pT bin.
   for (int ipt = ana::firstUsedPtBin; ipt < ana::firstUsedPtBin+nPtBinsUsed; ipt++) {
     TH1D * hUnfold = unfoldedByIter[bestIdx][ipt];
     TH1D * hTruth  = unfold_utility::unflattenXj(flatTruth, ipt, Form("hxjtruth_final_pt%d", ipt));
-    // Shape-normalize (bin-width density, then unit area) - Data (raw counts) and the
-    // weighted MC truth (cross-section scaled, ~10^9) are on wildly different absolute
-    // scales; without this Data's real, non-zero curve is invisible next to truth's.
+    // Shape-normalize: Data and weighted MC truth have very different scales.
     TH1D * hUnfoldDisp = unfold_utility::densityForDisplay(hUnfold, Form("hxjunfold_final_pt%d_disp", ipt));
     hUnfoldDisp->Scale(1./hUnfoldDisp->Integral());
     TH1D * hTruthDisp  = unfold_utility::densityForDisplay(hTruth,  Form("hxjtruth_final_pt%d_disp", ipt));
@@ -237,12 +182,7 @@ void draw_iteration_halfclosure(string systag = "nominal") {
     c->SaveAs(pdfPath.c_str());
   }
 
-  // Next pages: all iterations overlaid on one plot instead of one page per iteration -
-  // colored red (fewest iterations) to purple (most), following the rainbow, so the
-  // shape change with more iterations is visible directly rather than only in the
-  // chi2/error summary. One page per used pT bin. Shape-normalized (bin-width density,
-  // then unit area) for the same reason as the per-pT-bin pages above - Data and the
-  // weighted MC truth are on wildly different absolute scales.
+  // Next pages: all iterations overlaid, red (fewest) to purple (most), one page per pT bin.
   for (int ipt = ana::firstUsedPtBin; ipt < ana::firstUsedPtBin+nPtBinsUsed; ipt++) {
     TH1D * hTruth0     = unfold_utility::unflattenXj(flatTruth, ipt, Form("hxjtruth_perIter_pt%d", ipt));
     TH1D * hTruthDisp0 = unfold_utility::densityForDisplay(hTruth0, Form("hxjtruth_perIter_pt%d_disp", ipt));
@@ -322,10 +262,7 @@ void draw_iteration_halfclosure(string systag = "nominal") {
     c->SaveAs(pdfPath.c_str());
   }
 
-  // Last plot: chi2/ndf of the relative change between consecutive iterations (top) and
-  // unfolded uncertainty (bottom) vs iteration count, both marking the combined-best
-  // iteration. Both panels share the same x-range (iteration 2 onward) since the
-  // relative-change metric has no value at the first tested iteration.
+  // Last plot: relative-change chi2/ndf (top) and uncertainty (bottom) vs iteration count.
   c->Clear();
   c->cd();
   TPad * p1 = new TPad("p1","",0,.5,1,1);

@@ -3,94 +3,34 @@
 #include "../src/unfold_utility.h"
 #include "RooUnfoldResponse.h"
 #include "RooUnfoldBayes.h"
-// The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
-// into /home/samson72/root/lib/libgammajet.so, sitting on the same library search path
-// as this project's libgammajet_unfold.so. Without forcing which one loads first, ROOT's
-// implicit symbol autoload can bind drawer/ana calls to the wrong (mismatched-layout)
-// library and segfault - explicit load removes the ambiguity.
+// Load explicitly: the sibling gammajet project's libgammajet.so has same-named classes.
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
-// Prior-sensitivity systematic, replacing draw_nonclosure.C's arbitrary full-flattening
-// test with the DATA-DRIVEN reweighting method actually used by:
-//  - The sPHENIX dijet-xJ analysis note (PPG08, Sec. 4.4/6.3, "Sensitivity to Prior"):
-//    "The weight factors are constructed by taking the [pair-normalized] ratio of the
-//    unfolded result and the prior distribution (Pythia-8)... Fills and misses are
-//    reweighted, but since there is not valid truth [pair] in fakes, they are not
-//    reweighted." Systematic = the shift in the final result from using this reweighted
-//    prior vs. not.
-//  - ATLAS's photon-jet xJ paper (arXiv:1809.07280, Sec. 5.3): the same ratio, fitted
-//    smooth in xJ per pT bin to get w(xJ,pT), then alternates at sqrt(w) and w^1.5
-//    (bracketing w on the geometric-mean scale) test sensitivity to how strongly the
-//    prior is pulled toward what Data's own unfolded result already looks like.
-//
-// Method here (no fit - the raw per-bin ratio is used directly, matching PPG08's more
-// literal description; ATLAS's smoothing is a refinement, not implemented here):
-//   1. Unfold the actual purity-corrected Data through the NOMINAL (un-reweighted)
-//      response at niterate - this is the same "nominal" every other macro in this
-//      directory already treats as the analysis's result; it is NOT redefined here.
-//   2. w(bin) = (shape-normalized nominal-unfolded Data) / (shape-normalized Pythia8
-//      truth prior), per pT-bin slice - shape-normalizing first means w only encodes a
-//      SHAPE correction, since Data's accepted yield and the MC prior's normalization
-//      aren't comparable quantities to begin with.
-//   3. Three alternate priors are built at sqrt(w), w, and w^1.5 (ATLAS's exponents):
-//      reweight the response matrix's truth (Y) axis and truth template by that per-bin
-//      factor, then re-project onto reco and add back the (unweighted, per PPG08 - fakes
-//      have no truth to reweight by) training fakes, to get a fully self-consistent
-//      reweighted RooUnfoldResponse (this is the exact same reweight-matrix-columns
-//      mechanism draw_nonclosure.C used, just with a data-informed weight function
-//      instead of "flatten to constant").
-//   4. The SAME actual Data (flatMeasured) is re-unfolded through each reweighted
-//      response. The prior enters only through the response's own truth marginal
-//      (RooUnfoldBayes::setup() falls back to "the truth of the response matrix" as its
-//      Bayes prior whenever no separate prior is given), so the response itself is what's
-//      carrying the reweighting into the unfolding.
-//   5. Only the "w" variant's shift relative to the (un-reweighted) nominal is reported as
-//      the actual prior-sensitivity systematic - NOT an envelope over all three. ATLAS's
-//      sqrt(w)/w^1.5 bracket tests sensitivity to reweighting STRENGTH relative to a
-//      w-reweighted NOMINAL - that's a meaningful question only because ATLAS's own
-//      nominal analysis result IS the w-reweighted one. This file never adopts that
-//      convention (nominal here stays un-reweighted, matching every other macro in this
-//      directory), so sqrt(w)/w^1.5 would just be two more points on the same line from
-//      "no correction" to "full correction" to "over-correction" - not a materially
-//      different question from "w vs nominal" itself. What IS the direct analog of PPG08's
-//      comparison (reweighted vs not) in a framework where nominal stays un-reweighted is
-//      exactly "w vs nominal" - so that's the only one reported as the systematic, treated
-//      as a single SYMMETRIC source (like narrowBDT/narrowISO/threejet/herwig in
-//      draw_systematics.C - its full magnitude feeds both the up and down total there,
-//      since one alternate has no natural "other side" to pair against) rather than an
-//      asymmetric two-point envelope. sqrt(w)/w^1.5 are still built and drawn alongside w
-//      on the comparison pages, purely as a diagnostic for whether the shift scales
-//      sensibly with reweighting strength - they don't contribute to the reported number.
+// Prior sensitivity, the data-driven reweighting of PPG08 (Sec. 4.4/6.3) and ATLAS
+// (arXiv:1809.07280, Sec. 5.3), without ATLAS's smoothing fit:
+//   1. Unfold Data through the nominal response (the analysis result).
+//   2. w = (shape-normalized unfolded Data) / (shape-normalized Pythia8 truth), per bin.
+//   3. Reweight the response's truth axis by w^0.5, w, w^1.5 and re-project onto reco; training
+//      fakes are added back unweighted (no truth to reweight by).
+//   4. Re-unfold the same Data through each (the prior is the response's truth marginal).
+//   5. Only w vs nominal is the systematic (one symmetric source in draw_systematics.C); our
+//      nominal is un-reweighted, so sqrt(w) and w^1.5 are diagnostics only.
 
-// Jet radius index - set from draw_prior_sensitivity()'s jetRadiusIndex argument (default
-// R=0.4, matching draw_systematics.C's ir/jetRadiusIndex convention); NOT a fixed constant -
-// draw_systematics.C reads this file's output per-radius and needs a matching per-radius
-// prior-sensitivity comparison, not always the R=0.4 one.
+// Jet radius index, from jetRadiusIndex (default R=0.4).
 int ir = 2;
-const int nPtBinsUsed = ana::nPtBinsUsed; // physics analysis only uses ana::ptBins[ana::firstUsedPtBin..]
-const int niterate = 2; // matches draw_purity_corrected.C / draw_final_result.C's chosen nominal iteration count
+const int nPtBinsUsed = ana::nPtBinsUsed; // reported bins start at ana::firstUsedPtBin
+const int niterate = 2; // nominal iteration count
 const vector<int> iterationsToScan = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}; // for the bonus niter-dependence page
 const vector<double> exponents = {0.5, 1.0, 1.5}; // ATLAS's sqrt(w), w, w^1.5 - see file header
 const vector<string> variantNames = {"sqrtw", "w", "w1p5"};
 const vector<string> variantLabels = {"#sqrt{w} prior", "w prior", "w^{1.5} prior"};
 const vector<int> variantColors = {kAzure+2, kGreen+2, kRed};
-const int wIndex = 1; // which entry above is the reported systematic (PPG08's "w") - see file header
+const int wIndex = 1; // the reported variant (w)
 
-// The last 3 xJ bins in each pT bin have very low counts, so chi2/NDF here would be
-// dominated by their noise rather than genuine prior sensitivity - excluded from the
-// chi2 metric only (still drawn on the comparison pages). Same exclusion as
-// draw_purity_corrected.C/draw_iteration_halfclosure.C/toy_iterations.C ("resp")/
-// toy_iterations.C ("data")/draw_refolding.C/draw_nonclosure.C.
+// The last 3 xJ bins per pT bin are low-count noise: excluded from chi2 only (still drawn).
 const int nXjBinsForChi2 = ana::nUnfoldXjBins - 3;
 
-// densityForDisplay now lives in unfold_utility - see src/unfold_utility.h.
-// buildFullyCorrected now lives in unfold_utility (purity-corrects all ana::nPtBins
-// slices via unfold_utility::purityCorrect and reflattens for RooUnfold) - see
-// src/unfold_utility.h.
-
-// w(bin) = (shape-normalized nominal-unfolded Data) / (shape-normalized Pythia8 truth
-// prior), per pT-bin slice - see file header. Defaults to 1 (no reweighting) wherever
-// either side has no content to form a meaningful ratio from.
+// w per bin (step 2); 1 where either side is empty.
 TH1D * buildDataInformedWeights(TH1D * unfoldedNominal, TH1D * priorTruth) {
   TH1D * w = (TH1D*)priorTruth->Clone("hPriorWeight");
   for (int b = 0; b <= w->GetNbinsX()+1; b++) w->SetBinContent(b, 1.0);
@@ -110,11 +50,7 @@ TH1D * buildDataInformedWeights(TH1D * unfoldedNominal, TH1D * priorTruth) {
   return w;
 }
 
-// Builds one reweighted-prior response (matrix + truth + reco, self-consistently, per
-// the file header's step 3) at the given power of the base per-bin weight - power=1 is
-// ATLAS's w, 0.5 is sqrt(w), 1.5 is w^1.5. Mirrors draw_nonclosure.C's
-// buildFlatteningWeights/altRespMatrix2D machinery, generalized to an arbitrary weight
-// array and exponent rather than "flatten to constant".
+// One reweighted-prior response at weight^power (step 3).
 void buildReweightedResponse(TH2D * nominalMatrix, TH1D * nominalTruth, TH1D * nominalReco,
     TH1D * fakesTraining, TH1D * baseWeight, double power, const char * tag,
     TH2D *& altMatrixOut, TH1D *& altTruthOut, TH1D *& altRecoOut) {
@@ -140,16 +76,12 @@ void buildReweightedResponse(TH2D * nominalMatrix, TH1D * nominalTruth, TH1D * n
     altMatched->SetBinContent(bx, sum);
   }
   altRecoOut = (TH1D*)altMatched->Clone(Form("hAltReco_%s", tag));
-  altRecoOut->Add(fakesTraining); // unweighted - fakes have no truth-level partner to reweight by
+  altRecoOut->Add(fakesTraining); // unweighted: fakes have no truth partner
   delete altMatched;
   delete w;
 }
 
-// chi2/NDF of a reweighted-prior variant vs the un-reweighted nominal, using the
-// nominal's own (RooUnfoldBayes-propagated) statistical error as the yardstick - is the
-// prior-driven shift big or small compared to how uncertain the nominal result already
-// is, the same question ATLAS's delta_prior/delta_stat combination and PPG08's own
-// prior-sensitivity systematic both ask.
+// chi2/NDF of a variant vs nominal, with the nominal's statistical error as yardstick.
 double computeChi2NDF(TH1D * hVariant, TH1D * hNominal) {
   double chi2 = 0;
   int ndf = 0;
@@ -169,16 +101,13 @@ void draw_prior_sensitivity(string systag = "nominal", int jetRadiusIndex = 2) {
   ir = jetRadiusIndex;
 
   drawer d("pythia", systag);
-  // ir==2 (R=0.4) keeps the original, un-suffixed filenames - draw_systematics.C's
-  // ir==2 default reads these exact paths; every other radius gets its own file, same
-  // convention as draw_systematics.C's systematics.root vs systematics_R0X.root.
+  // R=0.4 keeps the unsuffixed filenames; other radii get their own.
   string pdfPath  = (ir == 2) ? Form("%s/pdfs/draw_prior_sensitivity_%s.pdf", ana::dir(), systag.c_str())
                               : Form("%s/pdfs/draw_prior_sensitivity_%s_%s.pdf", ana::dir(), systag.c_str(), ana::rnames[ir]);
   string rootPath = (ir == 2) ? Form("%s/hists/prior_sensitivity_%s.root", ana::dir(), systag.c_str())
                               : Form("%s/hists/prior_sensitivity_%s_%s.root", ana::dir(), systag.c_str(), ana::rnames[ir]);
 
-  // Response matrix + purity-corrected Data - same construction as draw_refolding.C/
-  // draw_purity_corrected.C.
+  // Response and purity-corrected Data, as in draw_purity_corrected.C.
   TH1D * respRecoTemplate  = d.get(Form("hrecoxj%i",ir), 1);
   TH1D * respTruthTemplate = d.get(Form("htruthxj%i",ir), 1);
   TH2D * respMatrix2D      = d.get2d(Form("hxjresponse%i",ir), 1);
@@ -189,13 +118,13 @@ void draw_prior_sensitivity(string systag = "nominal", int jetRadiusIndex = 2) {
   TH1D * flatC = d.get(Form("hrecoxj%i_2",ir), 0);
   TH1D * flatMeasured = unfold_utility::buildFullyCorrected(flatA, flatC, "data", systag, ir);
 
-  // Step 1: the current, un-reweighted-prior nominal - not redefined by this file.
+  // Step 1: nominal.
   TH1D * flatUnfoldedNominal = unfold_utility::unfoldOnce(response, flatMeasured, niterate, "hUnfoldedNominal");
 
-  // Step 2: data-informed base weight.
+  // Step 2: base weight.
   TH1D * baseWeight = buildDataInformedWeights(flatUnfoldedNominal, respTruthTemplate);
 
-  // Steps 3-4: three reweighted-prior responses, each re-unfolding the SAME flatMeasured.
+  // Steps 3-4: reweighted responses, same flatMeasured.
   vector<TH1D*> flatUnfoldedVariant(exponents.size());
   for (unsigned iv = 0; iv < exponents.size(); iv++) {
     TH2D * altMatrix; TH1D * altTruth; TH1D * altReco;
@@ -213,11 +142,8 @@ void draw_prior_sensitivity(string systag = "nominal", int jetRadiusIndex = 2) {
   cout << "Prior sensitivity (niter=" << niterate << "): pT bin, chi2/NDF per variant (first "
        << nXjBinsForChi2 << " of " << ana::nUnfoldXjBins << " xJ bins)" << endl;
 
-  // Pages 1..nPtBinsUsed: nominal unfolded Data vs the three reweighted-prior variants,
-  // absolute counts/bin-width (all on the same "unfolded Data" scale - no shape
-  // normalization needed, matching draw_refolding.C's reasoning), with a ratio panel.
-  // sqrt(w)/w^1.5 are drawn for diagnostic purposes only - see file header for why only
-  // the "w" variant (wIndex) is accumulated into fracDiff, the actual reported systematic.
+  // Pages 1..nPtBinsUsed: nominal vs the three variants (absolute densities) with ratios.
+  // Only the w variant (wIndex) enters fracDiff.
   vector<vector<double>> fracDiff(nPtBinsUsed, vector<double>(ana::nUnfoldXjBins, 0));
   for (int ipt = ana::firstUsedPtBin; ipt < ana::firstUsedPtBin+nPtBinsUsed; ipt++) {
     TH1D * hNominal = unfold_utility::unflattenXj(flatUnfoldedNominal, ipt, Form("hNominal_pt%d", ipt));
@@ -317,12 +243,8 @@ void draw_prior_sensitivity(string systag = "nominal", int jetRadiusIndex = 2) {
     for (unsigned iv = 0; iv < exponents.size(); iv++) delete hVariant[iv];
   }
 
-  // Summary page: the "w"-variant's per-bin fractional shift from nominal - the proposed
-  // prior-sensitivity systematic (see file header for why only "w", not an envelope over
-  // all three variants). Drawn as a single symmetric source, curve and negation both shown
-  // - the same display convention draw_systematics.C already uses for narrowBDT/narrowISO/
-  // threejet/herwig, since (like those) this is one alternate with no natural "other side"
-  // to pair against, not a true two-point high/low systematic like JES/JER.
+  // Summary: the w variant's fractional shift (the systematic), drawn with its negation as a
+  // symmetric source.
   c->Clear();
   c->cd();
   vector<TPad*> pads(nPtBinsUsed);
@@ -340,9 +262,7 @@ void draw_prior_sensitivity(string systag = "nominal", int jetRadiusIndex = 2) {
     pads[idisplay]->SetTopMargin(0.05);
     gPad->SetTicks(1,1);
 
-    // Only the binning/axis structure of the nominal is needed here (every real bin's
-    // content gets overwritten with fracDiff below) - no density scaling applies to a
-    // fractional-deviation curve.
+    // Binning only; contents overwritten below.
     TH1D * hNominalPt = unfold_utility::unflattenXj(flatUnfoldedNominal, ipt, Form("hFracFrame_pt%d",ipt));
     TH1D * hFrac    = (TH1D*)hNominalPt->Clone(Form("hFracDiff_pt%d",ipt));
     TH1D * hFracNeg = (TH1D*)hNominalPt->Clone(Form("hFracDiffNeg_pt%d",ipt));
@@ -383,11 +303,7 @@ void draw_prior_sensitivity(string systag = "nominal", int jetRadiusIndex = 2) {
   }
   c->SaveAs(pdfPath.c_str());
 
-  // Bonus page: does prior sensitivity shrink with more iterations, as expected (more
-  // iterations should wash out prior dependence, same theme as draw_nonclosure.C's bonus
-  // page and ATLAS's own niter-selection procedure, which weighs exactly this against
-  // statistical uncertainty)? Metric: mean over used bins of chi2/NDF of the "w"-power
-  // variant (the middle, unmodified-exponent case) vs nominal, at each niter.
+  // Bonus page: mean chi2/NDF of the w variant vs nominal at each niter (should fall with niter).
   cout << "Prior-sensitivity niter-dependence scan (w-power variant)..." << endl;
   TGraph * gChi2 = new TGraph((int)iterationsToScan.size());
   for (unsigned k = 0; k < iterationsToScan.size(); k++) {

@@ -1,37 +1,16 @@
 #include "../src/ana.h"
 #include "../src/drawer.h"
 #include "../src/unfold_utility.h"
-// The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
-// into /home/samson72/root/lib/libgammajet.so, sitting on the same library search path
-// as this project's libgammajet_unfold.so. Without forcing which one loads first, ROOT's
-// implicit symbol autoload can bind drawer/ana calls to the wrong (mismatched-layout)
-// library and segfault - explicit load removes the ambiguity.
+// Load explicitly: the sibling gammajet project's libgammajet.so has same-named classes.
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
-// Diagnostic-only macro: compares the reco-level (pre-unfolding) purity-corrected xJ
-// spectrum from two methods -
-//   1) raw region A, uncorrected
-//   2) the OLD, superseded production method (purityCorrectOld below), which assumes
-//      region C is 100% background
-//   3) the exact two-purity method (unfold_utility::purityCorrect), which additionally
-//      uses region C's own purity P_C (from puritymaker.C's same leakage-corrected
-//      bootstrap, via the ana::getPurityC getter) and solves the 2x2 linear system
-//        A_i = S^A s_i + B^A bkg_i,  C_i = S^C s_i + B^C bkg_i
-//      for the shared signal/background shapes s_i, bkg_i, instead of assuming region C's
-//      raw shape IS the background shape. See src/unfold_utility.h for the derivation;
-//      this reduces to method (2) exactly when P_C -> 0.
-// No unfolding here - this only tests whether the correction method itself looks
-// reasonable at reco level. This macro is what motivated switching production code
-// (drawing/draw_purity_corrected.C and the insitu/ macros) over to the two-purity
-// method - kept around as a standing sanity check / regression comparison.
-const int ir = 2; // nominal jet radius index (R=0.4), matches draw_purity_corrected.C
+// Reco-level comparison of raw region A, the old single-purity correction (region C taken as
+// pure background) and the two-purity method (unfold_utility::purityCorrect), which reduces to
+// the old one as P_C -> 0. No unfolding.
+const int ir = 2; // nominal R=0.4
 const int nPtBinsUsed = ana::nPtBinsUsed;
-// densityForDisplay now lives in unfold_utility - see src/unfold_utility.h.
 
-// The OLD, superseded single-purity method - no longer used anywhere in production
-// (draw_purity_corrected.C and the rest of the pipeline call unfold_utility::purityCorrect
-// now), kept here only as the comparison baseline this macro exists to check against.
-// Signal(xJ) = A(xJ) - (1-P_A)*(N_A/N_C)*C(xJ), i.e. assumes region C is pure background.
+// Old single-purity method: A - (1-P_A)*(N_A/N_C)*C.
 TH1D * purityCorrectOld(TH1D * A, TH1D * C, float p, float pErrLow, float pErrHigh, const char * name) {
   float NA = A->Integral();
   float NC = C->Integral();
@@ -57,21 +36,13 @@ TH1D * purityCorrectOld(TH1D * A, TH1D * C, float p, float pErrLow, float pErrHi
   return h;
 }
 
-// (1-P_A)*(N_A/N_C)*C(xJ): the piece subtracted from region A by the old method - same
-// as bkgFromRegionC in drawing/draw_purity_corrected.C. TH1D::Scale() carries C's own
-// bin errors through proportionally, so no separate error handling is needed here.
+// Background subtracted by the old method.
 TH1D * bkgOld(TH1D * C, float p, float NA, float NC, const char * name) {
   float scale = (1-p)*(NA/NC);
   TH1D * h = (TH1D*)C->Clone(name);
   h->Scale(scale);
   return h;
 }
-
-// The exact two-purity method itself (signal and background) now lives in
-// unfold_utility::purityCorrect/purityCorrectBkg, shared with drawing/draw_purity_corrected.C
-// and the insitu/ macros - see src/unfold_utility.h for the derivation. Only the OLD,
-// deliberately-superseded single-purity formula (purityCorrectOld/bkgOld) stays local
-// here, since this macro's whole point is comparing the two.
 
 void draw_purity_method_compare(string systag = "nominal") {
   gStyle->SetOptStat(0);
@@ -108,9 +79,7 @@ void draw_purity_method_compare(string systag = "nominal") {
     TH1D * hBkgOld = bkgOld(C, pA, NA, NC, Form("hxjBkgOld_pt%d", ipt));
     TH1D * hBkgNew = unfold_utility::purityCorrectBkg(A, C, pA, pC, Form("hxjBkgNew_pt%d", ipt));
 
-    // Page 1: region A (raw) with the two competing background estimates overlaid -
-    // same layout as drawing/draw_purity_corrected.C's page 1 (Region A / (1-P)*N_A/N_C*C),
-    // just with both the old and new background curves shown together for comparison.
+    // Page 1: region A with the old and new background estimates.
     c->Clear();
     c->cd();
     gPad->SetTicks();
@@ -154,7 +123,7 @@ void draw_purity_method_compare(string systag = "nominal") {
     if (hBkgOld) hBkgOld->Write();
     if (hBkgNew) hBkgNew->Write();
 
-    // Page 2: the raw/old-corrected/new-corrected signal comparison, with a ratio panel.
+    // Page 2: raw / old / new signal, with a ratio panel.
     c->Clear();
     c->cd();
     TPad * p1 = new TPad(Form("pcmp1_%d",ipt),"",0,.35,1,1);
@@ -213,9 +182,7 @@ void draw_purity_method_compare(string systag = "nominal") {
         Form("P_{A} = %.3f +%.3f/-%.3f", pA, pAErrHigh, pAErrLow),
         Form("P_{C} = %.3f +%.3f/-%.3f", pC, pCErrHigh, pCErrLow)}, .5, .85, 15, gPad->GetWh()*0.8);
 
-    // Means of the (shape, not signal-count) background-subtracted xJ distributions -
-    // same "Mean raw/corr" convention as drawing/draw_purity_corrected.C, extended to
-    // both correction methods. Drawn below the legend so it doesn't collide with it.
+    // Means of the background-subtracted shapes, below the legend.
     d.drawText(Form("Mean raw: %.2f #pm %.2f", Adisp->GetMean(), Adisp->GetMeanError()), .6, .28);
     if (Olddisp) d.drawText(Form("Mean old: %.2f #pm %.2f", Olddisp->GetMean(), Olddisp->GetMeanError()), .6, .23);
     if (Newdisp) d.drawText(Form("Mean new: %.2f #pm %.2f", Newdisp->GetMean(), Newdisp->GetMeanError()), .6, .18);

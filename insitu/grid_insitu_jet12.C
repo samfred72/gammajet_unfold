@@ -18,70 +18,32 @@
 #include "TStyle.h"
 using namespace std;
 
-// ana::findPtBin/etc. live in ana.cc, compiled into libgammajet_unfold.so - load it
-// explicitly (see grid_insitu.C) so cling resolves the real compiled definitions.
+// Load explicitly: the sibling gammajet project's libgammajet.so has same-named classes.
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
-// Non-purity-corrected in-situ JES cross-check: same grid-scan machinery as
-// grid_insitu.C, but comparing the *un-purity-corrected* Data Region A (no A-C
-// background subtraction) against the *un-purity-corrected* Region A of "Jet12_long"
-// (a single QCD-dijet-triggered Pythia8 MC sample, no truth-level jet-pT cut, at the
-// standard gammajet_unfold/trees path - see src/treeuser.h's
-// threshmap/threshmap_high/reco_threshmap_high entries for it), instead of
-// grid_insitu.C's purity-corrected Data vs. real prompt-photon Pythia8 gamma+jet MC
-// (Photon5+10+20).
-//
-// This is a consistency check on the primary (purity-corrected, Photon-MC-referenced)
-// result: does Data's naive, background-contaminated Region A line up with a QCD MC
-// sample's own naive Region A (itself mostly fake-photon-triggered dijet background)
-// under the same single-scale-factor fit? Neither side is ABCD-subtracted here, so
-// there is no purity[] and no Region C in this macro at all - see draw_insitu_xj_jet12.C
-// for the corresponding non-purity-corrected xJ-shape comparison.
-//
-// Reuses grid_insitu.C's Delta-chi2=1 error convention, ana::ptBinsUsed restriction
-// (only the 15-20, 20-25, 25-35 GeV reported bins - see ana.h's ptBins/ptBinsUsed/
-// firstUsedPtBin comment; drops both the 13-15 GeV migration buffer and the 35-100 GeV
-// overflow, the latter for low Data statistics), and mean(x_J)-based chi2 definition
-// unchanged - no new uncertainty-combination or bin-selection logic is introduced here
-// (see gammajet_unfold/CLAUDE.md).
+// Non-purity-corrected cross-check of grid_insitu.C: Data region A vs the region A of the
+// Jet12_long QCD Pythia8 sample (mostly fake-photon dijets), same scan and conventions. No
+// region C or purity here.
 
-// insitu/ is split into inputs/ (the raw Data/Jet12 insitu ntuples, written by
-// unfolder.h's production pipeline), output/ (this and the other grid_insitu*.C
-// macros' own .root output), and pdfs/ (their .pdf output).
 const char * insitu_input_dir  = ana::path("insitu/inputs");
 const char * insitu_output_dir = ana::path("insitu/output");
 const char * insitu_pdf_dir    = ana::path("insitu/pdfs");
 
-// Same restriction as grid_insitu.C - only ana::ptBinsUsed (15-20, 20-25, 25-35 GeV),
-// dropping both the 13-15 GeV migration buffer bin and the 35-100 GeV overflow bin
-// (the latter for low Data statistics).
+// Reported pT bins only (ana::ptBinsUsed).
 const int nPtBinsUsed = ana::nPtBinsUsed;
-// Shape method: last 3 sparse x_J bins dropped; pT bin 2 merged in pairs of x_J bins
-// (see grid_insitu.C's shape method).
+// Shape method: last 3 sparse xJ bins dropped; pT bin 2 merged in pairs.
 const int nXjBinsForChi2 = ana::nUnfoldXjBins - 3;
 const int coarseRebinPtBin = 2;
 const int coarseGroupSize = 2;
 bool shapeMethod = false; // set by grid_insitu_jet12(..., method)
 
-// The MC reference sample - always "Jet12_long" now (see file header; the legacy
-// "Jet12_full" cross-check has been retired).
+// MC reference sample.
 const string mcTrigger = "Jet12_long";
 
-// Nominal cross-section weight for the Jet12 sample - same number as drawer.h's
-// scalemap[isphoton=0][12] for sim="pythia". Jet12_long is the same underlying
-// trigger/cross-section as plain "Jet12" (see src/treeuser.h), not a separate cross
-// section, so this weight is a documentation/consistency convention only: with a
-// single MC sample as the reference, it cancels out of every mean(x_J) computed below
-// since all events share it.
+// Jet12 cross-section weight (drawer.h's scalemap); cancels with one sample.
 map<int,double> jet_scale = {{12,3.997e+06}};
 
-// referenceMeans, computeRegionAMeans, buildXjByPtBin, and buildMCXjByPtBin now live
-// in src/insitu_utility.h/.cc (insitu_utility:: namespace) - moved there after being
-// found copy-pasted byte-for-byte across all six grid_insitu*.C macros.
-
-// One comparison page: top panel is mean(x_J) vs pT for MC and raw Data; bottom panel
-// is the raw ratio (raw Data/MC) and the corrected ratio (best-fit-scaled Data/MC) -
-// same layout as grid_insitu.C's drawJESPage(), single study (no purity-corrected page).
+// Mean xJ vs pT for MC and raw Data (top); raw and corrected ratios (bottom).
 void drawJESPage(TCanvas * c, const char * pdfPath, const char * label, int ir,
     TGraphErrors * gMC, TGraphErrors * gDataRaw, TGraphErrors * gRatioRaw, TGraphErrors * gRatioCorr,
     float pa, float paErrLow, float paErrHigh) {
@@ -158,11 +120,7 @@ void drawJESPage(TCanvas * c, const char * pdfPath, const char * label, int ir,
   c->SaveAs(pdfPath);
 }
 
-// One xJ-distribution comparison page, for a single photon-pT bin: the fixed Jet12 MC
-// reference, the raw (uncorrected) Data distribution, and the Data distribution at the
-// study's best-fit jet-energy-scale - all shape-normalized and divided by bin width for
-// display (ana::unfoldXjBins is non-uniform), same densityForDisplay convention as
-// draw_insitu_xj_jet12.C/grid_insitu.C.
+// xJ for one pT bin: Jet12 reference, raw Data, Data at the best-fit pa (shape-normalized densities).
 void drawXjPage(TCanvas * c, const char * pdfPath, const char * label, int ir, float ptlow, float pthigh,
     TH1D * hMC, TH1D * hDataRaw, TH1D * hDataCorr) {
   c->Clear();
@@ -217,19 +175,15 @@ void drawXjPage(TCanvas * c, const char * pdfPath, const char * label, int ir, f
   c->SaveAs(pdfPath);
 }
 
-// method = "mean" or "shape"; output grid_insitu_jet12_<systag> or grid_insitu_jet12_shapechi2_<systag>.
+// method = "mean" or "shape".
 void grid_insitu_jet12(string systag = "nominal", string method = "mean") {
   if (method != "mean" && method != "shape") { cout << "method must be \"mean\" or \"shape\"" << endl; return; }
   shapeMethod = (method == "shape");
   const char * tag = shapeMethod ? "jet12_shapechi2" : "jet12";
-  // See grid_insitu.C's identical comment: avoids per-pT-bin histograms auto-
-  // registering into whichever radius subdirectory was left current by the previous
-  // iteration's mkdir/cd.
+  // Don't auto-register into the current radius directory.
   TH1::AddDirectory(kFALSE);
 
-  // One file/one PDF for the whole systag, all seven jet radii inside (each in its own
-  // ana::rnames[ir] subdirectory of fout - see grid_insitu.C's identical comment for
-  // why mkdir/cd has to happen before "results" (a TTree) is constructed).
+  // One file and one PDF per systag; each radius in its ana::rnames[ir] subdirectory.
   string pdfPathStr = Form("%s/grid_insitu_%s_%s.pdf", insitu_pdf_dir, tag, systag.c_str());
   TCanvas * c = new TCanvas("c","",700,700);
   c->SaveAs(Form("%s[", pdfPathStr.c_str()));
@@ -243,9 +197,7 @@ void grid_insitu_jet12(string systag = "nominal", string method = "mean") {
   vector<DataEvent> dataA = insitu_utility::cacheDataEvents(dataFile, 0, ir);
   cout << "Cached Data events: region A=" << dataA.size() << endl;
 
-  // Low-xJ floor per used pT bin - see referenceMeans()'s comment above for why this
-  // (and the ir filter both functions also apply) was missing before and what it
-  // changes.
+  // Low-xJ floor per used pT bin.
   float lowXj[nPtBinsUsed];
   for (int ipt = 0; ipt < nPtBinsUsed; ipt++) lowXj[ipt] = insitu_utility::lowXjFloor(ir, ana::ptBinsUsed[ipt]);
 
@@ -263,9 +215,7 @@ void grid_insitu_jet12(string systag = "nominal", string method = "mean") {
   }
 
   // -----------------------------
-  // Grid scan: single overall jet-energy-scale factor pa, no pT-dependence - same
-  // scan window/step (insitu_utility.h's scanLow/scanHigh/scanN) as grid_insitu.C's
-  // gammajet-only mode.
+  // Grid scan over pa (window in insitu_utility.h)
   // -----------------------------
   const int na = insitu_utility::scanN;
   const float lowa = insitu_utility::scanLow, higha = insitu_utility::scanHigh;
@@ -351,9 +301,7 @@ void grid_insitu_jet12(string systag = "nominal", string method = "mean") {
        << " +" << errHigh << "/-" << errLow << " (chi2=" << minchisq << ")" << endl;
 
   // -----------------------------
-  // Build x_J histograms per photon-pT bin: the fixed Jet12 MC reference, Data at
-  // pa=1 (raw) and at the scan's best-fit pa (corrected) - same non-uniform binning
-  // as grid_insitu.C.
+  // xJ histograms per pT bin: Jet12 reference, raw Data, Data at the best-fit pa
   // -----------------------------
   vector<TH1D*> hxjMC_pt    = insitu_utility::buildMCXjByPtBin(mcSamples, 0, ir, "hxjA_jet12", lowXj);
   vector<TH1D*> hxjA_raw_pt  = insitu_utility::buildXjByPtBin(dataA, 1.0,   nPtBinsUsed, "hxjA_data_raw", lowXj);
@@ -369,9 +317,7 @@ void grid_insitu_jet12(string systag = "nominal", string method = "mean") {
   TH1D * hxjA_data_bestscale = sumPtBins(hxjA_corr_pt, "hxjA_data_bestscale");
 
   // -----------------------------
-  // Mean(x_J) vs pT comparison plot - top: MC vs raw Data; bottom: raw ratio vs
-  // corrected ratio (evaluated at the scan's best-fit pa). Single page - no
-  // purity-corrected branch, unlike grid_insitu.C.
+  // Mean xJ vs pT page
   // -----------------------------
   gStyle->SetOptStat(0);
 
@@ -393,7 +339,7 @@ void grid_insitu_jet12(string systag = "nominal", string method = "mean") {
   }
 
   // -----------------------------
-  // Save - see grid_insitu.C's identical comment.
+  // Save
   // -----------------------------
   fout->cd();
   fout->mkdir(ana::rnames[ir])->cd();

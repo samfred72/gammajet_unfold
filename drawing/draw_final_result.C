@@ -3,63 +3,23 @@
 #include "../src/unfold_utility.h"
 #include "RooUnfoldResponse.h"
 #include "RooUnfoldBayes.h"
-// The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
-// into /home/samson72/root/lib/libgammajet.so, sitting on the same library search path
-// as this project's libgammajet_unfold.so. Without forcing which one loads first, ROOT's
-// implicit symbol autoload can bind drawer/ana calls to the wrong (mismatched-layout)
-// library and segfault - explicit load removes the ambiguity.
+// Load explicitly: the sibling gammajet project's libgammajet.so has same-named classes.
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
-// Final result: nominal unfolded (1/N)dN/dxJ per pT bin, with statistical and systematic
-// uncertainty shown separately (standard practice - stat is uncorrelated bin-to-bin,
-// syst is often correlated, so combining them into one band would obscure that), compared
-// to the #gamma+jet MC truth prediction.
-//
-// Statistical uncertainty: the bin errors already carried on the unfolded histogram
-// itself, from RooUnfoldBayes's own analytic covariance calculation (computed for every
-// unfoldOnce() call - see the "Calculating covariances..." log line). toy_iterations.C ("resp")
-// / toy_iterations.C ("data") exist specifically to cross-check this analytic covariance
-// against a toy-based estimate; they're a validation of this number, not a replacement
-// for it, so no toy loops are re-run here.
-//
-// Systematic uncertainty: the quadrature-sum fractional uncertainty (hquadsum_up/down_pt<N>)
-// already computed and saved by draw_systematics.C - JERhigh/JERlow/emscale_high/
-// emscale_low/EMRhigh/EMRlow/jes_high/jes_low/threejet/Purity (narrowBDT/narrowISO/
-// narrowBDTbkg/narrowISObkg/wideISObkg's own combined ABCD sideband-boundary systematic,
-// following PPG12's treatment - see draw_systematics.C's purityMembers)/Unfolding
-// (niterHigh+priorSensitivity in quadrature feeding up, niterLow+priorSensitivity in
-// quadrature feeding down - see draw_systematics.C's unfoldingUncUp/unfoldingUncDown)/
-// herwig (generator-modeling) combined in quadrature. Asymmetric: JER/JES/emscale/EMR are
-// true two-point (high/low) systematics there, combined via their per-bin envelope rather
-// than symmetrized; Unfolding is likewise asymmetric, but via its own direct high/low
-// source pairing rather than a per-bin sign test (see draw_systematics.C's header
-// comment); Purity is symmetric, like threejet/herwig. Because at least one source is
-// asymmetric, the box below is a TGraphAsymmErrors, not a plain TH1 (which can only carry
-// one symmetric error per bin).
-//
-// Statistical uncertainty stays on the data points' own error bars; systematic
-// uncertainty is drawn as a separate azure box behind them. MC truth is overlaid for
-// reference, with a ratio panel below.
+// Final result: nominal unfolded (1/N)dN/dxJ per pT bin vs #gamma+jet MC truth.
+// Statistical errors are RooUnfoldBayes's analytic covariance (cross-checked by the toy macros),
+// on the points. Systematics (hquadsum_up/down_pt<N> from draw_systematics.C) are asymmetric,
+// drawn as a separate box (TGraphAsymmErrors). Ratio panel below.
 
-// Jet radius index - mutable (not const) so draw_final_result(int) can set it at the top
-// of the function, before any of the code below (all written against this global) runs.
-// Defaults to the nominal R=0.4 working point used throughout the note.
+// Jet radius index, set by draw_final_result(int); default R=0.4.
 int ir = 2;
-const int nPtBinsUsed = ana::nPtBinsUsed; // physics analysis only uses ana::ptBins[ana::firstUsedPtBin..]
-const int niterate = 2; // matches draw_purity_corrected.C's best-iteration scan result
-// Set inside draw_final_result(int) from ir - the nominal R=0.4 default reproduces the
-// unsuffixed filenames every other macro/main.tex reads; every other radius gets its own
-// _<rname>-suffixed triple instead of clobbering the nominal file. systRootPath must match
-// whatever suffix draw_systematics(int) was run with for the same radius.
+const int nPtBinsUsed = ana::nPtBinsUsed; // reported bins start at ana::firstUsedPtBin
+const int niterate = 2; // nominal iteration count
+// R=0.4 keeps the unsuffixed filenames; other radii get _<rname> (must match draw_systematics).
 string pdfPathStr, rootPathStr, systRootPathStr;
 const char * pdfPath;
 const char * rootPath;
 const char * systRootPath;
-
-// densityForDisplay now lives in unfold_utility - see src/unfold_utility.h.
-// buildFullyCorrected now lives in unfold_utility (purity-corrects all ana::nPtBins
-// slices via unfold_utility::purityCorrect and reflattens for RooUnfold) - see
-// src/unfold_utility.h.
 
 void draw_final_result(int jetRadiusIndex = 2) {
   gStyle->SetOptStat(0);
@@ -106,15 +66,7 @@ void draw_final_result(int jetRadiusIndex = 2) {
     TH1D * hTruthDisp = unfold_utility::densityForDisplay(hTruth, Form("hFinalTruthDisp_pt%d", ipt));
     hTruthDisp->Scale(1./hTruthDisp->Integral());
 
-    // Systematic-only uncertainty box - kept separate from the data points' own
-    // statistical error bars (standard practice: stat and syst behave differently -
-    // stat is uncorrelated bin-to-bin, syst is often correlated - so they're shown
-    // separately rather than combined into one band). hquadsum_up/down_pt<N> are the
-    // fractional systematic (from draw_systematics.C's shape-normalized comparison, so
-    // already in the same "fraction of shape-normalized content" units used here) -
-    // asymmetric because JER/JES/emscale are combined as true two-point (high/low)
-    // systematics there, not symmetrized. A TGraphAsymmErrors carries the box instead of
-    // a TH1 (whose SetBinError is inherently one symmetric value per bin).
+    // Systematic box, separate from the statistical error bars; fractional, asymmetric.
     TH1D * hquadUp   = (TH1D*)fsyst->Get(Form("hquadsum_up_pt%d", ipt));
     TH1D * hquadDown = (TH1D*)fsyst->Get(Form("hquadsum_down_pt%d", ipt));
     int nb = hUnfoldDisp->GetNbinsX();
@@ -147,9 +99,7 @@ void draw_final_result(int jetRadiusIndex = 2) {
     p1->SetBottomMargin(0.02);
     p1->SetLeftMargin(.15);
     gPad->SetTicks(1,1);
-    // Frame-only histogram for the axes - TGraphAsymmErrors carries no axis-range/label
-    // machinery of its own, so a zero-content clone sets up the pad exactly as the old
-    // hSystBox draw used to before the box itself is drawn on top.
+    // Frame-only histogram for the axes.
     TH1D * hFrame1 = (TH1D*)hUnfoldDisp->Clone(Form("hFinalFrame1_pt%d", ipt));
     hFrame1->Reset("ICES");
     hFrame1->SetLineColor(kWhite);
@@ -185,13 +135,7 @@ void draw_final_result(int jetRadiusIndex = 2) {
     p2->SetBottomMargin(0.3);
     p2->SetLeftMargin(.15);
     gPad->SetTicks(1,1);
-    // Ratio box: same x/y/errors as gSystBox, each scaled by that bin's own truth content
-    // (not truth's own uncertainty - the box is meant to carry only the analysis's
-    // systematic uncertainty, same quantity as the top panel, just rescaled to sit on the
-    // Data/Truth axis).
-    // Only bins with both a data and a truth value get a ratio point/box: with the
-    // unclipped draw options below, a placeholder at 0 would otherwise show up as a
-    // stray box/error bar pinned to the bottom of the frame.
+    // Ratio box: gSystBox scaled by the truth content. Only bins with both data and truth.
     TGraphAsymmErrors * gRatioSystBox = new TGraphAsymmErrors();
     gRatioSystBox->SetName(Form("gFinalRatioSystBox_pt%d", ipt));
     for (int b = 1; b <= nb; b++) {
@@ -228,11 +172,8 @@ void draw_final_result(int jetRadiusIndex = 2) {
     hFrame2->Draw("p");
     gRatioSystBox->SetFillColorAlpha(kAzure+1, 0.35);
     gRatioSystBox->SetLineColor(kWhite);
-    // By default ROOT drops a point whose central value lies outside the frame together
-    // with its error bar and syst box. "2 0" (graph) and "e0" (histogram) keep them, clipped
-    // to the frame, so an off-scale bin still shows how far its uncertainties reach into
-    // the visible range. The marker itself can't be drawn outside the frame, so an arrow at
-    // the frame edge marks the direction of each off-scale central value instead.
+    // "2 0" (graph) and "e0" (histogram) keep off-frame points' errors and boxes, clipped; an arrow
+    // at the frame edge marks each off-scale central value.
     gRatioSystBox->Draw("2 0 same");
     hRatio->SetLineColor(kBlack);
     hRatio->SetMarkerColor(kBlack);

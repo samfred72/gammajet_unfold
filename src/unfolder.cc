@@ -9,17 +9,13 @@ bool unfolder::check_pair(jet_object jet, int ir, pho_object pho, bool isreco, f
   int iabcd = ana::findabcdBin(pho.iso4, pho.bdt, 0);
 
   int ptbin = ana::findPtBin(pho.pt);
-  // testPt lets a caller test the xJ floor against a pt other than jet.pt (e.g. the
-  // insitu tree's raw, uncorrected jet pt - see the in-situ test tree fill below);
-  // floorScale loosens/tightens the floor itself by a multiplicative factor around
-  // that same jet.pt-based lowbin edge.
+  // testPt: test the x_J floor against another pT (the in-situ tree's raw jet pT); floorScale scales the floor.
   float val = (testPt >= 0 ? testPt : jet.pt)/pho.pt;
   float lowval = ana::jet_calib_pt_cut[ir]/ana::ptBins[ptbin];
   float lowbin = ana::unfoldXjBins[ana::findUnfoldXjBin(lowval)+1];
 
   if (ptbin == -1) return false;
   if (val < lowbin*floorScale) return false;
-  //if (iabcd != 0) return false;
   if (fabs(pho.eta) > ana::photonEtaCut) return false;
   if (fabs(jet.eta) > ana::etacut - ana::JetRs[ir]) return false;
   if (dphi < ana::oppcut) return false;
@@ -47,16 +43,11 @@ void unfolder::fill_matrix() {
   for (int isys = 0; isys < nsys; isys++) cout << (isys?",":"") << systags[isys];
   cout << ")..." << endl;
 
-  // Per-systag constants - each depends only on that systag's name string, not on the
-  // event, so computed once per systag here rather than re-derived every event. See the
-  // constructor comment in unfolder.h for the full list/rationale of what each one means.
+  // Per-systag constants, computed once (see unfolder.h).
   vector<int> systagAbcdBinArr(nsys);
   vector<bool> systagThreejetVetoArr(nsys);
   vector<float> systagEmscaleShiftArr(nsys);
   vector<int> systagEmrVariantArr(nsys);
-  // jesCorrectionArr[isys][ir]: per-(systag,radius), unlike the other arrays above -
-  // see the JES comment below, where the per-radius jesNominal/jesStatErrLow/High/jesBySystag
-  // tables live (ana.h).
   vector<vector<float>> jesCorrectionArr(nsys, vector<float>(ana::nJetR));
   for (int isys = 0; isys < nsys; isys++) {
     const string & systag = systags[isys];
@@ -64,41 +55,16 @@ void unfolder::fill_matrix() {
                               (systag == "narrowBDTbkg") ? 3 : (systag == "narrowISObkg") ? 4 :
                               (systag == "wideISObkg") ? 5 : 0;
     systagThreejetVetoArr[isys] = (systag == "threejet");
-    // emscale_high/emscale_low shift the EM-calorimeter energy scale by +-ana::emscaleShift (1.48%, from the
-    // PPG12 note - see ana.h): applied in
-    // full to the (entirely-EM) photon cluster, and to only the EM-fraction portion of the
-    // jet (the non-EM/hadronic portion of jet_pt_smear_truth[ir] is left untouched). MC-only, same
-    // convention as JERhigh/JERlow above - jet_pt_smear_truth[ir] has no Data equivalent, so Data
-    // always falls back to its nominal reco pT regardless of systag.
+    // emscale_high/low (MC only): +-ana::emscaleShift on the photon and on the EM fraction of the jet.
     systagEmscaleShiftArr[isys] = (systag == "emscale_high") ?  ana::emscaleShift :
                                    (systag == "emscale_low")  ? -ana::emscaleShift : 0.0;
-    // EMRhigh/EMRlow: electromagnetic (cluster) resolution systematic. Nominal smears
-    // MC's cluster pT by the truth-pT-dependent extra Gaussian ana::emResolutionSigma
-    // (~1% at 15 GeV, 2% at 20 GeV, 2.4% at 36 GeV) that matches MC's resolution to
-    // Data's; the high/low variants swap in a wider Data resolution (~6%, roughly flat)
-    // or no extra smearing at all (0%) - all from the PPG12 note, see ana.h. Independent
-    // of the emscale_high/emscale_low mean-scale shift above. MC-only, same convention as
-    // JERhigh/JERlow/emscale_high/emscale_low - Data has no smeared-high/low variant of
-    // itself, so Data always falls back to its unsmeared reco cluster pT regardless of
-    // systag (see recoClusterPt below).
+    // EMRhigh/EMRlow (MC only): the extra cluster smearing uses the wider or no Data resolution
+    // (ana::emResolutionSigma). Independent of emscale.
     systagEmrVariantArr[isys] = (systag == "EMRhigh") ? ana::emrHigh :
                                  (systag == "EMRlow")  ? ana::emrLow  : ana::emrNominal;
-    // JES: Data's reconstructed jet pT has a residual calibration gap relative to MC (found
-    // via the in-situ jet-photon pT-balance study - see insitu/), corrected per jet radius
-    // by dividing by the in-situ p_a (grid_insitu.C's purity-corrected best fit, one value
-    // per radius from the full 7-radius scan - see ana.h). Data-only: MC is on-scale by
-    // construction and is untouched regardless of systag.
-    //
-    // Each variation is propagated once, coherently (PPG18 review issue 5): a systag with
-    // its own in-situ scan (JER, emscale, EMR, threejet, the ABCD-boundary variations)
-    // corrects Data with the p_a ITS OWN scan found (ana::jesForSystag), so e.g. JERhigh
-    // is unfolded with both the JERhigh response and the JES the JERhigh MC reference
-    // implies - its effect on the jet scale lives inside the JERhigh systematic. jes_high/
-    // jes_low vary the nominal p_a by the nominal fit's statistical uncertainty only
-    // (ana::jesStatErrLow/High), so they no longer also contain every other systag's
-    // in-situ shift. Applied to recoJetPt (and everything downstream: unfold response
-    // matrices, purity histograms, pairing) below, but deliberately NOT to insitu_jet_pt -
-    // see rawJetPt.
+    // JES: Data jet pT is divided by the in-situ p_a (ana.h). A systag with its own in-situ scan uses
+    // its own p_a (ana::jesForSystag); jes_high/low shift the nominal p_a by its statistical error.
+    // Not applied to the in-situ tree's jet pT (rawJetPt).
     for (int ir = 0; ir < ana::nJetR; ir++) {
       jesCorrectionArr[isys][ir] =
           (systag == "jes_high") ? ana::jesNominal[ir] - ana::jesStatErrLow[ir] :
@@ -122,27 +88,17 @@ void unfolder::fill_matrix() {
     if (fabs(vz) > ana::vzcut) continue;
 
     // -----------------------
-    // Event selection - shared across every systag (check_keep_MC never depends on
-    // systag), computed once per event.
+    // Event selection (systag-independent)
     // -----------------------
 
     vector<bool> keepMC = check_keep_MC(truth_cluster_pt, cluster_pt, truth_jet_pt, jet_pt_smear_truth, trigger);
     if (isMC && !keepMC.at(keepMC.size()-1)) continue;
 
-    // Data/MC vz and cluster-pT reweighting (src/reweight_utility.h) - one weight per
-    // event, from the raw (un-systag-shifted) vz/cluster_pt, applied identically across
-    // every systag reprocessing below: it corrects an orthogonal Data-vs-MC mismatch
-    // (vertex profile, pT-threshold stitching), not something a JES/JER/emscale
-    // systematic shift should itself perturb. Data always gets weight 1 (the correction
-    // reweights MC to match Data, not the other way around).
+    // Data/MC vz and cluster-pT weight from the raw quantities, the same for every systag; 1 for Data.
     float mcWeight = isMC ? rw.GetWeight(vz, cluster_pt) : 1.0f;
 
     // -----------------------
-    // Per-systag reprocessing of this same event - one full pass over the tree fills
-    // every systag's histograms, instead of re-reading the tree once per systag. Every
-    // quantity below that varies with systag (recoClusterPt, recoJetPt, ispaired,
-    // iabcd_reco) is a closed-form shift or a selection among branches already read by
-    // the single t->GetEntry(e) above - see unfolder.h's constructor comment.
+    // Per-systag reprocessing of this event (closed-form shifts or branch choices; no re-read)
     // -----------------------
     for (int isys = 0; isys < nsys; isys++) {
       const string & systag = systags[isys];
@@ -173,8 +129,6 @@ void unfolder::fill_matrix() {
           truth_cluster_e,
           truth_cluster_eta,
           truth_cluster_phi,
-          //cluster_showershape[8], // TEMPORARY!!!!!
-          //cluster_showershape[9],
           truth_cluster_iso3,
           truth_cluster_iso4,
           0, // no time object for truth
@@ -182,31 +136,23 @@ void unfolder::fill_matrix() {
           2 // truth photon is guaranteed a photon
       ) : maxpho);
 
-
       vector<jet_object> maxjet(ana::nJetR);
       vector<jet_object> maxjet_truth(ana::nJetR);
       vector<bool> ispaired(ana::nJetR, false);
       vector<bool> ispaired_truth(ana::nJetR, false);
-      // Looser than ispaired: tests the xJ floor against rawJetPt (not jesCorrection-
-      // boosted recoJetPt) at floorScale=insitu_utility::scanLow, so the in-situ tree keeps every event a
-      // grid_insitu.C scan point down to pa=scanLow could still scale above the floor -
-      // see the in-situ test tree fill below and check_pair's testPt/floorScale params.
+      // In-situ pairing: x_J floor tested against the uncorrected jet pT at floorScale = scanLow, so the
+      // tree keeps every event a scan point down to scanLow could use.
       vector<bool> ispairedInsitu(ana::nJetR, false);
 
       for (int ir = 0; ir < ana::nJetR; ir++) {
         if (isMC && !keepMC[ir]) continue;
 
-        // JERhigh/JERlow/emscale_high/emscale_low only mean anything for MC (smearing is
-        // applied to MC to match Data's resolution - Data has no smeared-high/low variant of
-        // itself); jes_high/jes_low go the other way (Data-only - MC is already on-scale by
-        // construction, so jesCorrection never enters the isMC branch below).
+        // JER/emscale variations are MC only; jes_high/low are Data only.
         float recoJetPt;
         if (isMC) {
           recoJetPt = (systag == "JERhigh") ? jet_pt_smear_high_truth[ir] :
                       (systag == "JERlow")  ? jet_pt_smear_low_truth[ir]  :
-                      // scale only the EM-fraction portion of the jet by (1 + shift); the
-                      // non-EM/hadronic portion, jet_pt_smear_truth[ir]*(1-jet_emfrac[ir]), is
-                      // untouched.
+                      // Scale only the EM fraction of the jet.
                       (systagEmscaleShift != 0.0) ?
                           jet_pt_smear_truth[ir]*jet_emfrac[ir]
                             + jet_pt_smear_truth[ir]*jet_emfrac[ir]*systagEmscaleShift
@@ -215,13 +161,8 @@ void unfolder::fill_matrix() {
         } else {
           recoJetPt = jet_pt_calib[ir] / jesCorrectionArr[isys][ir];
         }
-        // Uncorrected Data jet pT, for the insitu tree only (see insitu_jet_pt fill
-        // below) - the insitu study is what jesCorrectionArr (ana::jesNominal, see
-        // above) is itself derived from, so baking that correction into insitu_jet_pt
-        // would make the in-situ grid scan measure only the residual gap around an
-        // already-applied guess instead of the actual Data/MC JES gap. MC never has
-        // jesCorrection applied in the first place (see the isMC branch above), so this is just
-        // recoJetPt there.
+        // Uncorrected Data jet pT for the in-situ tree: the scan measures the full Data/MC gap, not a
+        // residual around the current correction.
         float rawJetPt = isMC ? recoJetPt : jet_pt_calib[ir];
         maxjet[ir] = jet_object(
             recoJetPt,
@@ -248,8 +189,7 @@ void unfolder::fill_matrix() {
         if (check_match(maxpho, maxpho_truth)) {
           hphopurnum[isys][ir]->Fill(maxpho.pt, mcWeight);
           hphoeffnum[isys][ir]->Fill(maxpho_truth.pt, mcWeight);
-          // Photon-only quantity, independent of jet radius - fill once (ir==1, same
-          // convention as hpurity_num/den below) rather than nJetR times.
+          // Photon-only: fill once (ir == 1).
           if (ir == 1) {
             hphoIDeff_bdt[isys]->Fill(maxpho_truth.pt, maxpho.bdt, mcWeight);
             if (maxpho.iso4 > -999) hphoIDeff_iso[isys]->Fill(maxpho_truth.pt, maxpho.iso4, mcWeight);
@@ -267,36 +207,21 @@ void unfolder::fill_matrix() {
         int bin = ana::findUnfoldBin(xj,maxpho.pt);
         int bin_truth = ana::findUnfoldBin(xj_truth,maxpho_truth.pt);
 
-
         // -----------------------
         // Pairing
         // -----------------------
-        // Both bounds must match ana::findPtBin's half-open [ptBins[i], ptBins[i+1]) convention,
-        // not just the lower one: findUnfoldBin (via findPtBin) accepts pt == ptBins[0] (>=) but
-        // rejects pt >= ptBins[nPtBins] (<), returning bin -1 outside that range. A pt that
-        // doesn't match this exact convention can still be "paired" but land in no valid unfold
-        // bin, which silently drops the event into RooUnfoldResponse's histogram underflow
-        // (counted in _mes/_tru totals but not in the response matrix used for inversion, and
-        // not routed through Miss()/Fake() either) - a bookkeeping leak.
+        // Both photon-pT bounds follow findPtBin's half-open [low, high) convention; otherwise a paired
+        // event could land in no unfold bin and leak into RooUnfold's underflow.
         if (maxpho.pt >= ana::ptBins[0] && maxpho.pt < ana::ptBins[ana::nPtBins] && maxjet[ir].pt > ana::jet_calib_pt_cut[ir]) {
           ispaired[ir] = check_pair(maxjet[ir], ir, maxpho,1);
         }
-        // Same pairing logic as ispaired above, but against rawJetPt with a floor scale
-        // tied to insitu_utility::scanLow - the grid scan's lowest trial pa - so every
-        // event a scan point down to scanLow could scale above the floor actually makes
-        // it into insitutree (see insitu_utility.h; only the photon-pt bounds guard the
-        // ptbin==-1 index inside check_pair, not the jet-pt pre-filter, which is a
-        // nominal-floor shortcut and would needlessly exclude the very low-side events
-        // this is meant to keep).
+        // Same as ispaired but with the in-situ floor (see above). Only the photon-pT bounds guard
+        // check_pair's ptbin index; the nominal jet-pT pre-filter would drop events the scan needs.
         if (maxpho.pt >= ana::ptBins[0] && maxpho.pt < ana::ptBins[ana::nPtBins]) {
           ispairedInsitu[ir] = check_pair(maxjet[ir], ir, maxpho, 1, rawJetPt, insitu_utility::scanLow);
         }
-        // threejet: veto events whose third jet has pT > ana::thirdJetPtCut, applied on top
-        // of the nominal pairing requirement, before it feeds the ABCD fills below. The
-        // third jet is put in the same pT definition as the recoil jet: Data gets the
-        // same in-situ correction (jesCorrectionArr), MC is the nominal smeared pT (no
-        // JER/emscale variation - this systag has neither). Reco only by design: a truth
-        // veto would unfold to a different observable (xJ without a third jet).
+        // threejet: veto if the third jet's pT (recoil-jet definition: Data in-situ corrected, MC nominal
+        // smear) exceeds ana::thirdJetPtCut. Reco only: a truth veto would change the observable.
         if (systagThreejetVeto) {
           float thirdJetPt = isMC ? thirdjet_pt[ir] : thirdjet_pt[ir] / jesCorrectionArr[isys][ir];
           bool hasThirdJet = thirdJetPt > ana::thirdJetPtCut;
@@ -306,43 +231,19 @@ void unfolder::fill_matrix() {
         if (maxpho_truth.pt >= ana::ptBins[0] && maxpho_truth.pt < ana::ptBins[ana::nPtBins] && maxjet_truth[ir].pt > ana::jet_calib_pt_cut[ir]) {
           ispaired_truth[ir] = check_pair(maxjet_truth[ir], ir, maxpho_truth,1);
         }
-        // narrowBDT/narrowISO/narrowBDTbkg/narrowISObkg/wideISObkg each reselect the reco
-        // ABCD grid with one boundary shifted (ana::findabcdBin bin 1-5 instead of nominal
-        // bin 0 - see ana.h's isoBins/isoBinsHigh/bdtGoodLow/bdtBadLow comment) across all
-        // four regions, not just region A, since purity correction downstream needs A and
-        // C together. The truth-side ABCD stays pinned to bin 0 for every systag,
-        // including all five of these: the response matrix's truth axis is the fixed
-        // fiducial definition being measured, and a reconstruction/selection systematic
-        // should vary how well that fixed target is reconstructed, not the target itself.
-        // (Truth photons do have a real, non-trivial isolation spread - this is a
-        // deliberate choice, not an invariant simplification.)
+        // ABCD variations move one boundary for all four regions (purity needs A and C together). The
+        // truth-side ABCD stays nominal for every systag: the truth axis is the fixed fiducial definition.
         int iabcd_reco = ana::findabcdBin(maxpho.iso4, maxpho.bdt, systagAbcdBin);
         int iabcd_truth = ana::findabcdBin(maxpho_truth.iso4, maxpho_truth.bdt, 0);
         if (ispaired[ir] && iabcd_reco != -1) hrecoxj_abcd[isys][ir][iabcd_reco]->Fill(bin, mcWeight);
         if (ispaired_truth[ir] && iabcd_truth != -1) htruthxj_abcd[isys][ir][iabcd_truth]->Fill(bin, mcWeight);
         if (ispaired[ir] && iabcd_reco != -1) hclusterpt_abcd[isys][ir][iabcd_reco]->Fill(maxpho.pt, mcWeight);
-        // MC-only, truth-matched (photon deltaR<0.1) subset of the fill above - the actual
-        // signal template macros/puritymaker.C's leakage fractions (fp[i]=N_sig^i/N_sig^A)
-        // are defined against, rather than an all-reconstructed-cluster ratio. isMC guards
-        // this since maxpho_truth is not a real generator-level photon for Data (see its
-        // isMC-gated construction above) - check_match(maxpho, maxpho_truth) against that
-        // would be meaningless for Data, not just redundant.
+        // MC only: truth-matched (dR < 0.1) subset, the signal template for puritymaker.C's leakage fractions.
         if (isMC && ispaired[ir] && iabcd_reco != -1 && check_match(maxpho, maxpho_truth))
           hclusterpt_abcd_truthmatched[isys][ir][iabcd_reco]->Fill(maxpho.pt, mcWeight);
 
-        // In-situ test tree: one per systag (not per radius - see insitu_tree's
-        // construction in unfolder.h), an "ir" branch distinguishes which jet radius
-        // each row is for. All four ABCD regions, gated on ispairedInsitu (eta/dphi/
-        // ptbin cuts identical to the response matrix's ispaired, but the xJ floor is
-        // tested against rawJetPt at insitu_utility::scanLow instead of the
-        // jesCorrection-boosted recoJetPt at floorScale=1.0) - not yet narrowed to the
-        // signal region below.
-        //
-        // insitu_weight carries the same vz/cluster_pt mcWeight used everywhere else in
-        // this event loop (1.0 for Data, since mcWeight is only ever non-trivial for
-        // isMC) - insitu/grid_insitu.C and friends must multiply it into every MC fill
-        // they do from this tree so the in-situ reference shape matches the rest of the
-        // pipeline's Data/MC reweighting instead of silently using an unweighted MC shape.
+        // In-situ tree: all four ABCD regions, gated on ispairedInsitu. insitu_weight is the MC weight
+        // (1 for Data); MC readers must apply it.
         if (ispairedInsitu[ir] && iabcd_reco != -1) {
           insitu_pho_pt[isys] = maxpho.pt;
           insitu_jet_pt[isys] = rawJetPt;
@@ -352,15 +253,8 @@ void unfolder::fill_matrix() {
           insitu_tree[isys]->Fill();
         }
 
-        // hpurity_num/den (below) are NOT the real purity pipeline - they're written to
-        // the unfolding output file but nothing downstream reads them. The actual
-        // purity determination is hclusterpt_abcd[isys][i][j] (filled per radius above,
-        // gated on ispaired[ir]) -> macros/puritymaker.C -> ana::getPurity/getPurityC
-        // (which now take an ir argument - purity is "of paired photons", and pairing
-        // genuinely differs by jet radius, so it's not one number reused everywhere).
-        // hpurity_num/den stay a single representative radius (R=0.4, ir==2) since nothing
-        // consumes them per-radius; kept only for whatever manual/future inspection they
-        // were originally added for.
+        // hpurity_num/den are not used downstream (the purity comes from hclusterpt_abcd via
+        // puritymaker.C); kept at R = 0.4 for inspection.
         if (ir == 2 && ispairedInsitu[ir] && iabcd_reco != -1) {
           bool maxpho_is_photon = check_match(maxpho, maxpho_truth);
           int iabcd = ana::findabcdBin(maxpho.iso4, maxpho.bdt, 0);
@@ -375,11 +269,7 @@ void unfolder::fill_matrix() {
           }
         }
 
-
-        // Response matrix / pair purity-efficiency counters below are restricted to the
-        // signal region (abcd bin 0) on both reco and truth sides - the abcd-inclusive
-        // ispaired/ispaired_truth above was only needed for the hrecoxj_abcd/htruthxj_abcd/
-        // ispairedInsitu fills.
+        // Response matrix and pair counters: signal region (abcd 0) only, on both sides.
         ispaired[ir] = ispaired[ir] && iabcd_reco == 0;
         ispaired_truth[ir] = ispaired_truth[ir] && iabcd_truth == 0;
 
@@ -486,10 +376,7 @@ void unfolder::fill_matrix() {
           hpaireffnum[isys][ir]->Fill(bin_truth, mcWeight);
         }
 
-
-        // Drawing event displays - only for the first systag in the list, so enabling
-        // dodraw doesn't multiply the debug PDF output nsys-fold (event displays are a
-        // manual debugging aid, not part of the physics output).
+        // Event displays for the first systag only (debugging aid).
         if (dodraw && isys == 0 && ndraw < 100 && ir == 1 && (!ispaired_truth[ir] && ispaired[ir])) {
           if (!ispaired[ir]) {
             float dphi = maxjet[ir].deltaPhi(maxpho);
@@ -517,7 +404,6 @@ void unfolder::fill_matrix() {
             cout << endl;
           }
 
-
           TH2D * h = new TH2D("heventdisplay",";eta;phi",100,-1.5,1.5,100,-M_PI,M_PI);
           h->Draw();
 
@@ -535,7 +421,6 @@ void unfolder::fill_matrix() {
           circle_truth->SetMarkerColorAlpha(kBlack, 0.5);
           circle_truth->SetMarkerSize(15);
 
-          // For the legend
           TMarker * dummy_truth = new TMarker(maxpho_truth.eta, maxpho_truth.phi, 29);
           dummy_truth->SetMarkerColor(kBlack);
           dummy_truth->SetMarkerSize(2);
@@ -577,21 +462,14 @@ void unfolder::fill_matrix() {
   }
 }
 
-// Despite the name, this no longer runs any Bayesian unfolding itself - it only extracts
-// each RooUnfoldResponse's own response-matrix histogram (Hresponse(), populated already
-// by fill_matrix()'s Fill()/Miss()/Fake() calls, independent of ever constructing a
-// RooUnfoldBayes object). It used to also run a RooUnfoldBayes unfold at a hardcoded
-// niterate=1 and store the result (hunfoldjetpt*/hunfoldphopt*/hunfoldxj*, + _half
-// variants) - dead computation, since nothing outside this class ever read those
-// histograms (confirmed by a repo-wide grep): every real plot re-unfolds from the raw
-// response matrix at the actual nominal niterate=2 via unfold_utility::unfoldOnce
-// instead. Removed rather than left to keep computing and writing output nothing uses.
+// Extracts each RooUnfoldResponse's matrix (Hresponse). No unfolding here: the plots unfold via
+// unfold_utility::unfoldOnce at the nominal niterate.
 void unfolder::unfold() {
   int nsys = (int)systags.size();
 
   for (int isys = 0; isys < nsys; isys++) {
     for (int ir = 0; ir < ana::nJetR; ir++) {
-      // Full Closure
+      // Full closure
       hjetresponse[isys][ir] = (TH2D*)jet_response[isys][ir]->Hresponse();
       hjetresponse[isys][ir]->SetName(Form("hjetresponse%i", ir));
 
@@ -707,11 +585,7 @@ void unfolder::end() {
       hpaireff[isys][ir] = new TEfficiency(*hpaireffnum[isys][ir], *hpaireffden[isys][ir]);
       hpairpur[isys][ir] = new TEfficiency(*hpairpurnum[isys][ir], *hpairpurden[isys][ir]);
 
-      // num/den are filled with mcWeight (see fill_matrix()) - the default kFCP
-      // (Clopper-Pearson) interval assumes unweighted integer pass/total counts, so it's
-      // not valid once entries carry a weight. kFNormal is the standard fallback for
-      // weighted TEfficiency; SetUseWeightedEvents() tells it to use the num/den
-      // histograms' Sumw2 errors instead of raw bin content for the variance.
+      // Weighted entries: Clopper-Pearson does not apply, so use kFNormal with weighted-event errors.
       for (TEfficiency * eff : {hphoeff[isys][ir], hphopur[isys][ir], hjeteff[isys][ir],
                                  hjetpur[isys][ir], hpaireff[isys][ir], hpairpur[isys][ir]}) {
         eff->SetStatisticOption(TEfficiency::kFNormal);

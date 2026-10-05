@@ -1,12 +1,5 @@
-// Diagnostic: for each truth photon in nikhil_only_targets.csv (pt/eta/phi of truth
-// photons that nikhil's list keeps but sam.txt / print_truth_photon_pt25_35.C does not),
-// walk the exact same cut sequence as print_truth_photon_pt25_35.C and report the first
-// cut that removes it.
-//
-// Cut chain mirrors print_truth_photon_pt25_35.C (macros/print_truth_photon_pt25_35.C)
-// byte-for-byte: vz cut -> check_keep_MC trigger window -> jet_calib_pt_cut precondition
-// -> check_pair (xJ floor, photon |eta|, jet |eta|, back-to-back dphi) -> ABCD isolation
-// region -> target pT bin.
+// For each truth photon in nikhil_only_targets.csv, walk print_truth_photon_pt25_35.C's cut
+// chain and report the first cut that removes it.
 
 #include "../src/treeuser.h"
 #include "../src/pho_object.h"
@@ -25,7 +18,6 @@ void diagnose_nikhil_only(string trigger = "Photon20", string sim = "pythia") {
   const int ir = 2; // R=0.4, same as print_truth_photon_pt25_35.C
   const int target_ptbin = 3;
 
-  // Load targets
   vector<Target> targets;
   ifstream fin("/tmp/claude-1000/-home-samson72-sphnx/96a98a79-a3d7-4e7f-95dc-e5cdaaefefee/scratchpad/nikhil_only_targets.csv");
   string line;
@@ -49,7 +41,6 @@ void diagnose_nikhil_only(string trigger = "Photon20", string sim = "pythia") {
   for (Long64_t e = 0; e < nentries; e++) {
     tu.t->GetEntry(e);
 
-    // Quick pre-filter: is this event's truth cluster near ANY target?
     int match = -1;
     for (size_t k = 0; k < targets.size(); k++) {
       if (targets[k].found) continue;
@@ -75,7 +66,7 @@ void diagnose_nikhil_only(string trigger = "Photon20", string sim = "pythia") {
       continue;
     }
 
-    // --- Step 2: check_keep_MC trigger truth-pt window ---
+    // --- Step 2: check_keep_MC truth-pt window ---
     vector<bool> keepMC = tu.check_keep_MC(tu.truth_cluster_pt, tu.cluster_pt, tu.truth_jet_pt, tu.jet_pt_smear_reco, trigger);
     if (!keepMC.at(keepMC.size() - 1)) {
       cout << "  CUT: truth_cluster_pt=" << tu.truth_cluster_pt
@@ -87,7 +78,6 @@ void diagnose_nikhil_only(string trigger = "Photon20", string sim = "pythia") {
       continue;
     }
 
-    // --- Build truth photon/jet objects exactly as in print_truth_photon_pt25_35.C ---
     pho_object maxpho_truth(
         tu.truth_cluster_pt, tu.truth_cluster_e, tu.truth_cluster_eta, tu.truth_cluster_phi,
         tu.truth_cluster_iso3, tu.truth_cluster_iso4, 0, 0.99, 2);
@@ -147,7 +137,7 @@ void diagnose_nikhil_only(string trigger = "Photon20", string sim = "pythia") {
       }
     }
 
-    // --- Step 5: ABCD isolation region ---
+    // --- Step 5: ABCD region ---
     int iabcd_truth = ana::findabcdBin(maxpho_truth.iso4, maxpho_truth.bdt, 0);
     bool ispaired_final = ispaired_truth && (iabcd_truth == 0);
     if (ispaired_truth && iabcd_truth != 0) {

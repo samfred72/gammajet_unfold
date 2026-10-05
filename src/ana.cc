@@ -20,7 +20,6 @@ const char * ana::path(const string & rel) {
 ana::ana() {
 }
 
-// See ana.h's comment above emResolutionSigma for the prescription/provenance.
 static float emSigmaOverE(float E, float p0, float p1, float p2) {
   return sqrt(p0*p0/E + p1*p1/(E*E) + p2*p2);
 }
@@ -32,7 +31,6 @@ float ana::emResolutionSigma(float truthPt, int emrVariant) {
   return sqrt(max(0.0f, data*data - mc*mc));
 }
 
-// See ana.h's comment above the declaration - the single place to add/remove a systag.
 const vector<string> ana::systags = {
   "nominal", "JERhigh", "JERlow", "emscale_high", "emscale_low",
   "jes_high", "jes_low", "threejet", "narrowBDT", "narrowISO",
@@ -42,11 +40,7 @@ const vector<pair<string,string>> ana::asymmetricSystagPairs = {
   {"JERhigh", "JERlow"}, {"emscale_high", "emscale_low"}, {"jes_high", "jes_low"},
   {"EMRhigh", "EMRlow"}
 };
-// narrowISObkg/wideISObkg are a genuine two-sided variation of the same boundary (see
-// isoBinsHigh below) but are deliberately NOT listed above - unlike JER/emscale/jes/EMR,
-// they're each treated as their own independent symmetrized source (full magnitude to
-// both up and down), not sign-split against each other. See drawing/draw_systematics.C's
-// purityMembers comment for why.
+// narrowISObkg/wideISObkg are symmetrized independently, not sign-split (see draw_systematics.C).
 
 double ana::jesForSystag(const string & systag, int ir) {
   for (int i = 0; i < nJesSystags; i++) {
@@ -59,8 +53,6 @@ double ana::jesForSystag(const string & systag, int ir) {
 
 Bool_t ana::PassEtaCut(float eta, float vz = 0)
 {
-  //float loweta = GetShiftedEta(vz,etamin);
-  //float higheta = GetShiftedEta(vz,etamax);
   if (eta < etamin || eta > etamax) return false;
   else return true;
 }
@@ -122,13 +114,13 @@ Int_t ana::findUnfoldBin(double xj, double pt)
   
   if (xj >= 2.0) ixj = nUnfoldXjBins;
  
-  return ipt*(nUnfoldXjBins+2) + ixj + 1; // +2 for underflow and overflow bins, +1 for the undeflow bin
+  return ipt*(nUnfoldXjBins+2) + ixj + 1; // +2 for underflow and overflow
 }
 Int_t ana::findabcdBin(double iso, double bdt, int bin)
 {
   int isiso;
   int isbdt;
-  if (iso <= -999) { // PhotonClusterBuilder's iso_topo_valid==0 sentinel: topocluster iso not computed
+  if (iso <= -999) { // iso_topo_valid==0: topo iso not computed
     isiso = -1;
   }
   else if (iso < isoBins[bin]) {
@@ -156,11 +148,10 @@ Int_t ana::findabcdBin(double iso, double bdt, int bin)
   else {
     bool b_isiso = isiso;
     bool b_isbdt = isbdt;
-    int iabcd = (((b_isbdt << 0b1) | b_isiso) ^ 0b11); // silly bitwise operations to map isiso+isbdt->A,B,C,D (index 0,1,2,3)
+    int iabcd = (((b_isbdt << 0b1) | b_isiso) ^ 0b11); // isiso+isbdt -> A,B,C,D (0..3)
     return iabcd;
   }
 }
-
 
 Int_t ana::findHadronBin(double value) {
   for (int i = 0; i < nHadronBins; i++) {
@@ -187,19 +178,7 @@ string ana::purityFilename(const string & systag) {
   return string(Form("%s/hists/purity_%s.root", ana::dir(), systag.c_str()));
 }
 
-// getPurity/getPurityC and their ErrorLow/ErrorHigh siblings below used to
-// TFile::Open() the same purity_<systag>.root fresh on every single call (and never
-// `delete f` after Close() - Close() alone doesn't free the TFile object, only the OS
-// file handle, so every call also leaked one small TFile object). Calling these 6
-// functions 9 times each (once per pT bin) is negligible at the couple-of-calls-per-
-// macro-run rate they were designed for, but a toy bootstrap loop that re-derives the
-// full purity-corrected spectrum on every toy (draw_toy_vs_analytic.C's data-side toys,
-// via unfold_utility::buildFullyCorrected) calls this 9*6=54 times PER TOY - 540,000
-// file-opens (plus 540,000 leaked TFile objects) over a 10,000-toy run, which is real
-// I/O and allocation overhead dominating the macro's runtime. The purity value for a
-// given (systag, ir) never changes between toys (it only depends on the fixed purity
-// curve, not the toyed A/C counts), so cache the open file per systag instead of
-// reopening it - correctness is unaffected, every caller just gets the same file back.
+// Cache the purity file per systag: toy loops call these thousands of times.
 static TFile * cachedPurityFile(const string & systag) {
   static map<string, TFile*> cache;
   string fname = ana::purityFilename(systag);
@@ -210,14 +189,8 @@ static TFile * cachedPurityFile(const string & systag) {
   return f;
 }
 
-// low/high are expected to be the edges of one ana::ptBins bin (that's how every caller
-// invokes this), so (low+high)/2 lands on the bin center and findPtBin recovers the bin
-// index directly - this reads the actual puritymaker.C point/error for that bin rather
-// than a smooth fit evaluated/integrated over the range.
-//
-// purityFilename(systag) now holds every jet radius's purity curve in its own
-// ana::rnames[ir] subdirectory (see puritymaker.C) - Get() reaches into that
-// subdirectory via a "<rname>/objname" path instead of opening a radius-suffixed file.
+// low/high are one ana::ptBins bin's edges, so the center gives the bin index. Each radius's curves
+// live in the ana::rnames[ir] subdirectory.
 float ana::getPurity(float low, float high, string systag, int ir) {
   TFile * f = cachedPurityFile(systag);
   TGraphAsymmErrors * oh = (TGraphAsymmErrors*)f->Get(Form("%s/combined", rnames[ir]));
@@ -237,8 +210,7 @@ float ana::getPurity(float val, string systag, int ir) {
   float ret = func->Eval(val);
   return ret;
 }
-// puritymaker.C's bootstrap errors are asymmetric (16th/84th percentile around the
-// median) - keep them that way rather than collapsing to one symmetric number.
+// Bootstrap errors are asymmetric (16th/84th percentiles); keep them so.
 float ana::getPurityErrorLow(float low, float high, string systag, int ir) {
   TFile * f = cachedPurityFile(systag);
   TGraphAsymmErrors * oh = (TGraphAsymmErrors*)f->Get(Form("%s/combined", rnames[ir]));
@@ -263,8 +235,7 @@ float ana::getPurityErrorHigh(float low, float high, string systag, int ir) {
   float err = oh->GetErrorYhigh(ipt);
   return err;
 }
-// Region-C analogues of getPurity/getPurityErrorLow/getPurityErrorHigh above - same
-// puritymaker.C bootstrap, read from the "combined_C" graph instead of "combined".
+// Region-C analogues of the above ("combined_C" graph).
 float ana::getPurityC(float low, float high, string systag, int ir) {
   TFile * f = cachedPurityFile(systag);
   TGraphAsymmErrors * oh = (TGraphAsymmErrors*)f->Get(Form("%s/combined_C", rnames[ir]));

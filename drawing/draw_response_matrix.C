@@ -1,21 +1,12 @@
 #include "../src/ana.h"
 #include "../src/drawer.h"
-// The original gammajet project builds its OWN, differently-laid-out drawer/ana classes
-// into /home/samson72/root/lib/libgammajet.so, sitting on the same library search path
-// as this project's libgammajet_unfold.so. Without forcing which one loads first, ROOT's
-// implicit symbol autoload can bind drawer/ana calls to the wrong (mismatched-layout)
-// library and segfault - explicit load removes the ambiguity.
+// Load explicitly: the sibling gammajet project's libgammajet.so has same-named classes.
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
-// Plots the raw response matrix used as unfolding input: hxjresponse%i, written by
-// src/unfolder.cc:469-470 as RooUnfoldResponse::Hresponse() for the Photon5/10/20
-// combination. Per RooUnfoldResponse.h:66, axes are (x,y)=(measured,truth), flattened
-// over pT x xJ (with under/overflow) bins on both axes - see draw_covariance.C's
-// matrixIndex() for the exact flat-index convention, reused here only for the pT-bin
-// gridlines below. This macro does no unfolding/closure/systematics - just a direct look
-// at the migration matrix itself.
+// The response matrix hxjresponse%i (Photon5/10/20): x = measured, y = truth, both flattened over
+// pT x xJ with under/overflow.
 
-const int ir = 2; // nominal jet radius index (R=0.4), matching every other macro in this directory
+const int ir = 2; // nominal R=0.4
 
 void draw_response_matrix(string systag = "nominal") {
   gStyle->SetOptStat(0);
@@ -26,7 +17,7 @@ void draw_response_matrix(string systag = "nominal") {
 
   TH2D * hResponse = d.get2d(Form("hxjresponse%i", ir), 1);
 
-  // NaN/Inf poisons ROOT's axis auto-ranging and silently produces a blank canvas.
+  // Sanitize NaN/Inf before drawing.
   for (int bx = 0; bx <= hResponse->GetNbinsX()+1; bx++) {
     for (int by = 0; by <= hResponse->GetNbinsY()+1; by++) {
       double v = hResponse->GetBinContent(bx, by);
@@ -48,11 +39,7 @@ void draw_response_matrix(string systag = "nominal") {
   hResponse->GetZaxis()->SetTitle("Entries");
   hResponse->Draw("colz");
 
-  // pT-bin boundary gridlines: the flattened axes stack nUnfoldXjBins+2 (under/overflow
-  // included) xJ bins per pT bin, ana::nPtBins pT bins total - same flat-index convention
-  // as draw_covariance.C's matrixIndex(). Purely visual, to show the block-diagonal
-  // structure (migration is expected to stay within a pT block, only crossing pT
-  // boundaries near the block edges).
+  // pT-block gridlines (nUnfoldXjBins+2 bins per pT bin).
   int nFlatPerPt = ana::nUnfoldXjBins + 2;
   int nFlatTotal = nFlatPerPt * ana::nPtBins;
   for (int ipt = 1; ipt < ana::nPtBins; ipt++) {

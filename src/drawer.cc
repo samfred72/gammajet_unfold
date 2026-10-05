@@ -11,7 +11,6 @@ void drawer::drawLine(float x1, float y1, float x2, float y2) {
 
 void drawer::drawText(const char *text, float xp, float yp, int textColor, int textSize) {
    TLatex *tex = new TLatex(xp,yp,text);
-   //tex->SetTextAlign(22);
    tex->SetTextFont(43);
    tex->SetTextSize(textSize);
    tex->SetTextColor(textColor);
@@ -32,7 +31,6 @@ void drawer::drawAll(vector<string> samples, vector<string> features, float draw
   float subtitlescale = 1.25;// * 700.0/csize;
   float ydiff = fontsize * 0.0017 * 700.0/csize;
   drawText("#bf{#it{sPHENIX}} #kern[0.5]{Internal}",drawx,drawy,1,(int)fontsize*titlescale);
-  //drawText("#bf{#it{sPHENIX}} Preliminary",drawx,drawy,1,(int)fontsize*titlescale);
   for (unsigned i = 0; i < samples.size(); i++) {
     drawText(samples.at(i).c_str(),drawx,drawy-ydiff*subtitlescale*(i+1),1,(int)fontsize*subtitlescale);
   }
@@ -58,14 +56,11 @@ void drawer::format(TF1 * f, int type) {
 }
 
 void drawer::scale(TH1D * h, float low, float high) {
-  // Get the X-axis object
   TAxis *xaxis = h->GetXaxis();
 
-  // Find the corresponding bin numbers
   Int_t bin_low = xaxis->FindBin(low);
   Int_t bin_high = xaxis->FindBin(high);
 
-  // Sum the bin contents within the range
   double entries_in_range = 0;
   for (Int_t bin = bin_low; bin <= bin_high; ++bin) {
     entries_in_range += h->GetBinContent(bin);
@@ -79,7 +74,6 @@ TF1 * drawer::fit(TH1D * h, float low, float high, const char * options) {
   if (h->GetEntries() > 0) h->Fit(func,options);
   return func;
 }
-
 
 TH1D * drawer::combineMC(const char * histname, bool isphoton) {
   vector<TH1D*> hists;            
@@ -250,7 +244,6 @@ vector<vector<vector<vector<vector<vector<TH1D*>>>>>> drawer::collect_hists(cons
         if (k == 4) continue;
         for (int l = 0; l < ana::nIsoBdtBins; l++) {
           for (int m = 0; m < ana::n3jetBins; m++) {
-            //cout << simulation << " " << i << j << k << l << m << endl;
             for (int n = 0; n < 4; n++) {
               if (type) { // It's an MC sample
                 hists[i][j][k][l][m][n] = combineMC(Form("%s_%i_%i_%i_%i_%i_%i",histname,i,j,k,l,m,n),isphoton);

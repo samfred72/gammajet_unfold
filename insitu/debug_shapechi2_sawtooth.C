@@ -17,18 +17,9 @@ using namespace std;
 
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 
-// Digs into the sawtooth pattern grid_insitu.C (shape method)'s Region-A shape-chi2 curve
-// picked up after the low-xJ floor (insitu_utility::lowXjFloor) was added: as pa scans,
-// x_J(pa) = jet_pt/pa/pho_pt shifts continuously, so each event crosses the FIXED
-// lowXj[ptbin] threshold at its own pa_cross = jet_pt/(lowXj[ptbin]*pho_pt), leaving the
-// sample permanently as pa increases past that point (x_J is monotonically decreasing in
-// pa, so this is a one-way exit, not a flicker). This script recomputes NA(pa) per pT bin
-// (the shared normalization denominator for every bin fraction) alongside chi2A(pa) over
-// the same scan grid as production, to see whether chi2 jumps line up with clusters of
-// events exiting together rather than one at a time.
-// insitu/ is split into inputs/ (the raw Data/Photon insitu ntuples, written by
-// unfolder.h's production pipeline) and pdfs/ (this debug macro's own .pdf output,
-// no .root output).
+// The sawtooth in grid_insitu.C's region-A shape chi2 after the low-xJ floor: each event leaves
+// the sample at pa_cross = jet_pt/(lowXj*pho_pt). Recomputes NA(pa) and chi2A(pa) per pT bin to
+// see whether chi2 jumps line up with clusters of exits.
 const char * insitu_input_dir = ana::path("insitu/inputs");
 const char * insitu_pdf_dir   = ana::path("insitu/pdfs");
 const int nPtBinsUsed = ana::nPtBinsUsed;
@@ -96,9 +87,7 @@ void debug_shapechi2_sawtooth(string systag = "nominal", int ir = 2) {
          << " GeV) = " << lowXj[ipt] << endl;
   }
 
-  // pa_cross per event: the pa above which this event's x_J(pa) drops below its pT
-  // bin's floor and it exits the sample. Events are sorted here purely so the printed
-  // "cluster" report below reads in scan order - the scan loop itself doesn't need this.
+  // pa_cross per event, sorted for the report.
   struct Cross { float pa_cross; int ipt; };
   vector<Cross> crossings;
   for (auto & ev : dataA) {
@@ -163,8 +152,7 @@ void debug_shapechi2_sawtooth(string systag = "nominal", int ir = 2) {
     chisqArr[ia] = chisqA;
   }
 
-  // Find the biggest upward jumps in chi2 between consecutive scan points, and report
-  // how many events cross the floor in that same pa step, in which pT bin(s).
+  // Largest upward chi2 jumps and how many events cross the floor in that step.
   vector<pair<float,int>> jumps; // (delta chi2, ia)
   for (int ia = 1; ia < na; ia++) jumps.push_back({chisqArr[ia] - chisqArr[ia-1], ia});
   sort(jumps.begin(), jumps.end(), [](const pair<float,int> & a, const pair<float,int> & b) { return a.first > b.first; });
@@ -186,9 +174,7 @@ void debug_shapechi2_sawtooth(string systag = "nominal", int ir = 2) {
     cout << endl;
   }
 
-  // Also report the widest gaps between consecutive sorted crossing pa's, per pT bin -
-  // a large gap means a long pa stretch with a completely fixed NA (no exits), which
-  // would show up as one of the smoother "tooth" segments between cliffs.
+  // Widest gaps between crossings per pT bin (smooth segments).
   for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
     vector<float> pas;
     for (auto & c : crossings) if (c.ipt == ipt) pas.push_back(c.pa_cross);

@@ -8,173 +8,90 @@
 #include "TGraphErrors.h"
 #include "TH1D.h"
 
-// Shared helpers for the insitu/*.C in-situ JES calibration macros - previously
-// duplicated byte-for-byte across grid_insitu.C, grid_insitu_jet12.C,
-// grid_insitu_unfolded.C, and (for some) draw_insitu_xj.C.
+// Helpers shared by the insitu/*.C JES scans.
 struct DataEvent { float pho_pt, jet_pt; int ptbin; };
-// One multijet-balance event (multiJet analysis trees): leading jet pT, the two recoil
-// jets' pT/phi, the leading-jet pT bin, and the per-event weight (1 for Data, the MC
-// sample's cross-section scale for MC).
+// Multijet balance event: leading pT, recoil jets' pT/phi, leading-pT bin, weight (1 for Data).
 struct MultijetEvent { float lead, sl, slphi, ssl, sslphi, w; int bin; };
 
 class insitu_utility {
   public:
-    // In-situ JES grid scan window: every grid_insitu*.C in insitu/ scans a trial overall
-    // jet-energy-scale factor pa over na=scanN steps of (scanHigh-scanLow)/scanN each,
-    // covering [scanLow, scanHigh) - centralized here (was six copies of
-    // "const float lowa = 0.95, higha = 1.05;"/"const int na = 1000;" duplicated across
-    // grid_insitu.C, grid_insitu_jet12.C, grid_insitu.C (shape method), grid_insitu_unfolded.C,
-    // and grid_insitu_unfolded.C (shape method)) so the scan range only needs to change in one
-    // place. scanN is chosen to hold the step size (scanHigh-scanLow)/scanN fixed at 1e-4
-    // (the original [0.95,1.05]/1000 granularity) as the window moves - unfolder.cc's
-    // ispairedInsitu floorScale is tied directly to scanLow (see fill_matrix()), so
-    // events are always kept in insitutree down to whatever scanLow is set to here.
-    // Lowered from 0.90 to 0.80 (Sep 28 2026, PPG18 review issue 3): several scans (R = 0.2,
-    // threejet, JERhigh) sat at the 0.90 edge. scanN doubled with it to keep the 1e-4 step.
+    // JES scan window [scanLow, scanHigh) in scanN steps of 1e-4. unfolder.cc keeps in-situ events
+    // down to scanLow (ispairedInsitu floor), so lowering it needs a rerun of the unfolding.
     static constexpr float scanLow = 0.80;
     static constexpr float scanHigh = 1.00;
     static constexpr int scanN = 2000;
 
-    // Reads the insitutree (pho_pt, jet_pt, abcd, ir) written by unfolder.cc, keeping
-    // only events in the requested ABCD region AND the requested jet radius (the tree
-    // holds every ana::nJetR radius's rows together, one file per systag - see
-    // unfolder.h's insitu_tree construction; a single underlying event can appear as up
-    // to ana::nJetR separate rows, one per radius it paired at). If restrictToUsed
-    // (default), only events in ana::ptBinsUsed are kept and ptbin is re-indexed to
-    // 0..ana::nPtBinsUsed-1 (grid_insitu.C/grid_insitu_jet12.C's convention); if false,
-    // every ana::ptBins bin is kept with ptbin = ana::findPtBin's raw index
-    // (grid_insitu_unfolded.C's convention - needed so the full flattened (pT,xJ)
-    // measured vector has a complete input for cross-pT-bin migration during unfolding).
-    //
-    // Deliberately does not read the tree's "weight" branch (the vz/cluster_pt mcWeight
-    // - see unfolder.cc's in-situ test tree comment): every caller of this function
-    // reads a Data_*_insitu.root file, where that weight is always 1.0 (mcWeight is
-    // isMC-only), so it would be a no-op here. MC insitutree consumers must read and
-    // apply "weight" themselves - see grid_insitu.C's referenceMeans/buildMCXjByPtBin.
+    // Data events from unfolder.cc's insitutree for one ABCD region and jet radius. restrictToUsed
+    // keeps ana::ptBinsUsed (ptbin re-indexed from 0); false keeps every ana::ptBins bin (the unfolded
+    // scans need the full vector for pT migration). The MC "weight" branch is not read (always 1 in Data).
     static vector<DataEvent> cacheDataEvents(const char * filename, int abcdSelect, int ir, bool restrictToUsed = true);
 
-    // Low-xJ floor for a given jet radius `ir` and photon-pT bin's LOWER edge `ptLow` -
-    // identical formula to unfolder::check_pair's `lowbin` (src/unfolder.cc): the
-    // enclosing ana::unfoldXjBins bin's UPPER edge above jet_calib_pt_cut[ir]/ptLow (i.e.
-    // rounded up to the next full xJ bin, same as check_pair, not down to the raw ratio
-    // itself). Every insitu/grid_insitu*.C mean(x_J)/shape calculation should drop events
-    // below this floor at whatever trial pa is being evaluated, so it excludes exactly
-    // the same low-xJ events unfolder.cc's ispaired/check_pair would exclude from the
-    // response matrix and hrecoxj/htruthxj at the same jet radius and JES scale - jets
-    // below jet_calib_pt_cut[ir] aren't a reconstruction-trustworthy denominator for xJ,
-    // regardless of which macro is computing a mean or a shape from them.
+    // Low-x_J floor for radius ir and pT-bin lower edge ptLow: the x_J-bin upper edge above
+    // jet_calib_pt_cut[ir]/ptLow, exactly as unfolder::check_pair. Every scan applies it at each trial pa.
     static double lowXjFloor(int ir, double ptLow);
 
-    // Canonical insitutree filename for a given trigger/sim/systag - one file holds
-    // every jet radius (see cacheDataEvents' ir parameter to select one back out) -
-    // mirrors unfolder.h's insitu_tree construction exactly, so every insitu/*.C macro
-    // locates the same file unfolder.cc actually wrote instead of re-deriving the
-    // naming convention independently in each macro. Pass sim="" for Data (3-part
-    // name, no sim component, matching unfolder.cc's isMC branch); a non-empty sim for
-    // MC (4-part name: trigger_sim_systag).
+    // insitutree file name as written by unfolder.cc; sim = "" for Data.
     static string insituFilename(const char * insitu_dir, const char * trigger,
         const char * sim, const string & systag);
 
-    // Scans outward from the minimum on a chi2-vs-pa graph for the two points where
-    // chi2 first crosses minchisq+1 (68% CL for one parameter).
+    // Points where chi2 first exceeds minchisq + 1 on each side of the minimum.
     static void findError(TGraph * g, int ibest, float minchisq, float & errLow, float & errHigh);
 
-    // Mean(x_J) vs. photon pT, one point per ana::ptBinsUsed bin (x error = half bin width).
+    // Mean x_J vs photon pT over ana::ptBinsUsed.
     static TGraphErrors * meanGraph(const float mean[], const float err[], const char * name);
 
-    // Ratio of two mean(x_J) arrays (e.g. Data/MC) vs. photon pT, errors combined
-    // assuming the numerator and denominator are independent.
+    // Ratio of two mean arrays, errors added in quadrature.
     static TGraphErrors * ratioGraph(const float meanNum[], const float errNum[],
         const float meanDen[], const float errDen[], const char * name);
 
-    // sPHENIX label block: bold-italic "sPHENIX Internal" title, then one line per
-    // sample, then one line per feature - same text/font convention as
-    // drawer::drawAll() (src/drawer.cc), reimplemented here so the insitu/ macros don't
-    // have to construct a full drawer (which opens a batch of unrelated unfolding-output
-    // files they have no other use for).
+    // Same label block as drawer::drawAll, without constructing a drawer (which opens many files).
     static void drawSPhenixLabel(vector<string> samples, vector<string> features,
         float drawx, float drawy, int fontsize, float csize);
 
-    // ----- Computational helpers shared by the six grid_insitu*.C JES-scan macros -----
-    // Consolidated here after the same logic was found copy-pasted (and once, actually
-    // buggy in one of its copies but not the other) across grid_insitu.C,
-    // grid_insitu.C (shape method), grid_insitu_unfolded.C,
-    // grid_insitu_unfolded.C (shape method), grid_insitu_jet12.C, and
-    // grid_insitu_jet12.C (shape method). See those macros for how each is used - none of
-    // the logic below changed in the move, only its location.
+    // ----- Shared by the grid_insitu*.C scans -----
 
-    // Sums a fine-binned array's [startBin, nBinsForFit) range into groups of groupSize
-    // fine bins each - used by the shape-chi2 macros' pT-bin-2 coarse rebinning (see
-    // grid_insitu.C (shape method)'s coarseRebinPtBin comment).
+    // Sum fine bins [startBin, nBinsForFit) in groups of groupSize (shape method, pT bin 2).
     static vector<double> coarsenSum(const vector<double> & fine, int startBin, int nBinsForFit, int groupSize);
-    // Same grouping, but combines per-bin errors in quadrature.
     static vector<double> coarsenQuadrature(const vector<double> & fineErr, int startBin, int nBinsForFit, int groupSize);
 
-    // Weighted mean/error of x=jet_pt/pho_pt per used photon-pT bin, combining several
-    // (filename,weight) MC samples read from their insitutree - the fixed reference a
-    // grid_insitu*.C pa scan compares Data against. abcdSelect/ir/lowXj[] filter events
-    // the same way cacheDataEvents does on the Data side. Sample-agnostic: pass
-    // Photon5+10+20 for the primary in-situ study or a single Jet12(-family) sample for
-    // the dijet-MC cross-check - see referenceShape() below for the shape-chi2 analogue.
+    // Weighted mean x_J and error per used pT bin over (file, weight) MC samples - the reference the
+    // Data scan is compared to. Same filters as cacheDataEvents.
     static void referenceMeans(const vector<pair<string,double>> & samples, int abcdSelect, int ir,
         float refMean[], float refMeanErr[], const float lowXj[]);
 
-    // Fixed MC reference xJ SHAPE (bin fraction, not density) and its per-bin error, per
-    // used photon-pT bin - the shape-chi2 analogue of referenceMeans() above (see
-    // grid_insitu.C (shape method)'s referenceShape() comment for the bin-fraction-vs-density
-    // and error-convention rationale).
+    // Reference x_J shape (bin fractions) and per-bin errors per used pT bin.
     static void referenceShape(const vector<pair<string,double>> & samples, int abcdSelect, int ir,
         vector<vector<double>> & refFrac, vector<vector<double>> & refFracErr, const float lowXj[]);
 
-    // Region-A-only mean(x_J)/error per used photon-pT bin, at a given trial
-    // jet-energy-scale factor pa - display-only where the fit criterion is shape chi2 or
-    // unfolded-vs-truth.
+    // Region-A mean x_J at trial scale pa (display where the fit uses another criterion).
     static void computeRegionAMeans(const vector<DataEvent> & dataA, float pa, float mean[], float err[], const float lowXj[]);
 
-    // Purity-corrected (two-purity method) mean(x_J)/error per used photon-pT bin, at a
-    // given trial pa - region A and region C are scaled by the same pa, purity[]/
-    // purityC[] held fixed (see unfold_utility::purityCorrectCoeffs).
+    // Purity-corrected mean x_J at trial pa (A and C scaled alike; purity fixed).
     static void computeCorrectedMeans(const vector<DataEvent> & dataA, const vector<DataEvent> & dataC,
         float pa, const float purity[], const float purityC[], float mean[], float err[], const float lowXj[]);
 
-    // x_J histogram per pT bin (ana::unfoldXjBins binning) from a cached Data sample, at
-    // a given trial jet-energy-scale factor pa. nBins is ana::nPtBinsUsed for the
-    // reco-level/Jet12-referenced macros, or ana::nPtBins for the unfolded macros (which
-    // need every pT bin, including the migration-buffer/overflow bins, for cross-pT-bin
-    // migration during unfolding - see grid_insitu_unfolded.C's cacheDataEvents comment).
+    // Data x_J histogram per pT bin at trial pa. nBins = ana::nPtBinsUsed, or ana::nPtBins for the
+    // unfolded scans.
     static vector<TH1D*> buildXjByPtBin(const vector<DataEvent> & data, float pa, int nBins,
         const char * prefix, const float lowXj[]);
 
-    // x_J histogram per used photon-pT bin (ana::nPtBinsUsed) for the fixed (never
-    // rescaled) cross-section-weighted MC reference - same samples/weights convention as
-    // referenceMeans()/referenceShape() above. Always ana::nPtBinsUsed-sized: only the
-    // reco-level/Jet12-referenced macros scan a raw MC ntuple like this at all: the
-    // unfolded macros' truth reference comes from the response-matrix template instead.
+    // MC reference x_J histogram per used pT bin (weights as referenceMeans).
     static vector<TH1D*> buildMCXjByPtBin(const vector<pair<string,double>> & samples, int abcdSelect, int ir,
         const char * prefix, const float lowXj[]);
 
-    // Purity-correct region A/C histograms per pT bin via unfold_utility::purityCorrect
-    // (src/unfold_utility.h) - the exact two-purity method. nBins is ana::nPtBinsUsed
-    // (grid_insitu.C/grid_insitu.C (shape method), with real asymmetric purity-error arrays)
-    // or ana::nPtBins (the unfolded macros, which pass zero-filled error arrays since
-    // purity is held fixed there and the asymmetric term isn't needed).
+    // Two-purity correction per pT bin (unfold_utility::purityCorrect). The unfolded scans pass
+    // zero purity errors.
     static vector<TH1D*> purityCorrectByPtBin(const vector<TH1D*> & hA, const vector<TH1D*> & hC, int nBins,
         const float purity[], const float purityErrLow[], const float purityErrHigh[],
         const float purityC[], const float purityCErrLow[], const float purityCErrHigh[],
         const char * prefix);
 
-    // ----- Multijet balance (grid_insitu.C's gammajet+multijet "combined" mode) -----
-    // Reads the per-radius trees written by multijet/analysis.cc into
-    // multijet/multijet_analysis_<sim>.root - so the multijet event selection and MC
-    // weighting live in one place (analysis.cc), not here:
-    //   Data: ttree_data_r<10R>                  (weight = 1)
-    //   MC:   ttree_<Jet8|Jet12|Jet20|Jet30>_r<10R>_<RECO|HIGH|LOW>  (weight = cross section x
-    //         analysis.cc's leading-pT and z-vertex reweighting; RECO/HIGH/LOW = the
-    //         jet_pt_smear_reco/_high_reco/_low_reco JER variants)
-    // Branches: leadingPT, SLPT, SLphi, SSLPT, SSLphi, weight.
-    // The balance is B = pT,lead / |pT,sub + pT,subsub| (vector sum of the two recoil
-    // jets), binned in leading-jet pT with analysis.cc's bins. A constant JES cancels in B,
-    // so these points only constrain the slope pb of a linear JES f(pT) = pa + pb*pT.
+    // ----- Multijet balance (grid_insitu.C combined mode) -----
+    // Reads multijet/analysis.cc's per-radius trees from multijet_analysis_<sim>.root, so the multijet
+    // selection and MC weighting live only there:
+    //   Data: ttree_data_r<10R>; MC: ttree_<Jet8..Jet30>_r<10R>_<RECO|HIGH|LOW>
+    // B = pT,lead / |pT,sub + pT,subsub|. A constant JES cancels in B, so it constrains only the slope pb
+    // of f(pT) = pa + pb*pT.
     static constexpr int nMultijetPtBins = 7;
     static constexpr double multijetPtBins[nMultijetPtBins+1] = {20, 25, 30, 35, 40, 50, 60, 70}; // = analysis.cc pTBins
     static constexpr float multijetBalanceLow = 0.4, multijetBalanceHigh = 2.65; // = analysis.cc hxj range
@@ -182,18 +99,14 @@ class insitu_utility {
     static constexpr const char * multijetMCSamples[nMultijetMCSamples] = {"Jet8", "Jet12", "Jet20", "Jet30"};
 
     static int findMultijetPtBin(double leadPt);
-    // analysis.cc's output file for a given sim ("pythia"/"herwig").
     static string multijetAnalysisFilename(const char * multijet_dir, const char * sim);
-    // analysis.cc's JER variant for a systag: RECO (nominal), HIGH (JERhigh), LOW (JERlow).
-    // No other systag changes the multijet side.
+    // JER variant for a systag: HIGH (JERhigh), LOW (JERlow), else RECO.
     static string multijetSysName(const string & systag);
-    // Caches one of analysis.cc's per-radius trees (see above). Returns an empty vector,
-    // with a warning, if the file or tree is missing.
+    // Empty vector, with a warning, if the file or tree is missing.
     static vector<MultijetEvent> cacheMultijetEvents(const char * filename, const string & treename);
-    // B for one event with every jet divided by f(pT) = pa + pb*pT (each at its own pT).
+    // B with each jet divided by f at its own pT.
     static double multijetBalance(const MultijetEvent & ev, double pa, double pb);
-    // Weighted mean B and its error (Kish effective N) per leading-pT bin, events with B
-    // inside [multijetBalanceLow, multijetBalanceHigh) only. Empty bins get mean = err = 0.
+    // Weighted mean B and Kish error per leading-pT bin, for B in [multijetBalanceLow, multijetBalanceHigh).
     static void multijetMeans(const vector<MultijetEvent> & events, double pa, double pb,
         float mean[], float err[]);
 };
