@@ -12,7 +12,7 @@ source ~/.bashrc   # ROOT and GAMMAJET_UNFOLD (before set -e: /etc/bashrc may re
 set -eo pipefail
 SIM=$([[ $SLURM_ARRAY_TASK_ID == 1 ]] && echo herwig || echo pythia)
 cd "$GAMMAJET_UNFOLD/multijet"
-./analysis "$SLURM_ARRAY_TASK_ID" "$GAMMAJET_UNFOLD/trees"
+./analysis "$SLURM_ARRAY_TASK_ID" "$GAMMAJET_UNFOLD/trees" $MJ_ANAOPTS
 # keep each pass's output so the reweighting passes can be compared
 mkdir -p "$MJ_LOGDIR/pass$1"
-cp "multijet_analysis_$SIM.root" "$MJ_LOGDIR/pass$1/"
+cp "multijet_analysis_$SIM$MJ_TAG.root" "$MJ_LOGDIR/pass$1/"

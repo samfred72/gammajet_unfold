@@ -689,7 +689,7 @@ void runCombined(TCanvas * c, const char * pdfPath, TFile * fout, int ir, const 
     return;
   }
   float mjRef[nMJ], mjRefErr[nMJ];
-  insitu_utility::multijetMeans(mjMC, 1.0, 0.0, mjRef, mjRefErr);
+  insitu_utility::multijetMeans(mjMC, 1.0, 0.0, mjRef, mjRefErr, false); // MC trees: already selected
 
   // 2D grid scan.
   const float lowa = insitu_utility::scanLow, higha = insitu_utility::scanHigh;

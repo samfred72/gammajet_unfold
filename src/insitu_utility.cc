@@ -384,30 +384,33 @@ vector<MultijetEvent> insitu_utility::cacheMultijetEvents(const char * filename,
   Long64_t n = t->GetEntries();
   for (Long64_t e = 0; e < n; e++) {
     t->GetEntry(e);
-    int bin = findMultijetPtBin(lead);
-    if (bin < 0) continue;
-    events.push_back({lead, sl, slphi, ssl, sslphi, w, bin});
+    events.push_back({lead, sl, slphi, ssl, sslphi, w});
   }
   f->Close();
   return events;
 }
 
-double insitu_utility::multijetBalance(const MultijetEvent & ev, double pa, double pb) {
+double insitu_utility::multijetBalance(const MultijetEvent & ev, double pa, double pb, double & leadCorr, bool applyCuts) {
   double lead = ev.lead / (pa + pb*ev.lead);
   double s1 = ev.sl / (pa + pb*ev.sl), s2 = ev.ssl / (pa + pb*ev.ssl);
+  leadCorr = lead;
   double px = s1*std::cos(ev.slphi) + s2*std::cos(ev.sslphi);
   double py = s1*std::sin(ev.slphi) + s2*std::sin(ev.sslphi);
   double recoil = std::sqrt(px*px + py*py);
+  if (applyCuts && (lead < multijetLeadCut || s1 < multijetRecoilJetCut || s2 < multijetRecoilJetCut ||
+                    recoil < multijetRecoilCut)) return -1;
   return recoil > 0 ? lead/recoil : -1;
 }
 
 void insitu_utility::multijetMeans(const vector<MultijetEvent> & events, double pa, double pb,
-    float mean[], float err[]) {
+    float mean[], float err[], bool applyCuts) {
   vector<double> sw(nMultijetPtBins,0), sw2(nMultijetPtBins,0), swx(nMultijetPtBins,0), swx2(nMultijetPtBins,0);
   for (auto & ev : events) {
-    double b = multijetBalance(ev, pa, pb);
-    if (b < multijetBalanceLow || b >= multijetBalanceHigh) continue;
-    sw[ev.bin] += ev.w; sw2[ev.bin] += ev.w*ev.w; swx[ev.bin] += ev.w*b; swx2[ev.bin] += ev.w*b*b;
+    double lead;
+    double b = multijetBalance(ev, pa, pb, lead, applyCuts);
+    int bin = findMultijetPtBin(lead);
+    if (bin < 0 || b < multijetBalanceLow || b >= multijetBalanceHigh) continue;
+    sw[bin] += ev.w; sw2[bin] += ev.w*ev.w; swx[bin] += ev.w*b; swx2[bin] += ev.w*b*b;
   }
   for (int i = 0; i < nMultijetPtBins; i++) {
     if (sw[i] <= 0) { mean[i] = 0; err[i] = 0; continue; }

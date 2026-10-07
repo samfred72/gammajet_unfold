@@ -18,6 +18,7 @@
 #include "TLatex.h"
 #include "TMarker.h"
 #include "TSystem.h"
+#include "TRandom3.h"
 #include <vector>
 #include <cmath>
 #include <iomanip>
@@ -25,9 +26,33 @@
 
 // Multijet balance analysis (from SDCC multiJet_legacy/analysis.cc). Reads the multiJet trees
 // (../trees/multijet_*.root): Data multijet_Data.root, MC multijet_<sim>_Jet{8,12,20,30}.root.
-// Build: ./make.sh    Run: ./analysis <0=pythia|1=herwig> [tree dir]
+// Build: ./make.sh    Run: ./analysis <0=pythia|1=herwig> [tree dir] [--no-jet8] [--tight] [--truth-smear]
+//   --no-jet5, --no-jet8  leave out that sample (the lowest sample used starts at truth pT 0)
+//   --truth-smear  MC jet pT from the truth-anchored JER smears (jet_pt_smear_{,high_,low_}truth)
+//   --no-smear     MC jet pT without the extra JER smearing (jet_pt_calib, in all three slots; a test)
+//   --recoil-smear truth2|all|hybrid|none   where jets 2+3 are added unsmeared and the sum smeared once:
+//                  truth2 (default) MC events whose jets 2 and 3 belong to one truth jet (see above), width
+//                  at that truth jet's pT; all: every MC event, width at the unsmeared recoil pT; hybrid:
+//                  every MC event, width at the truth jet's pT when jets 2 and 3 belong to one, else at the
+//                  unsmeared recoil pT; none: never
+//   --truth-jet-min X  truth-jet pT threshold for that matching (default 7 GeV)
+//   --no-recoil-cut  drop the recoil >= 14 GeV cut
+//   --tight    test cut: leading > 25 GeV; writes multijet_analysis_<sim>_tight.root
 // Writes multijet_analysis_<sim>.root; reads the MC reweighting fits aux/ratio<R>_<sim>.root
-// (from makeratio.C on a previous pass).
+// (from makeratio.C on a previous pass) and the JER smearing template aux/jer_smear_templates.root.
+//
+// Recoil = |pT,2 + pT,3| (vector sum of the subleading and subsubleading jets). Selection: leading jet
+// >= 20 GeV, jets 2 and 3 >= 7 GeV each (before any recoil smearing, so the selection stays inside both
+// skims), recoil >= 14 GeV, |eta| < 1.1-R for the three jets, dphi12 > 3pi/4, dphi13 > pi/2. In MC the
+// leading reco jet is also capped per sample (Jet12 <= 35 GeV, Jet20 <= 50 GeV).
+// MC jets are JER-smeared. When jets 2 and 3 (ranked by unsmeared pT) belong to one truth jet, they are
+// added unsmeared and the sum is smeared once at that truth jet's pT, with the same template; otherwise
+// every jet is smeared on its own. "Belong to one truth jet" (truth jets >= 7 GeV, match radius 0.75R):
+//   the leading jet matches a truth jet TL; jet 2 matches a different truth jet TR; jet 3 matches TR or no
+//   truth jet (never TL); every other truth jet is more than 1.5R from jets 2 and 3; and the summed
+//   recoil points within 0.75R of TR.
+// Trees from the current treemaker carry the reco-truth match (jet_truth_pt) and a per-event recoil
+// deviate (recoil_smear_z), used here when present; older trees fall back to a dR match and a drawn deviate.
 
 float deltaPhi(float phi1, float phi2) {
   float dphi = std::fabs(phi1 - phi2);
@@ -90,13 +115,36 @@ int main(int argc, char* argv[]) {
 
   gROOT->SetBatch(true);
   if (argc < 2) {
-    std::cerr << "Usage: " << argv[0] << " <0=pythia|1=herwig> [tree dir, default ../trees]" << std::endl;
+    std::cerr << "Usage: " << argv[0] << " <0=pythia|1=herwig> [tree dir, default ../trees] [--no-jet5] [--no-jet8] [--tight] [--truth-smear] [--no-smear] [--recoil-smear truth2|all|hybrid|none] [--no-recoil-cut] [--truth-jet-min X]" << std::endl;
     return 1;
   }
   bool isherwig = (strcmp(argv[1], "1") == 0);
-  const char * treedir = (argc > 2 ? argv[2] : "../trees");
+  const char * treedir = "../trees";
+  bool useJet5 = true, useJet8 = true, tight = false, truthSmear = false, noSmear = false, recoilCut = true;
+  std::string recoilMode = "truth2";
+  float truthJetMin = 7;   // truth jets used in the recoil matching
+  for (int a = 2; a < argc; a++) {
+    if (!strcmp(argv[a], "--no-jet5")) useJet5 = false;
+    else if (!strcmp(argv[a], "--no-jet8")) useJet8 = false;
+    else if (!strcmp(argv[a], "--tight")) tight = true;
+    else if (!strcmp(argv[a], "--truth-smear")) truthSmear = true;
+    else if (!strcmp(argv[a], "--no-smear")) noSmear = true;
+    else if (!strcmp(argv[a], "--no-recoil-cut")) recoilCut = false;
+    else if (!strcmp(argv[a], "--recoil-smear") && a+1 < argc) recoilMode = argv[++a];
+    else if (!strcmp(argv[a], "--truth-jet-min") && a+1 < argc) truthJetMin = atof(argv[++a]);
+    else if (argv[a][0] != '-') treedir = argv[a];
+    else { std::cerr << "Unknown option " << argv[a] << std::endl; return 1; }
+  }
   const char * sim = (isherwig ? "herwig" : "pythia");
-  std::cout << "sim is: " << argv[1] << " " << sim << std::endl;
+  const char * tag = (tight ? "_tight" : "");
+  std::cout << "sim is: " << argv[1] << " " << sim << (useJet8 ? "" : ", no Jet8") << (tight ? ", tight cuts" : "") << (truthSmear ? ", truth-anchored smearing" : "") << (noSmear ? ", no extra MC smearing" : "")
+            << ", recoil smearing " << recoilMode << (recoilCut ? "" : ", no recoil cut")
+            << ", truth jets >= " << truthJetMin << " GeV" << std::endl;
+  if (recoilMode != "truth2" && recoilMode != "all" && recoilMode != "hybrid" && recoilMode != "none") {
+    std::cerr << "--recoil-smear must be truth2, all, hybrid or none" << std::endl;
+    return 1;
+  }
+  const char * smearKind = truthSmear ? "truth" : "reco";
 
   // All 7 radii in one pass.
   const int nRadii = 7;
@@ -108,69 +156,87 @@ int main(int argc, char* argv[]) {
   const char * sysNames[nsystypes] = {"RECO","HIGH","LOW"};
   const char * fitFuncNames[nsystypes] = {"ratio_func_JERreco","ratio_func_JERhigh","ratio_func_JERlow"};
 
-  // file setup
-  TFile infile(Form("%s/multijet_Data.root", treedir), "READ"); // Data
-  // herwig has no Jet8 sample: that tree is skipped; pythia requires it
-  const char * f08name = Form("%s/multijet_%s_Jet8.root", treedir, sim);
-  TFile * f08 = gSystem->AccessPathName(f08name) ? nullptr : TFile::Open(f08name, "READ");
-  TFile f12(Form("%s/multijet_%s_Jet12.root", treedir, sim), "READ"); //sim
-  TFile f20(Form("%s/multijet_%s_Jet20.root", treedir, sim), "READ"); //sim
-  TFile f30(Form("%s/multijet_%s_Jet30.root", treedir, sim), "READ"); //sim
+  // Selection. Data trees (not the histograms) keep events down to the lowest in-situ JES the
+  // scans try, jesFloor: a jet passes there if pT/jesFloor passes the nominal cut.
+  const float leading_pT_Cutoff = tight ? 25 : 20;
+  const float recoilJetMin = 7;  // jets 2 and 3, each
+  const float recoilPtMin = recoilCut ? 14 : 0;  // |pT,2 + pT,3|
+  const float SSLDPHI = M_PI/2.0;
+  const float SLDPHI = 3*M_PI/4.0;
+  const float jesFloor = 0.9;
 
-  if (infile.IsZombie()) return 1;
-  if (!f08 || f08->IsZombie()) {
-    if (!isherwig) return 1;
-    std::cout << "No herwig Jet8 sample: skipping the Jet8 tree" << std::endl;
-    f08 = nullptr;
-  }
-  if (f12.IsZombie()) return 1;
-  if (f20.IsZombie()) return 1;
-  if (f30.IsZombie()) return 1;
-
-  // weighting
-
-  float leading_pT_Cutoff = 20;
-  float subleadingPTCutoff = 7;
-  float SSLCutOff = 7;
-  float SSLDPHI = M_PI/2.0;
-  float SLDPHI = 3*M_PI/4.0;
-
-  double weight8, weight12, weight20, weight30;
-  // pythia weights
-  if (!isherwig) {
-    weight8  = 1.3013e+07 / 2.5298e+03;// * 10000000.0 / 9998000.0;
-    weight12 = 1.4903e+06 / 2.5298e+03;
-    weight20 = 6.2623e+04 / 2.5298e+03;
-    weight30 = 1;
-  }
-  // herwig weights
-  else {
-    weight8  = 1.8437e+08 / 2.0694e+03;
-    weight12 = 1.1324e+06 / 2.0694e+03 * 10000000.0 / 10001000.0;
-    weight20 = 5.2613e+04 / 2.0694e+03 * 10000000.0 / 10913000.0;
-    weight30 = 1 * 10000000.0 / 9999000.0;
-  }
-  const int nsimtrees = 4;
+  // MC samples (index i-1; i = 0 is Data). Cross sections (pb) from the MDC2 table; herwig also
+  // corrects for the generated event counts. Weights are normalized to Jet30.
+  const int nsimtrees = 5;
   const int ntrees = nsimtrees + 1;
-  double weights[ntrees] = {1, weight8, weight12, weight20, weight30};
+  const char * treenames[ntrees] = {"data", "Jet5", "Jet8", "Jet12", "Jet20", "Jet30"};
+  const double xsec[2][nsimtrees] = {
+    {1.3878e+08, 1.3013e+07, 1.4903e+06, 6.2623e+04, 2.5298e+03}, // pythia
+    {1.8437e+08, 0, 1.132355e+06, 5.2613e+04, 2.0694e+03},        // herwig (no Jet8 sample)
+  };
+  const double neventCorr[2][nsimtrees] = {
+    {1, 1, 1, 1, 1},
+    {1, 1, 10000000.0/10001000.0, 10000000.0/10913000.0, 10000000.0/9999000.0},
+  };
+  // Highest leading reco jet pT (GeV) accepted from each sample (index = tree index, 0 = Data): keeps the
+  // heavily weighted low-pT-hat samples out of the bins the higher samples cover.
+  const float leadRecoMax[ntrees] = {1e9, 1e9, 1e9, 35, 50, 1e9};
 
-  // truth-pT-hat stitching windows: row = radius, column = data,Jet8,Jet12,Jet20,Jet30
-  double cutLow[nRadii][4] = {
-    {0,12,20,30}, {0,13,21,31}, {0,14,21,32}, {0,19,27,38},
-    {0,22,29,41}, {0,24,32,45}, {0,25,34,47}
+  // Leading-truth-jet pT (GeV) above which each sample is fully efficient, per radius (MDC2 table).
+  // Jet8 is not in that table: it can only be combined with Jet5 once these are filled in.
+  const double truthThreshold[nsimtrees][nRadii] = {
+    { 5,  6,  7, 10, 12, 14, 15}, // Jet5
+    {-1, -1, -1, -1, -1, -1, -1}, // Jet8 (unknown)
+    {12, 13, 14, 19, 22, 24, 25}, // Jet12
+    {20, 21, 21, 27, 29, 32, 34}, // Jet20
+    {30, 31, 32, 38, 41, 45, 47}, // Jet30
   };
-  double cutHigh[nRadii][4] = {
-    {12,20,30,100}, {13,21,31,100}, {14,21,32,100}, {19,27,38,100},
-    {22,29,41,100}, {24,32,45,100}, {25,34,47,100}
-  };
+
+  TFile * infile = TFile::Open(Form("%s/multijet_Data.root", treedir), "READ");
+  if (!infile || infile->IsZombie()) return 1;
+  TFile * simfile[nsimtrees] = {nullptr};
+  for (int k = 0; k < nsimtrees; k++) {
+    const char * name = Form("%s/multijet_%s_%s.root", treedir, sim, treenames[k+1]);
+    bool required = (k >= 2); // Jet12, Jet20, Jet30
+    const bool excluded = (k == 0 && !useJet5) || (k == 1 && !useJet8);
+    if (excluded || gSystem->AccessPathName(name)) {
+      if (required) { std::cerr << "Missing " << name << std::endl; return 1; }
+      std::cout << "Not using " << treenames[k+1] << (excluded ? " (excluded)" : " (no file)") << std::endl;
+      continue;
+    }
+    simfile[k] = TFile::Open(name, "READ");
+    if (!simfile[k] || simfile[k]->IsZombie()) return 1;
+  }
+  if (simfile[0] && simfile[1]) {
+    std::cerr << "Jet5 and Jet8 together need Jet8's truth-pT thresholds (truthThreshold); run with --no-jet8" << std::endl;
+    return 1;
+  }
+
+  const int isim = isherwig ? 1 : 0;
+  double weights[ntrees] = {1};
+  for (int k = 0; k < nsimtrees; k++) weights[k+1] = xsec[isim][k] / xsec[isim][nsimtrees-1] * neventCorr[isim][k];
+
+  // Truth-pT stitching windows: each used sample from its threshold up to the next used sample's;
+  // the lowest used sample starts at 0 (nothing below it).
   double lowcuts[nRadii][ntrees];
   double highcuts[nRadii][ntrees];
+  int firstMC = -1;
   for (int ir = 0; ir < nRadii; ir++) {
-    lowcuts[ir][0] = 0; highcuts[ir][0] = 100;
-    for (int k = 0; k < 4; k++) {
-      lowcuts[ir][k+1]  = cutLow[ir][k];
-      highcuts[ir][k+1] = cutHigh[ir][k];
+    lowcuts[ir][0] = 0; highcuts[ir][0] = 1e9;
+    int prev = -1;
+    for (int k = 0; k < nsimtrees; k++) {
+      if (!simfile[k]) continue;
+      lowcuts[ir][k+1] = (prev < 0) ? 0 : truthThreshold[k][ir];
+      highcuts[ir][k+1] = 1e9;
+      if (prev >= 0) highcuts[ir][prev+1] = truthThreshold[k][ir];
+      if (prev < 0) firstMC = k+1;
+      prev = k;
     }
+  }
+  for (int k = 0; k < nsimtrees; k++) {
+    if (!simfile[k]) continue;
+    std::cout << treenames[k+1] << ": weight " << weights[k+1] << ", R=0.4 truth window ["
+              << lowcuts[2][k+1] << ", " << highcuts[2][k+1] << ")" << std::endl;
   }
 
   // per-radius reweighting fits (makeratio.C)
@@ -189,14 +255,26 @@ int main(int argc, char* argv[]) {
     zvtxRatio[ir] = (TH1D*)fRatio[ir]->Get(Form("hratio_zvtx%d_%s", radii[ir], sim));
   }
 
+  // JER smearing template (nominal, up, down - the RECO/HIGH/LOW variations), as in the treemaker
+  TFile * fJER = TFile::Open("aux/jer_smear_templates.root", "READ");
+  if (!fJER || fJER->IsZombie()) { std::cerr << "Missing aux/jer_smear_templates.root" << std::endl; return 1; }
+  TH1D * jerWidth[nsystypes];
+  const char * jerNames[nsystypes] = {"nominal", "sysup", "sysdown"};
+  for (int j = 0; j < nsystypes; j++) {
+    jerWidth[j] = (TH1D*)fJER->Get(Form("h_jer_smear_r04_pileup_EMfracJES_%s", jerNames[j]));
+    jerWidth[j]->SetDirectory(0);
+  }
+  fJER->Close();
+  TRandom3 rnd(20261006);
+
   // output file: all radii, all systematics
-  TFile * wf = TFile::Open(Form("multijet_analysis_%s.root", sim), "RECREATE");
+  TFile * wf = TFile::Open(Form("multijet_analysis_%s%s.root", sim, tag), "RECREATE");
   wf->cd();
   gStyle->SetOptStat(0);
 
   // output histograms
-  std::vector<float> pTBins = {20,25,30,35,40,50,60,70};
-  const int nPtBins = 7;
+  std::vector<float> pTBins = {20,25,30,35,50};
+  const int nPtBins = 4;
 
   TH1D* leadingJetPT[nRadii];
   TH1D* leadingJetPT_Pyth[nRadii][nsystypes];
@@ -227,8 +305,8 @@ int main(int argc, char* argv[]) {
     heta0[ir]          = new TH1D(Form("heta0_r%d", radius), ";eta;counts", 100, -1.2, 1.2);
     heta1[ir]          = new TH1D(Form("heta1_r%d", radius), ";eta;counts", 100, -1.2, 1.2);
     heta2[ir]          = new TH1D(Form("heta2_r%d", radius), ";eta;counts", 100, -1.2, 1.2);
-    zvtx_data[ir]      = new TH1D(Form("zvtx_data_r%d", radius), ";z (mm);counts", 400, -1000, 1000);
-    zvtx_MC[ir]        = new TH1D(Form("zvtx_MC_r%d", radius), ";z (mm);counts", 400, -1000, 1000);
+    zvtx_data[ir]      = new TH1D(Form("zvtx_data_r%d", radius), ";z (cm);counts", 24, -60, 60);
+    zvtx_MC[ir]        = new TH1D(Form("zvtx_MC_r%d", radius), ";z (cm);counts", 24, -60, 60);
 
     for (int k = 0; k < nPtBins; k++) {
       hxj[ir][k][0][0] = new TH1D(Form("hxj_r%d_%1.0f_data", radius, pTBins[k]), ";x_{j};#frac{1}{N}#frac{dN}{dx_j}", 45, 0.4, 2.65);
@@ -240,9 +318,7 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  // output trees
-  const char * treenames[ntrees] = {"data", "Jet8", "Jet12", "Jet20", "Jet30"};
-
+  // output trees (one per MC sample slot, empty if the sample isn't used)
   TTree* outtree[nRadii][ntrees][nsystypes]; // for data (i=0) only the j=0 slot is used
 
   float LeadingPT[nRadii][ntrees][nsystypes];
@@ -278,16 +354,11 @@ int main(int argc, char* argv[]) {
   }
 
   // tree setup
-  TTree* TreeRead = (TTree*) infile.Get("ttree");
-  TTree *t08 = f08 ? (TTree*) f08->Get("ttree") : nullptr;
-  TTree *t12 = (TTree*) f12.Get("ttree");
-  TTree *t20 = (TTree*) f20.Get("ttree");
-  TTree *t30 = (TTree*) f30.Get("ttree");
-
-  TTree * intree[ntrees] = {TreeRead, t08, t12, t20, t30};
+  TTree * intree[ntrees] = {(TTree*) infile->Get("ttree")};
+  for (int k = 0; k < nsimtrees; k++) intree[k+1] = simfile[k] ? (TTree*) simfile[k]->Get("ttree") : nullptr;
 
   TCanvas * c = new TCanvas("c_unmatched","",500,1000);
-  c->SaveAs(Form("pdfs/unmatched_event_display_%s.pdf[", sim));
+  c->SaveAs(Form("pdfs/unmatched_event_display_%s%s.pdf[", sim, tag));
   int icount = 0;
 
   std::cout << "Running over trees..." << std::endl;
@@ -307,9 +378,12 @@ int main(int argc, char* argv[]) {
 
     std::vector<float>* jet_pt_calib[nRadii] = {nullptr};
     std::vector<float>* jet_eta_det[nRadii]  = {nullptr};
+    std::vector<float>* jet_eta[nRadii]      = {nullptr};
     std::vector<float>* jet_phi[nRadii]      = {nullptr};
+    std::vector<float>* jet_truth_pt[nRadii] = {nullptr};
+    float recoil_z[nRadii] = {0};
+    bool hasMatch = false, hasRecoilZ = false;
 
-    ULong64_t trigger = 0;
     float zvtx = 0;
     int mbd_hit = 0;
     double calib_lead_time = 0;
@@ -321,9 +395,14 @@ int main(int argc, char* argv[]) {
         intree[i]->SetBranchAddress(Form("truth_jet_pt_%d", radius), &TRUTH_pt[ir]);
         intree[i]->SetBranchAddress(Form("truth_jet_eta_%d", radius), &TRUTH_eta[ir]);
         intree[i]->SetBranchAddress(Form("truth_jet_phi_%d", radius), &TRUTH_phi[ir]);
-        intree[i]->SetBranchAddress(Form("jet_pt_smear_reco_%d", radius), &jet_pt_smearRECO[ir]);
-        intree[i]->SetBranchAddress(Form("jet_pt_smear_high_reco_%d", radius), &jet_pt_smearHIGH[ir]);
-        intree[i]->SetBranchAddress(Form("jet_pt_smear_low_reco_%d", radius), &jet_pt_smearLOW[ir]);
+        intree[i]->SetBranchAddress(Form("jet_pt_smear_%s_%d", smearKind, radius), &jet_pt_smearRECO[ir]);
+        intree[i]->SetBranchAddress(Form("jet_pt_smear_high_%s_%d", smearKind, radius), &jet_pt_smearHIGH[ir]);
+        intree[i]->SetBranchAddress(Form("jet_pt_smear_low_%s_%d", smearKind, radius), &jet_pt_smearLOW[ir]);
+        intree[i]->SetBranchAddress(Form("jet_eta_%d", radius), &jet_eta[ir]);
+        hasMatch = intree[i]->GetBranch(Form("jet_truth_pt_%d", radius));
+        hasRecoilZ = intree[i]->GetBranch(Form("recoil_smear_z_%d", radius));
+        if (hasMatch) intree[i]->SetBranchAddress(Form("jet_truth_pt_%d", radius), &jet_truth_pt[ir]);
+        if (hasRecoilZ) intree[i]->SetBranchAddress(Form("recoil_smear_z_%d", radius), &recoil_z[ir]);
       }
       intree[i]->SetBranchAddress(Form("jet_pt_calib_%d", radius), &jet_pt_calib[ir]);
       intree[i]->SetBranchAddress(Form("jet_eta_det_%d", radius), &jet_eta_det[ir]);
@@ -333,12 +412,12 @@ int main(int argc, char* argv[]) {
       intree[i]->SetBranchAddress("calib_lead_time", &calib_lead_time);
       intree[i]->SetBranchAddress("calib_delta_time", &calib_delta_time);
     }
-    intree[i]->SetBranchAddress("gl1_scaled", &trigger);
     intree[i]->SetBranchAddress("mbd_vertex_z", &zvtx);
     intree[i]->SetBranchAddress("mbd_hit", &mbd_hit);
 
     // tree analysis
     int matched_events[nRadii] = {0};
+    double nSelected[nRadii] = {0}, nRecoilSmeared[nRadii] = {0}; // selected RECO events, unweighted
     int passed_events[nRadii] = {0};
 
     Long64_t nentries = intree[i]->GetEntries();
@@ -357,19 +436,9 @@ int main(int argc, char* argv[]) {
         if (!(fabs(x) < 6 && fabs(y) < 3)) continue; //requiring timing cut
       }
 
-      // trigger selection
-      bool bit[64];
-      for (int b = 0; b < 64; b++) {
-        bit[b] = (((trigger >> b) & 0x1) == 0x1);
-      }
-      if (!isMC && !bit[22]) continue;
-
       for (int ir = 0; ir < nRadii; ir++) {
         int radius = radii[ir];
         float R = radius / 10.0f;
-
-        if (isMC) zvtx_MC[ir]->Fill(zvtx, weights[i]);
-        if (!isMC) zvtx_data[ir]->Fill(zvtx, weights[i]);
 
         if (jet_pt_calib[ir]->size() <= 2) continue; // requiring three jets
 
@@ -382,11 +451,61 @@ int main(int argc, char* argv[]) {
               TRUTH_pt[ir]->at(IDXTRUTH[0]) >= highcuts[ir][i]) continue;
           leadingJetPT_truth[ir]->Fill(TRUTH_pt[ir]->at(IDXTRUTH[0]), weights[i]);
         }
+        std::vector<int> truthJets;
+        if (isMC) for (size_t t = 0; t < TRUTH_pt[ir]->size(); t++) if (TRUTH_pt[ir]->at(t) >= truthJetMin) truthJets.push_back(t);
+        // Do jets 2 and 3 (ranked by unsmeared pT) belong to one truth jet? (see the header comment)
+        int recoilTruth = -1;
+        if (isMC && !noSmear && truthJets.size() >= 2 && (recoilMode == "truth2" || recoilMode == "hybrid")) {
+          std::vector<int> c = IDXGrab(jet_pt_calib[ir]->size(), *jet_pt_calib[ir]);
+          if (c[2] != -1) {
+            const float rMatch = 0.75*R, rIso = 1.5*R;
+            auto dRj = [&](int jet, int t) {
+              float de = jet_eta[ir]->at(jet) - TRUTH_eta[ir]->at(t), dp = deltaPhi(jet_phi[ir]->at(jet), TRUTH_phi[ir]->at(t));
+              return std::sqrt(de*de + dp*dp);
+            };
+            auto nearest = [&](int jet, int exclude) {
+              int best = -1; float bestDR = rMatch;
+              for (int t : truthJets) if (t != exclude && dRj(jet, t) < bestDR) { bestDR = dRj(jet, t); best = t; }
+              return best;
+            };
+            // leading jet: the treemaker's match when it is one of the truth jets, else the nearest within rMatch
+            int tL = -1;
+            const float leadMatch = hasMatch ? jet_truth_pt[ir]->at(c[0]) : -1;
+            for (int t : truthJets) if (leadMatch > 0 && std::fabs(TRUTH_pt[ir]->at(t) - leadMatch) < 1e-3) tL = t;
+            if (tL < 0) tL = nearest(c[0], -1);
+            const int tR = (tL >= 0) ? nearest(c[1], tL) : -1;
+            bool ok = (tL >= 0 && tR >= 0);
+            if (ok) {
+              const int t3 = nearest(c[2], -1); // jet 3: on the recoil truth jet, or on no truth jet
+              if (dRj(c[2], tL) < rMatch || (t3 >= 0 && t3 != tR && dRj(c[2], tR) >= rMatch)) ok = false;
+              for (int t : truthJets)               // other truth jets well away from jets 2 and 3
+                if (t != tL && t != tR && (dRj(c[1], t) < rIso || dRj(c[2], t) < rIso)) ok = false;
+            }
+            if (ok) {                               // the summed recoil points at the recoil truth jet
+              double px = 0, py = 0, pz = 0;
+              for (int k : {c[1], c[2]}) {
+                const double pt = jet_pt_calib[ir]->at(k), eta = jet_eta[ir]->at(k), phi = jet_phi[ir]->at(k);
+                px += pt*std::cos(phi); py += pt*std::sin(phi); pz += pt*std::sinh(eta);
+              }
+              const double ptSum = std::hypot(px, py);
+              if (ptSum > 0) {
+                const double de = std::asinh(pz/ptSum) - TRUTH_eta[ir]->at(tR);
+                const double dp = deltaPhi(std::atan2(py, px), TRUTH_phi[ir]->at(tR));
+                if (std::sqrt(de*de + dp*dp) < rMatch) recoilTruth = tR;
+              }
+            }
+          }
+        }
+        const bool recoilSmear = isMC && !noSmear &&
+                                 (recoilMode == "all" || recoilMode == "hybrid" || recoilTruth >= 0);
+        // one recoil deviate per event and radius, shared by the RECO/HIGH/LOW variations
+        const float recoilZ = !recoilSmear ? 0.f : hasRecoilZ ? recoil_z[ir] : (float)rnd.Gaus(0, 1);
 
         // loop over RECO / HIGH / LOW smeared pT
 
         std::vector<std::vector<float>*> ptVariations = (!isMC ?
-            std::vector<std::vector<float>*>{ jet_pt_calib[ir] } :
+            std::vector<std::vector<float>*>{ jet_pt_calib[ir] } : noSmear ?
+            std::vector<std::vector<float>*>{ jet_pt_calib[ir], jet_pt_calib[ir], jet_pt_calib[ir] } :
             std::vector<std::vector<float>*>{
               jet_pt_smearRECO[ir],
               jet_pt_smearHIGH[ir],
@@ -396,9 +515,30 @@ int main(int argc, char* argv[]) {
         for (int j = 0; j < nJloop; j++) {
 
           std::vector<float>* currentPt = ptVariations[j];
-          std::vector<int> Idx_Jets = IDXGrab(currentPt->size(), *currentPt);
+          std::vector<float>* rankPt = recoilSmear ? jet_pt_calib[ir] : currentPt;
+          std::vector<int> Idx_Jets = IDXGrab(rankPt->size(), *rankPt);
 
           if (Idx_Jets[0] == -1 || Idx_Jets[1] == -1 || Idx_Jets[2] == -1) continue;
+
+          const float lead = currentPt->at(Idx_Jets[0]);
+          float pt2 = currentPt->at(Idx_Jets[1]), pt3 = currentPt->at(Idx_Jets[2]);
+          if (recoilSmear) {
+            pt2 = jet_pt_calib[ir]->at(Idx_Jets[1]);
+            pt3 = jet_pt_calib[ir]->at(Idx_Jets[2]);
+          }
+          const float cut2 = pt2, cut3 = pt3; // the per-jet cuts use the values before any recoil smearing
+          if (recoilSmear) {
+            // add jets 2 and 3 unsmeared, smear the sum once at the recoil truth jet's pT, and scale both
+            // jets by the same factor so their vector sum is the smeared recoil
+            const float sum = newCoordinates(pt2, jet_phi[ir]->at(Idx_Jets[1]), pt3, jet_phi[ir]->at(Idx_Jets[2]), false);
+            // width at the matched recoil truth jet's pT, or at the unsmeared recoil pT ("all", unmatched "hybrid")
+            const float ptTruth = recoilTruth >= 0 ? TRUTH_pt[ir]->at(recoilTruth) : sum;
+            const float width = jerWidth[j]->Interpolate(std::min(std::max(ptTruth, 5.01f), 79.9f));
+            const float smeared = sum + recoilZ * ptTruth * width;
+            if (sum <= 0 || smeared <= 0) continue;
+            pt2 *= smeared / sum;
+            pt3 *= smeared / sum;
+          }
 
           float dPhi13 = deltaPhi(
               jet_phi[ir]->at(Idx_Jets[0]),
@@ -409,14 +549,29 @@ int main(int argc, char* argv[]) {
               jet_phi[ir]->at(Idx_Jets[0]),
               jet_phi[ir]->at(Idx_Jets[1])
               );
-          float phi23 = newCoordinates(currentPt->at(Idx_Jets[1]), jet_phi[ir]->at(Idx_Jets[1]),
-                                       currentPt->at(Idx_Jets[2]), jet_phi[ir]->at(Idx_Jets[2]), true);
+          float phi23 = newCoordinates(pt2, jet_phi[ir]->at(Idx_Jets[1]), pt3, jet_phi[ir]->at(Idx_Jets[2]), true);
+          const float recoil = newCoordinates(pt2, jet_phi[ir]->at(Idx_Jets[1]), pt3, jet_phi[ir]->at(Idx_Jets[2]), false);
           float dPhi123 = deltaPhi(
               jet_phi[ir]->at(Idx_Jets[0]),
               phi23
               );
 
-          if (i == 1 && j == 0) {
+          const float floorScale = isMC ? 1.f : jesFloor;
+          if (leading_pT_Cutoff*floorScale > lead ||
+              lead > leadRecoMax[i] ||
+              recoilJetMin*floorScale > cut2 ||
+              recoilJetMin*floorScale > cut3 ||
+              recoilPtMin*floorScale > recoil ||
+              std::fabs(jet_eta_det[ir]->at(Idx_Jets[0])) > (1.1-R) ||
+              std::fabs(jet_eta_det[ir]->at(Idx_Jets[1])) > (1.1-R) ||
+              std::fabs(jet_eta_det[ir]->at(Idx_Jets[2])) > (1.1-R) ||
+              std::fabs(dPhi13) < SSLDPHI ||
+              std::fabs(dPhi12) < SLDPHI
+             ) continue;
+          // nominal selection (the loose Data events above only go to the output tree)
+          const bool passNominal = lead >= leading_pT_Cutoff && cut2 >= recoilJetMin && cut3 >= recoilJetMin && recoil >= recoilPtMin;
+
+          if (passNominal && i == firstMC && j == 0) {
             dphi12[ir]->Fill(dPhi12);
             dphi13[ir]->Fill(dPhi13);
             heta0[ir]->Fill(jet_eta_det[ir]->at(Idx_Jets[0]));
@@ -424,25 +579,13 @@ int main(int argc, char* argv[]) {
             heta2[ir]->Fill(jet_eta_det[ir]->at(Idx_Jets[2]));
           }
 
-          if (leading_pT_Cutoff > currentPt->at(Idx_Jets[0]) ||
-              subleadingPTCutoff > currentPt->at(Idx_Jets[1]) ||
-              SSLCutOff > currentPt->at(Idx_Jets[2]) ||
-              30 <= currentPt->at(Idx_Jets[1]) ||
-              30 <= currentPt->at(Idx_Jets[2]) ||
-              std::fabs(jet_eta_det[ir]->at(Idx_Jets[0])) > (1.1-R) ||
-              std::fabs(jet_eta_det[ir]->at(Idx_Jets[1])) > (1.1-R) ||
-              std::fabs(jet_eta_det[ir]->at(Idx_Jets[2])) > (1.1-R) ||
-              std::fabs(dPhi13) < SSLDPHI ||
-              std::fabs(dPhi12) < SLDPHI
-             ) continue;
-
-          if (isMC && j == 0) {
+          if (isMC && j == 0 && !recoilSmear) {
             bool match0 = (std::fabs(currentPt->at(Idx_Jets[0]) - jet_pt_calib[ir]->at(Idx_Jets[0])) > 0.00001);
             bool match1 = (std::fabs(currentPt->at(Idx_Jets[1]) - jet_pt_calib[ir]->at(Idx_Jets[1])) > 0.00001);
             bool match2 = (std::fabs(currentPt->at(Idx_Jets[2]) - jet_pt_calib[ir]->at(Idx_Jets[2])) > 0.00001);
 
             if (match0 && match1 && match2) { matched_events[ir]++; }
-            else if (ir == reprRadiusIdx && i == 1 && icount < 100) { // bad-event display (radius 4, Jet8 MC)
+            else if (ir == reprRadiusIdx && i == firstMC && icount < 100) { // bad-event display (radius 4, lowest MC sample)
               c->cd();
 
               TH2D *h = new TH2D(Form("heventdisplay_%d",icount), ";#eta;#phi", 100,-1.5,1.5, 100,-M_PI,M_PI);
@@ -511,7 +654,7 @@ int main(int argc, char* argv[]) {
 
               c->Modified();
               c->Update();
-              c->SaveAs(Form("pdfs/unmatched_event_display_%s.pdf", sim));
+              c->SaveAs(Form("pdfs/unmatched_event_display_%s%s.pdf", sim, tag));
 
               icount++;
               delete h;
@@ -519,13 +662,13 @@ int main(int argc, char* argv[]) {
             passed_events[ir]++;
           }
 
-          double fitValue = myFit[ir][j]->Eval(currentPt->at(Idx_Jets[0]));
+          double fitValue = myFit[ir][j]->Eval(lead);
           double zvtxValue = zvtxRatio[ir]->GetBinContent(zvtxRatio[ir]->FindBin(zvtx));
           double w_ratio = (isMC ? zvtxValue * fitValue * weights[i] : weights[i]);
 
-          LeadingPT[ir][i][j] = currentPt->at(Idx_Jets[0]);
-          SLPT[ir][i][j]      = currentPt->at(Idx_Jets[1]);
-          SSLPT[ir][i][j]     = currentPt->at(Idx_Jets[2]);
+          LeadingPT[ir][i][j] = lead;
+          SLPT[ir][i][j]      = pt2;
+          SSLPT[ir][i][j]     = pt3;
 
           SLeta[ir][i][j]  = jet_eta_det[ir]->at(Idx_Jets[1]);
           SLphi[ir][i][j]  = jet_phi[ir]->at(Idx_Jets[1]);
@@ -533,13 +676,17 @@ int main(int argc, char* argv[]) {
           SSLphi[ir][i][j] = jet_phi[ir]->at(Idx_Jets[2]);
 
           PT23[ir][i][j] = newCoordinates(SLPT[ir][i][j], SLphi[ir][i][j], SSLPT[ir][i][j], SSLphi[ir][i][j], false);
+          weight[ir][i][j] = w_ratio;
+          outtree[ir][i][j]->Fill();
+          if (!passNominal) continue;
+          if (isMC && j == 0) { nSelected[ir]++; if (recoilSmear) nRecoilSmeared[ir]++; }
+
           if (i > 0 && j == 0) {
             dphi1_23[ir]->Fill(dPhi123, w_ratio);
           }
           if (i == 0 && j == 0) {
             dphi1_23_data[ir]->Fill(dPhi123);
           }
-          weight[ir][i][j] = w_ratio;
 
           for (int k = 0; k < (int)pTBins.size()-1; k++){
             if (LeadingPT[ir][i][j] > pTBins[k] && LeadingPT[ir][i][j] < pTBins[k+1]){
@@ -547,9 +694,11 @@ int main(int argc, char* argv[]) {
               else       hxj[ir][k][j][1]->Fill(LeadingPT[ir][i][j] / PT23[ir][i][j], w_ratio);
             }
           }
-          if (!isMC) leadingJetPT[ir]->Fill(          LeadingPT[ir][i][j], weights[i]); // used for w_ratio, not here
-          if (isMC)  leadingJetPT_Pyth[ir][j]->Fill(  LeadingPT[ir][i][j], weights[i]); // used for w_ratio, not here
-          outtree[ir][i][j]->Fill();
+          // Inputs to makeratio.C's reweighting, after the full selection and with the
+          // cross-section weights only: each correction is derived from the unreweighted MC.
+          if (!isMC) leadingJetPT[ir]->Fill(LeadingPT[ir][i][j]);
+          if (isMC)  leadingJetPT_Pyth[ir][j]->Fill(LeadingPT[ir][i][j], weights[i]);
+          if (j == 0) (isMC ? zvtx_MC[ir] : zvtx_data[ir])->Fill(zvtx, weights[i]);
         }
       }
     }
@@ -557,10 +706,11 @@ int main(int argc, char* argv[]) {
     if (i > 0) {
       for (int ir = 0; ir < nRadii; ir++) {
         std::cout << "  r0" << radii[ir] << " fraction of matched events: " << matched_events[ir] << " / " << passed_events[ir]
-                   << " = " << (passed_events[ir] ? (float)matched_events[ir]/(float)passed_events[ir] : 0.f) << std::endl;
+                   << " = " << (passed_events[ir] ? (float)matched_events[ir]/(float)passed_events[ir] : 0.f)
+                   << "; recoil-smeared: " << nRecoilSmeared[ir] << " / " << nSelected[ir] << " selected" << std::endl;
       }
     }
-    if (i == 1) c->SaveAs(Form("pdfs/unmatched_event_display_%s.pdf]", sim));
+    if (i == firstMC) c->SaveAs(Form("pdfs/unmatched_event_display_%s%s.pdf]", sim, tag));
   }
 
   // writing

@@ -24,7 +24,7 @@ const char * insitu_pdf_dir    = ana::path("insitu/pdfs");
 const int ir = 2;
 
 // Jet12 cross-section weight (drawer.h's scalemap).
-map<int,double> jet_scale = {{12,3.997e+06}};
+map<int,double> jet_scale = {{12,1.4903e+06}};
 
 // One xJ histogram per pT bin from one insitu tree for one ABCD region, scaled by weight times
 // the tree's weight branch (1 for Data). Empty histograms if the file is missing.

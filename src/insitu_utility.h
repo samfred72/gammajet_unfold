@@ -10,8 +10,8 @@
 
 // Helpers shared by the insitu/*.C JES scans.
 struct DataEvent { float pho_pt, jet_pt; int ptbin; };
-// Multijet balance event: leading pT, recoil jets' pT/phi, leading-pT bin, weight (1 for Data).
-struct MultijetEvent { float lead, sl, slphi, ssl, sslphi, w; int bin; };
+// Multijet balance event: leading pT, recoil jets' pT/phi, weight (1 for Data).
+struct MultijetEvent { float lead, sl, slphi, ssl, sslphi, w; };
 
 class insitu_utility {
   public:
@@ -89,14 +89,17 @@ class insitu_utility {
     // ----- Multijet balance (grid_insitu.C combined mode) -----
     // Reads multijet/analysis.cc's per-radius trees from multijet_analysis_<sim>.root, so the multijet
     // selection and MC weighting live only there:
-    //   Data: ttree_data_r<10R>; MC: ttree_<Jet8..Jet30>_r<10R>_<RECO|HIGH|LOW>
+    //   Data: ttree_data_r<10R>; MC: ttree_<Jet5..Jet30>_r<10R>_<RECO|HIGH|LOW>
     // B = pT,lead / |pT,sub + pT,subsub|. A constant JES cancels in B, so it constrains only the slope pb
-    // of f(pT) = pa + pb*pT.
-    static constexpr int nMultijetPtBins = 7;
-    static constexpr double multijetPtBins[nMultijetPtBins+1] = {20, 25, 30, 35, 40, 50, 60, 70}; // = analysis.cc pTBins
+    // of f(pT) = pa + pb*pT. The Data trees keep events down to analysis.cc's jesFloor, so the pT cuts
+    // below are applied after each jet is divided by f.
+    static constexpr int nMultijetPtBins = 4;
+    static constexpr double multijetPtBins[nMultijetPtBins+1] = {20, 25, 30, 35, 50}; // = analysis.cc pTBins
     static constexpr float multijetBalanceLow = 0.4, multijetBalanceHigh = 2.65; // = analysis.cc hxj range
-    static constexpr int nMultijetMCSamples = 4;
-    static constexpr const char * multijetMCSamples[nMultijetMCSamples] = {"Jet8", "Jet12", "Jet20", "Jet30"};
+    // = analysis.cc cuts: leading jet, jets 2 and 3 each, recoil |pT2 + pT3|
+    static constexpr float multijetLeadCut = 20, multijetRecoilJetCut = 7, multijetRecoilCut = 14;
+    static constexpr int nMultijetMCSamples = 5;
+    static constexpr const char * multijetMCSamples[nMultijetMCSamples] = {"Jet5", "Jet8", "Jet12", "Jet20", "Jet30"};
 
     static int findMultijetPtBin(double leadPt);
     static string multijetAnalysisFilename(const char * multijet_dir, const char * sim);
@@ -104,11 +107,14 @@ class insitu_utility {
     static string multijetSysName(const string & systag);
     // Empty vector, with a warning, if the file or tree is missing.
     static vector<MultijetEvent> cacheMultijetEvents(const char * filename, const string & treename);
-    // B with each jet divided by f at its own pT.
-    static double multijetBalance(const MultijetEvent & ev, double pa, double pb);
+    // B with each jet divided by f at its own pT, and the corrected leading pT; -1 if the corrected
+    // jets fail the pT cuts.
+    // applyCuts=false for the MC trees: analysis.cc already selected them, and in its two-truth-jet
+    // events jets 2 and 3 are stored scaled to the smeared recoil.
+    static double multijetBalance(const MultijetEvent & ev, double pa, double pb, double & leadCorr, bool applyCuts = true);
     // Weighted mean B and Kish error per leading-pT bin, for B in [multijetBalanceLow, multijetBalanceHigh).
     static void multijetMeans(const vector<MultijetEvent> & events, double pa, double pb,
-        float mean[], float err[]);
+        float mean[], float err[], bool applyCuts = true);
 };
 
 #endif // INSITU_UTILITY_H

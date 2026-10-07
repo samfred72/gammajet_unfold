@@ -41,7 +41,7 @@ bool shapeMethod = false; // set by grid_insitu_jet12(..., method)
 const string mcTrigger = "Jet12_long";
 
 // Jet12 cross-section weight (drawer.h's scalemap); cancels with one sample.
-map<int,double> jet_scale = {{12,3.997e+06}};
+map<int,double> jet_scale = {{12,1.4903e+06}};
 
 // Mean xJ vs pT for MC and raw Data (top); raw and corrected ratios (bottom).
 void drawJESPage(TCanvas * c, const char * pdfPath, const char * label, int ir,

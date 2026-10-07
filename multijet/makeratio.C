@@ -35,8 +35,9 @@ void makeratio() {
 
       TH1D * hdataz = (TH1D*)f->Get(Form("zvtx_data_r%d", i));
       TH1D * hMCz = (TH1D*)f->Get(Form("zvtx_MC_r%d", i));
-      hdataz->Scale(1.0/hdataz->Integral(189,213,"width"));
-      hMCz->Scale(1.0/hMCz->Integral(189,213,"width"));
+      // |z| < 60 cm, after the full selection (analysis.cc)
+      hdataz->Scale(1.0/hdataz->Integral("width"));
+      hMCz->Scale(1.0/hMCz->Integral("width"));
 
       TH1D * ratioz = (TH1D*)hdataz->Clone(Form("hratio_zvtx%i_%s",i,names[in]));
       ratioz->Reset("ICES");
