@@ -1,0 +1,159 @@
+% Multijet balance: three ways to treat the MC recoil (R = 0.4)
+\documentclass[aspectratio=169,10pt]{beamer}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}{\hfill\insertframenumber\,/\,\inserttotalframenumber\hspace{1em}\vspace{0.6em}}
+\newcommand{\xj}{x_{j}}
+
+\title{Multijet balance: smearing the recoil in MC}
+\subtitle{Four configurations, R = 0.4}
+\author{Samuel F.\ Liechty}
+\date{October 7, 2026}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{Common setup}
+  \begin{itemize}
+    \item $\xj = p_{T,\mathrm{lead}} / |\vec p_{T,2} + \vec p_{T,3}|$; the recoil is $|\vec p_{T,2} + \vec p_{T,3}|$.
+    \item Reprocessed data and Pythia8 trees (new skim, per-event seeded JER smearing).
+    \item MC: Jet12, Jet20, Jet30; Jet12 starts at truth $p_T = 0$.
+    \item Leading reco jet capped at 35 GeV in Jet12 and 50 GeV in Jet20.
+    \item Leading jet $\geq 20$ GeV, jets 2 and 3 $\geq 7$ GeV each, $|\eta| < 0.7$, $\Delta\phi_{12} > 3\pi/4$, $\Delta\phi_{13} > \pi/2$.
+    \item Leading-$p_T$ bins 20--25, 25--30, 30--35, 35--50 GeV.
+    \item MC reweighted in leading $p_T$ and $z$ vertex; two passes.
+    \item Only the treatment of the MC recoil changes between the configurations.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{The four configurations}
+  \centering
+  \begin{tabular}{llll}
+    \toprule
+    & jets 2 and 3 & recoil smearing & recoil cut \\
+    \midrule
+    1 & each smeared on its own & none & none \\
+    2 & each smeared on its own & none & $\geq 14$ GeV \\
+    3 & added unsmeared & sum smeared once, every event & $\geq 14$ GeV \\
+    \midrule
+    4 & 2 truth jets: added unsmeared & 2 truth jets: sum smeared once & $\geq 14$ GeV \\
+            & otherwise: each smeared on its own & otherwise: none & \\
+    \bottomrule
+  \end{tabular}
+  \vspace{1em}
+  \begin{itemize}
+    \item In configuration 3 the smearing width is taken at the unsmeared recoil $p_T$, so truth is used only for the sample stitching.
+    \item Configuration 4 smears the recoil only in events with exactly two truth jets $\geq 7$ GeV, with the width at the recoil truth jet's $p_T$.
+    \item Its other events (about 30\% at R = 0.4) smear jets 2 and 3 individually, as in configuration 2.
+    \item The 7 GeV jet cuts use the values before any recoil smearing.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Result: data/MC of $\langle \xj \rangle$, R = 0.4}
+  \centering
+  \small
+  \begin{tabular}{lcccc}
+    \toprule
+    & 20--25 & 25--30 & 30--35 & 35--50 \\
+    \midrule
+    1: individual, no recoil cut & 1.019 $\pm$ 0.003 & 1.025 $\pm$ 0.005 & 1.020 $\pm$ 0.008 & 1.031 $\pm$ 0.011 \\
+    2: individual, recoil cut & 1.026 $\pm$ 0.003 & 1.031 $\pm$ 0.005 & 1.020 $\pm$ 0.008 & 1.030 $\pm$ 0.011 \\
+    3: recoil smeared, all events & 0.998 $\pm$ 0.004 & 0.990 $\pm$ 0.005 & 0.979 $\pm$ 0.007 & 0.980 $\pm$ 0.011 \\
+    4: recoil smeared, 2 truth jets & 0.997 $\pm$ 0.004 & 1.001 $\pm$ 0.005 & 0.985 $\pm$ 0.008 & 0.986 $\pm$ 0.011 \\
+    hybrid: all events, truth width if 2 & 1.000 $\pm$ 0.004 & 0.991 $\pm$ 0.005 & 0.979 $\pm$ 0.007 & 0.980 $\pm$ 0.011 \\
+    \midrule
+    data events & 16090 & 5346 & 1640 & 590 \\
+    \bottomrule
+  \end{tabular}
+  \vspace{1em}
+  \begin{itemize}
+    \item The recoil cut removes about 1.5\% of data events and moves the ratio by at most 0.007.
+    \item Smearing the summed recoil once raises the MC $\langle\xj\rangle$ by 2.5--5\%.
+    \item Hybrid (configuration 3 with the truth width in two-truth-jet events) matches configuration 3, so the width choice does not matter.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Configuration 1: individual smearing, no recoil cut}
+  \begin{columns}[T]
+    \begin{column}{0.62\textwidth}
+      \includegraphics[width=\linewidth,page=7]{figs/dists_cfg1.pdf}
+    \end{column}
+    \begin{column}{0.36\textwidth}
+      \includegraphics[width=\linewidth,page=7]{figs/means_cfg1.pdf}
+    \end{column}
+  \end{columns}
+  \vspace{0.3em}
+  \begin{itemize}
+    \item Data lies 2--3\% above MC in every bin.
+    \item The MC $\xj$ distribution peaks slightly lower than data.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Configuration 2: individual smearing, recoil $\geq 14$ GeV}
+  \begin{columns}[T]
+    \begin{column}{0.62\textwidth}
+      \includegraphics[width=\linewidth,page=7]{figs/dists_cfg2.pdf}
+    \end{column}
+    \begin{column}{0.36\textwidth}
+      \includegraphics[width=\linewidth,page=7]{figs/means_cfg2.pdf}
+    \end{column}
+  \end{columns}
+  \vspace{0.3em}
+  \begin{itemize}
+    \item Nearly identical to configuration 1.
+    \item Two jets of at least 7 GeV almost always give a recoil above 14 GeV.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Configuration 3: add unsmeared, smear the recoil, recoil $\geq 14$ GeV}
+  \begin{columns}[T]
+    \begin{column}{0.62\textwidth}
+      \includegraphics[width=\linewidth,page=7]{figs/dists_cfg3.pdf}
+    \end{column}
+    \begin{column}{0.36\textwidth}
+      \includegraphics[width=\linewidth,page=7]{figs/means_cfg3.pdf}
+    \end{column}
+  \end{columns}
+  \vspace{0.3em}
+  \begin{itemize}
+    \item The distributions agree over the whole $\xj$ range in the first three bins.
+    \item The ratio is about 1.00 at 20--25 GeV and 0.98--0.99 above.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Configuration 4: recoil smearing only in two-truth-jet events}
+  \begin{columns}[T]
+    \begin{column}{0.62\textwidth}
+      \includegraphics[width=\linewidth,page=7]{figs/dists_default.pdf}
+    \end{column}
+    \begin{column}{0.36\textwidth}
+      \includegraphics[width=\linewidth,page=7]{figs/means_default.pdf}
+    \end{column}
+  \end{columns}
+  \vspace{0.3em}
+  \begin{itemize}
+    \item Events with exactly two truth jets $\geq 7$ GeV: jets 2 and 3 added unsmeared, the sum smeared at the recoil truth jet's $p_T$.
+    \item All other events: jets 2 and 3 smeared individually.
+    \item The ratio is 1.00 at 20--30 GeV and about 0.985 above.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Summary}
+  \begin{itemize}
+    \item How the recoil is smeared, not the recoil cut, sets the data/MC agreement.
+    \item Smearing jets 2 and 3 individually leaves a 2--3\% data excess.
+    \item Adding jets 2 and 3 unsmeared and smearing the sum once removes it.
+    \item Configuration 3 agrees with configuration 4 at 20--25 GeV and is about 1\% lower above.
+    \item That difference comes from the events without exactly two truth jets, which configuration 4 smears individually; the width choice plays no role.
+    \item Configuration 3 needs no truth information, so it is the simpler definition to document.
+  \end{itemize}
+\end{frame}
+
+\end{document}
