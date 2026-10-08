@@ -179,9 +179,12 @@ string ana::purityFilename(const string & systag) {
 }
 
 // Cache the purity file per systag: toy loops call these thousands of times.
-static TFile * cachedPurityFile(const string & systag) {
+// threejet at R = 0.2 uses the nominal purity: there the veto removes the non-isolated regions B/D about
+// twice as often as A/C (claude_checks/insitu_variations/threejet_dr.C, threejet_runaway.C), which leaves
+// the 25-35 GeV purity at 0.66 against 0.76-0.89 for every other variation.
+static TFile * cachedPurityFile(const string & systag, int ir) {
   static map<string, TFile*> cache;
-  string fname = ana::purityFilename(systag);
+  string fname = ana::purityFilename((systag == "threejet" && ir == 0) ? "nominal" : systag);
   auto it = cache.find(fname);
   if (it != cache.end() && it->second && !it->second->IsZombie()) return it->second;
   TFile * f = TFile::Open(fname.c_str());
@@ -192,7 +195,7 @@ static TFile * cachedPurityFile(const string & systag) {
 // low/high are one ana::ptBins bin's edges, so the center gives the bin index. Each radius's curves
 // live in the ana::rnames[ir] subdirectory.
 float ana::getPurity(float low, float high, string systag, int ir) {
-  TFile * f = cachedPurityFile(systag);
+  TFile * f = cachedPurityFile(systag, ir);
   TGraphAsymmErrors * oh = (TGraphAsymmErrors*)f->Get(Form("%s/combined", rnames[ir]));
   int ipt = findPtBin((low+high)/2.0);
   if (ipt < 0) {
@@ -205,14 +208,14 @@ float ana::getPurity(float low, float high, string systag, int ir) {
   return y;
 }
 float ana::getPurity(float val, string systag, int ir) {
-  TFile * f = cachedPurityFile(systag);
+  TFile * f = cachedPurityFile(systag, ir);
   TF1 * func = (TF1*)f->Get(Form("%s/func", rnames[ir]));
   float ret = func->Eval(val);
   return ret;
 }
 // Bootstrap errors are asymmetric (16th/84th percentiles); keep them so.
 float ana::getPurityErrorLow(float low, float high, string systag, int ir) {
-  TFile * f = cachedPurityFile(systag);
+  TFile * f = cachedPurityFile(systag, ir);
   TGraphAsymmErrors * oh = (TGraphAsymmErrors*)f->Get(Form("%s/combined", rnames[ir]));
   int ipt = findPtBin((low+high)/2.0);
   if (ipt < 0) {
@@ -224,7 +227,7 @@ float ana::getPurityErrorLow(float low, float high, string systag, int ir) {
   return err;
 }
 float ana::getPurityErrorHigh(float low, float high, string systag, int ir) {
-  TFile * f = cachedPurityFile(systag);
+  TFile * f = cachedPurityFile(systag, ir);
   TGraphAsymmErrors * oh = (TGraphAsymmErrors*)f->Get(Form("%s/combined", rnames[ir]));
   int ipt = findPtBin((low+high)/2.0);
   if (ipt < 0) {
@@ -237,7 +240,7 @@ float ana::getPurityErrorHigh(float low, float high, string systag, int ir) {
 }
 // Region-C analogues of the above ("combined_C" graph).
 float ana::getPurityC(float low, float high, string systag, int ir) {
-  TFile * f = cachedPurityFile(systag);
+  TFile * f = cachedPurityFile(systag, ir);
   TGraphAsymmErrors * oh = (TGraphAsymmErrors*)f->Get(Form("%s/combined_C", rnames[ir]));
   int ipt = findPtBin((low+high)/2.0);
   if (ipt < 0) {
@@ -250,7 +253,7 @@ float ana::getPurityC(float low, float high, string systag, int ir) {
   return y;
 }
 float ana::getPurityCErrorLow(float low, float high, string systag, int ir) {
-  TFile * f = cachedPurityFile(systag);
+  TFile * f = cachedPurityFile(systag, ir);
   TGraphAsymmErrors * oh = (TGraphAsymmErrors*)f->Get(Form("%s/combined_C", rnames[ir]));
   int ipt = findPtBin((low+high)/2.0);
   if (ipt < 0) {
@@ -262,7 +265,7 @@ float ana::getPurityCErrorLow(float low, float high, string systag, int ir) {
   return err;
 }
 float ana::getPurityCErrorHigh(float low, float high, string systag, int ir) {
-  TFile * f = cachedPurityFile(systag);
+  TFile * f = cachedPurityFile(systag, ir);
   TGraphAsymmErrors * oh = (TGraphAsymmErrors*)f->Get(Form("%s/combined_C", rnames[ir]));
   int ipt = findPtBin((low+high)/2.0);
   if (ipt < 0) {

@@ -146,6 +146,11 @@ void unfolder::fill_matrix() {
 
       for (int ir = 0; ir < ana::nJetR; ir++) {
         if (isMC && !keepMC[ir]) continue;
+        // Data timing cut (ana::timing*); a failing event is dropped for this radius.
+        if (!isMC) {
+          if (fabs(cluster_time - ana::timingClusterCenter) >= ana::timingClusterHalfWidth) continue;
+          if (jet_pt_calib[ir] > 0 && fabs(cluster_time - jet_time[ir]) >= ana::timingDeltaMax) continue;
+        }
 
         // JER/emscale variations are MC only; jes_high/low are Data only.
         float recoJetPt;
