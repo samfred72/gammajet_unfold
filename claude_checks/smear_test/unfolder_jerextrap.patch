@@ -1,0 +1,107 @@
+diff --git a/src/unfolder.cc b/src/unfolder.cc
+index fbe9e5e..725fd9b 100644
+--- a/src/unfolder.cc
++++ b/src/unfolder.cc
+@@ -2,6 +2,53 @@
+ #include "insitu_utility.h"
+ using namespace std;
+ 
++// TRIAL (claude_checks/smear_test, branch jerextrap): GAMMAJET_JER_EXTRAP=lin15|lin5|tmpl|calib re-smears the MC
++// jet_pt_smear_truth with the nominal JER width extrapolated differently at low pT, as in
++// claude_checks/smear_test/fill_jet12_extrap.C:
++//   lin15  template above 15 GeV, its tangent at 15 GeV below
++//   lin5   template above its first bin centre c1 (5.19 GeV), its first segment continued below
++//   tmpl   the template itself (reproduces the stored smear; same bookkeeping as the others)
++//   calib  no extra smearing (jet pT = pt_calib)
++// The treemaker smeared with Gaus(pt_calib, pt_ref * w(pt_ref)) (CaloAna.cc smear_pt), pt_ref = matched truth
++// pT, or pt_calib if unmatched; only reco jets with pt_calib >= 5 GeV are matched (CaloAna.cc:316). Neither
++// the deviate nor pt_ref is stored, so: pt_ref = pt_calib below 5 GeV (exact); above, the stored leading truth
++// recoil jet if within 0.75R of the reco jet, else pt_calib (approximation, counted). The deviate is
++// recovered as z = (smear - calib) / (pt_ref w_tmpl(pt_ref)) and reused with the new width.
++namespace {
++  int jerExtrapMode() {
++    static int m = [] { const char * e = getenv("GAMMAJET_JER_EXTRAP"); if (!e) return 0;
++                        string s = e; return s == "lin15" ? 1 : s == "lin5" ? 2 : s == "tmpl" ? 3 : s == "calib" ? 4 : 0; }();
++    return m;
++  }
++  TH1D * jerNominal() {
++    static TH1D * h = [] {
++      TDirectory * saved = gDirectory;
++      TFile f(ana::path("claude_checks/smear_test/jerband_smearing_templates.root"), "read");
++      TH1D * x = (TH1D*)f.Get("h_jer_smear_r04_pileup_EMfracJES_nominal");
++      x->SetDirectory(0);
++      saved->cd();
++      return x;
++    }();
++    return h;
++  }
++  double jerWidth(int mode, double pt) {
++    TH1D * h = jerNominal();
++    if (mode == 1) {
++      const double w15 = h->Interpolate(15), s15 = (h->Interpolate(15.01) - h->Interpolate(14.99)) / 0.02;
++      return pt >= 15 ? h->Interpolate(pt) : w15 + s15*(pt - 15);
++    }
++    if (mode == 2) {
++      const double c1 = h->GetBinCenter(1), w5 = h->GetBinContent(1);
++      const double s5 = (h->GetBinContent(2) - h->GetBinContent(1)) / (h->GetBinCenter(2) - c1);
++      return pt >= c1 ? h->Interpolate(pt) : w5 + s5*(pt - c1);
++    }
++    return h->Interpolate(pt);
++  }
++  long nJerRef[3] = {0, 0, 0};    // R=0.4 jets, every event read: pt_calib < 5 (exact), truth-matched, pt_calib fallback
++  long nJerRefSel[3] = {0, 0, 0}; // the same for R=0.4 region-A in-situ pairs (first systag)
++  int jerRefKind[ana::nJetR];
++}
++
+ unfolder::~unfolder() {}
+ 
+ bool unfolder::check_pair(jet_object jet, int ir, pho_object pho, bool isreco, float testPt, float floorScale) {
+@@ -87,6 +134,28 @@ void unfolder::fill_matrix() {
+ 
+     if (fabs(vz) > ana::vzcut) continue;
+ 
++    if (isMC && jerExtrapMode() > 0) {
++      for (int ir = 0; ir < ana::nJetR; ir++) {
++        const float calib = jet_pt_calib[ir];
++        if (calib <= 0) continue;
++        int kind = 2;
++        float ptRef = calib;
++        if (calib < ana::jet_calib_pt_cut[ir]) kind = 0;
++        else if (truth_jet_pt[ir] > 0) {
++          float deta = jet_eta[ir] - truth_jet_eta[ir], dphi = fabs(jet_phi[ir] - truth_jet_phi[ir]);
++          if (dphi > M_PI) dphi = 2*M_PI - dphi;
++          if (sqrt(deta*deta + dphi*dphi) < 0.75*ana::JetRs[ir]) { kind = 1; ptRef = truth_jet_pt[ir]; }
++        }
++        if (ir == 2) nJerRef[kind]++;
++        jerRefKind[ir] = kind;
++        const double wT = jerWidth(0, ptRef);
++        if (wT <= 0 || ptRef <= 0) continue;
++        const double z = (jet_pt_smear_truth[ir] - calib) / (ptRef*wT);
++        const int mode = jerExtrapMode();
++        jet_pt_smear_truth[ir] = mode == 4 ? calib : calib + z*ptRef*jerWidth(mode == 3 ? 0 : mode, ptRef);
++      }
++    }
++
+     // -----------------------
+     // Event selection (systag-independent)
+     // -----------------------
+@@ -251,6 +320,7 @@ void unfolder::fill_matrix() {
+           insitu_weight[isys] = mcWeight;
+           insitu_ir[isys] = ir;
+           insitu_tree[isys]->Fill();
++          if (isMC && jerExtrapMode() > 0 && isys == 0 && ir == 2 && iabcd_reco == 0 && jet_pt_calib[ir] > 0) nJerRefSel[jerRefKind[ir]]++;
+         }
+ 
+         // hpurity_num/den are not used downstream (the purity comes from hclusterpt_abcd via
+@@ -515,6 +585,11 @@ void unfolder::savehists(TEfficiency * h[], int n) {
+ 
+ void unfolder::end() {
+   int nsys = (int)systags.size();
++  if (isMC && jerExtrapMode() > 0)
++    cout << "JER extrapolation mode " << jerExtrapMode() << ", R=0.4 jets: pt_calib<5 " << nJerRef[0]
++         << ", truth-matched " << nJerRef[1] << ", pt_calib fallback " << nJerRef[2] << endl
++         << "JER extrapolation region-A R=0.4 in-situ pairs: pt_calib<5 " << nJerRefSel[0]
++         << ", truth-matched " << nJerRefSel[1] << ", pt_calib fallback " << nJerRefSel[2] << endl;
+ 
+   for (int isys = 0; isys < nsys; isys++) {
+     insitu_file[isys]->cd();

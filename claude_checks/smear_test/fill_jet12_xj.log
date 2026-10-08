@@ -1,0 +1,10 @@
+Processing fill_jet12_xj.C...
+events 509589, truth-window 268509, truth2 recoil-matched 109771; jets 1075845, tmpl vs jet_pt_smear_reco mismatches 0
+perjet  selected (unweighted):  calib 3909  tmpl 7531  lin15 5172  lin5 9076
+   20-25 GeV  <xJ>:  calib 1.0871+-0.0043  tmpl 1.0489+-0.0031  lin15 1.0705+-0.0038  lin5 1.0497+-0.0028
+   25-30 GeV  <xJ>:  calib 1.2029+-0.0091  tmpl 1.1583+-0.0068  lin15 1.1938+-0.0084  lin5 1.1627+-0.0064
+   30-35 GeV  <xJ>:  calib 1.2770+-0.0190  tmpl 1.2602+-0.0151  lin15 1.2873+-0.0179  lin5 1.2495+-0.0138
+truth2  selected (unweighted):  calib 3909  tmpl 5238  lin15 4421  lin5 5719
+   20-25 GeV  <xJ>:  calib 1.0871+-0.0043  tmpl 1.0765+-0.0038  lin15 1.0816+-0.0043  lin5 1.0826+-0.0036
+   25-30 GeV  <xJ>:  calib 1.2029+-0.0091  tmpl 1.2001+-0.0084  lin15 1.2067+-0.0091  lin5 1.2109+-0.0083
+   30-35 GeV  <xJ>:  calib 1.2770+-0.0190  tmpl 1.3009+-0.0186  lin15 1.3037+-0.0193  lin5 1.3038+-0.0180

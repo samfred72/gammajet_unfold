@@ -1,0 +1,20 @@
+Processing draw_smear_function.C...
+Error in <TFile::TFile>: file /projects/sali6653/PPG18_analysis/hists/Jet8_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /projects/sali6653/PPG18_analysis/hists/Jet20_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /projects/sali6653/PPG18_analysis/hists/Jet30_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /projects/sali6653/PPG18_analysis/hists/Jet50_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /projects/sali6653/PPG18_analysis/hists/Jet60_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /projects/sali6653/PPG18_analysis/hists/Jet80_pythia_nominal_unfolding.root does not exist
+Info in <TCanvas::Print>: pdf file pdfs/smear_function.pdf has been created
+pT   nominal  up      down   (sigma/pT)
+ 1.00  0.5601  0.6431  0.4750
+ 2.00  0.5601  0.6431  0.4750
+ 3.00  0.5601  0.6431  0.4750
+ 4.00  0.5601  0.6431  0.4750
+ 5.00  0.5601  0.6431  0.4750
+ 5.19  0.5601  0.6431  0.4750
+ 6.00  0.4735  0.5428  0.4024
+ 8.00  0.3355  0.3823  0.2874
+10.00  0.2536  0.2862  0.2199
+15.00  0.1481  0.1604  0.1351
+20.00  0.1007  0.1073  0.0934

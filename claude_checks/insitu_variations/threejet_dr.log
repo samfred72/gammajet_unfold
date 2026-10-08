@@ -1,0 +1,22 @@
+Paired events vetoed by the three-jet cut (third jet / p_a > 5 GeV), and the part with DeltaR(photon, third jet) < 0.4
+R=0.2, 15-35 GeV:
+  A (iso, tight)           pairs   3655  vetoed  37.3%  vetoed with dR<0.4   0.1%
+  B (non-iso, tight)       pairs    968  vetoed  68.5%  vetoed with dR<0.4  16.3%
+  C (iso, non-tight)       pairs   2820  vetoed  41.0%  vetoed with dR<0.4   0.1%
+  D (non-iso, non-tight)   pairs   1806  vetoed  66.6%  vetoed with dR<0.4  14.3%
+R=0.2, 25-35 GeV:
+  A (iso, tight)           pairs     95  vetoed  61.1%  vetoed with dR<0.4   0.0%
+  B (non-iso, tight)       pairs     15  vetoed  66.7%  vetoed with dR<0.4  13.3%
+  C (iso, non-tight)       pairs     68  vetoed  48.5%  vetoed with dR<0.4   0.0%
+  D (non-iso, non-tight)   pairs     39  vetoed  69.2%  vetoed with dR<0.4  15.4%
+R=0.4, 15-35 GeV:
+  A (iso, tight)           pairs   3729  vetoed  28.3%  vetoed with dR<0.4   0.0%
+  B (non-iso, tight)       pairs    900  vetoed  41.4%  vetoed with dR<0.4   0.0%
+  C (iso, non-tight)       pairs   2785  vetoed  32.4%  vetoed with dR<0.4   0.0%
+  D (non-iso, non-tight)   pairs   1670  vetoed  37.3%  vetoed with dR<0.4   0.0%
+R=0.4, 25-35 GeV:
+  A (iso, tight)           pairs     90  vetoed  40.0%  vetoed with dR<0.4   0.0%
+  B (non-iso, tight)       pairs     14  vetoed  57.1%  vetoed with dR<0.4   0.0%
+  C (iso, non-tight)       pairs     67  vetoed  28.4%  vetoed with dR<0.4   0.0%
+  D (non-iso, non-tight)   pairs     37  vetoed  29.7%  vetoed with dR<0.4   0.0%
+Wrote /projects/sali6653/PPG18_analysis/claude_checks/insitu_variations/pdfs/threejet_dr.pdf
