@@ -59,6 +59,9 @@ class unfold_utility {
     // falls back to raw region A.
     // ir selects the radius's purity curve (default R = 0.4; per-radius callers must pass it).
     // quietAll silences the fallback warning for every slice (repeated calls such as toy loops).
+    // Negative purity-corrected contents in the buffer pT bins are set to 0 (clampBufferNegatives; see
+    // the .cc). Reported bins are not changed.
+    static constexpr bool clampBufferNegatives = true;
     static TH1D * buildFullyCorrected(TH1D * flatA, TH1D * flatC, const char * tag, string systag, int ir = 2, bool quietAll = false);
 };
 

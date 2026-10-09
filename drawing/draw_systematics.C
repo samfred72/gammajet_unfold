@@ -16,19 +16,23 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 //   - JER/JES/emscale/EMR high/low: per-source, per-bin sign split (asymmetricSystematics).
 //   - Purity: the five ABCD boundary sources in one symmetric quadrature sum (PPG12 Sec. 5.3).
 //   - Unfolding: up = niterHigh (+) prior, down = niterLow (+) prior.
-//   - threejet, herwig: symmetric.
+//   - threejet, timingwide, herwig: symmetric (timingwide is one-sided: a wider window, no direction).
 // Writes the ratio and fractional difference per (source, pT bin) to systematics.root.
 
 // Jet radius index, set by draw_systematics(int); default R=0.4.
 int ir = 2;
 const int nPtBinsUsed = ana::nPtBinsUsed; // reported bins start at ana::firstUsedPtBin
 const int niterate = 2;
+// herwig (generator) source switched off: the current Herwig production has wrong settings. To be
+// restored once Herwig is reproduced - set true (no other change needed).
+const bool includeHerwig = false;
 // ana::systags minus nominal, plus the sources that are not reprocessings. A new systag needs
 // systColors/systSources entries (.at() throws if missing).
 const vector<string> systematics = [] {
   vector<string> v;
   for (const string & s : ana::systags) if (s != "nominal") v.push_back(s);
-  v.insert(v.end(), {"herwig", "niterLow", "niterHigh", "priorSensitivity"});
+  if (includeHerwig) v.push_back("herwig");
+  v.insert(v.end(), {"niterLow", "niterHigh", "priorSensitivity"});
   return v;
 }();
 const map<string,int> systColors = {
@@ -46,6 +50,7 @@ const map<string,int> systColors = {
   {"narrowBDTbkg", kBlue+3},
   {"narrowISObkg", kMagenta+3},
   {"wideISObkg",   kMagenta-4},
+  {"timingwide",   kOrange+3},
   {"herwig",       kSpring+5},
   {"niterLow",     kCyan+2},
   {"niterHigh",    kViolet+1},
@@ -70,6 +75,7 @@ const map<string, SystSource> systSources = {
   {"narrowBDTbkg", {"pythia", "narrowBDTbkg", niterate}},
   {"narrowISObkg", {"pythia", "narrowISObkg", niterate}},
   {"wideISObkg",   {"pythia", "wideISObkg",   niterate}},
+  {"timingwide",   {"pythia", "timingwide",   niterate}},
   {"herwig",       {"herwig", "nominal",      niterate}},
   {"niterLow",     {"pythia", "nominal",      niterate-1}},
   {"niterHigh",    {"pythia", "nominal",      niterate+1}},
@@ -91,18 +97,23 @@ const int colorMagenta   = TColor::GetColor("#e87ba4");
 const int colorPurity    = TColor::GetColor("#008300");
 const int colorRed       = TColor::GetColor("#e34948");
 const int colorGrey      = TColor::GetColor("#767676");
+const int colorBrown     = TColor::GetColor("#8a5a2b"); // ninth source (timing); outside the 8-hue set
 
 // Final-page grouping: a high/low pair shares one color and legend entry; a symmetric source is
 // drawn with its negation. Purity and Unfolding members are drawn only as the combined curves.
 struct DisplayGroup { string label; int color; vector<string> members; bool symmetric; };
-const vector<DisplayGroup> displayGroups = {
+const vector<DisplayGroup> displayGroups = [] {
+  vector<DisplayGroup> v = {
   {"JER",       colorBlue,    {"JERhigh", "JERlow"},          false},
   {"JES",       colorOrange,  {"jes_high", "jes_low"},        false},
   {"EM scale",  colorAqua,    {"emscale_high", "emscale_low"},false},
   {"EMR",       colorGrey,    {"EMRhigh", "EMRlow"},          false},
   {"threejet",  colorMagenta, {"threejet"},                   true},
-  {"herwig",    colorRed,     {"herwig"},                     true},
-};
+  {"timing",    colorBrown,   {"timingwide"},                 true},
+  };
+  if (includeHerwig) v.push_back({"herwig", colorRed, {"herwig"}, true});
+  return v;
+}();
 // Combined into one symmetric Purity source.
 const set<string> purityMembers = {
   "narrowBDT", "narrowISO", "narrowBDTbkg", "narrowISObkg", "wideISObkg"

@@ -175,6 +175,14 @@ TH1D * unfold_utility::buildFullyCorrected(TH1D * flatA, TH1D * flatC, const cha
     // Last pT bin (35-100 GeV migration buffer) has an empty region B.
     bool quiet = quietAll || (ipt == ana::nPtBins - 1);
     TH1D * hcorr = purityCorrect(A, C, pA, pAErrLow, pAErrHigh, pC, pCErrLow, pCErrHigh, Form("htmpcorr_%s_pt%d", tag, ipt), nullptr, quiet);
+    // Buffer pT bins (not reported): negative purity-corrected contents set to 0, errors kept. Bayesian
+    // unfolding assumes a non-negative input; a negative buffer bin (35-100 GeV, x_J 0.4-0.5: -4 +- 4)
+    // made the unfolding blow up at isolated iterations beyond ~7 (refolding and response-toy chi2
+    // spikes; claude_checks/unfold_iterations). Reported bins are left as measured.
+    bool isBuffer = ipt < ana::firstUsedPtBin || ipt >= ana::firstUsedPtBin + ana::nPtBinsUsed;
+    if (hcorr && isBuffer && clampBufferNegatives) {
+      for (int b = 1; b <= hcorr->GetNbinsX(); b++) if (hcorr->GetBinContent(b) < 0) hcorr->SetBinContent(b, 0);
+    }
     reflattenXj(hcorr ? hcorr : A, ipt, flatCorrected);
     delete A; delete C; if (hcorr) delete hcorr;
   }

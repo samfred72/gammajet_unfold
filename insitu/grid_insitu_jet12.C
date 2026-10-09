@@ -234,6 +234,7 @@ void grid_insitu_jet12(string systag = "nominal", string method = "mean") {
     if (shapeMethod) {
       vector<vector<double>> countXj(nPtBinsUsed, vector<double>(ana::nUnfoldXjBins, 0.));
       for (auto & ev : dataA) {
+        if (insitu_utility::vetoed(ev, pa)) continue;
         float x = (ev.jet_pt/pa)/ev.pho_pt;
         if (x < lowXj[ev.ptbin]) continue;
         int ixj = ana::findUnfoldXjBin(x);
@@ -270,6 +271,7 @@ void grid_insitu_jet12(string systag = "nominal", string method = "mean") {
     vector<double> sumA(nPtBinsUsed,0), sumA2(nPtBinsUsed,0);
     vector<int> countA(nPtBinsUsed,0);
     for (auto & ev : dataA) {
+      if (insitu_utility::vetoed(ev, pa)) continue;
       float x = (ev.jet_pt/pa)/ev.pho_pt;
       if (x < lowXj[ev.ptbin]) continue;
       sumA[ev.ptbin]  += x;

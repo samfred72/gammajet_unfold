@@ -1,0 +1,23 @@
+Processing iter_test.C...
+Error in <TFile::TFile>: file /projects/sali6653/PPG18_analysis/hists/Jet8_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /projects/sali6653/PPG18_analysis/hists/Jet20_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /projects/sali6653/PPG18_analysis/hists/Jet30_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /projects/sali6653/PPG18_analysis/hists/Jet50_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /projects/sali6653/PPG18_analysis/hists/Jet60_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /projects/sali6653/PPG18_analysis/hists/Jet80_pythia_nominal_unfolding.root does not exist
+iter | refold chi2 asis  clamped | resp-toy chi2 asis  clamped (60 toys)
+   1 |     0.5784     0.5934 |    7.665e-07    3.706e-07
+   2 |     0.5708     0.5800 |    3.466e-06    1.547e-06
+   3 |     0.5677     0.5740 |    4.249e-06    2.425e-06
+   4 |     0.5660     0.5710 |    5.313e-06    3.724e-06
+   5 |     0.5641     0.5693 |    1.565e-05    7.667e-06
+   6 |     0.5630     0.5678 |    1.454e-05    8.463e-06
+   7 |     1.4342     0.5661 |       0.1304    9.936e-06
+   8 |     0.6497     0.5643 |        15.19    1.396e-05
+   9 |     0.5948     0.5623 |       0.2565    1.635e-05
+  10 |     0.5419     0.5602 |        3.247    2.016e-05
+  11 |     0.5406     0.5580 |        1.166     2.88e-05
+  12 |     0.5395     0.5559 |      0.03595    3.144e-05
+  13 |     0.5384     0.5538 |       0.2398    3.774e-05
+  14 |     0.9990     0.5518 |       0.1306    3.875e-05
+  15 |     0.7527     0.5498 |        23.41    4.786e-05

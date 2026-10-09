@@ -1,6 +1,7 @@
 #include "../src/ana.h"
 #include "../src/insitu_utility.h"
 #include "../src/unfold_utility.h"
+#include "../src/purity_utility.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -30,8 +31,10 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 //     purity-corrected A/C combination. draw_jes_summary.C turns this into ana.h's constants.
 //   mode "combined": gamma+jet plus multijet/analysis.cc's balance, fitting f(pT) = pa + pb*pT
 //     on a 2D grid (multijet fixes the slope, gamma+jet the normalization). Cross-check only.
-// Regions A and C are scaled by the same pa; the purity is held fixed (the JES does not move
-// isolation/BDT).
+// Regions A and C are scaled by the same pa. The Data purity depends on pa through the pairing (jet pT
+// cut, x_J floor), so in gammajet mode it is recomputed from the Data insitu tree at the scan result and
+// the scan repeated until the two agree (self-consistent; no re-unfolding needed). fixedPurity, and
+// combined mode, use purity_<systag>.root, made at the pa of the last unfolding.
 
 // insitu/: inputs/ (insitu trees), output/ (.root), pdfs/.
 const char * insitu_input_dir  = ana::path("insitu/inputs");
@@ -48,6 +51,7 @@ bool shapeMethod = false; // set by grid_insitu(..., method)
 
 // Photon5/10/20 cross-section weights (drawer.h's scalemap).
 map<int,double> photon_scale = {{5,146359.3},{10,6944.675},{20,130.4461}};
+map<int,double> photon_scale_herwig = {{5,6.48487e+07},{10,3.62808e+02},{20,5.34010e+01}};
 
 // Combined mode: directory of multijet/analysis.cc's output (selection and weights are its).
 string multijet_analysis_dir = ana::path("multijet"); // non-const so a test can point it elsewhere
@@ -198,8 +202,11 @@ void runCombined(TCanvas * c, const char * pdfPath, TFile * fout, int ir, const 
     const float refMean[], const float refMeanErr[], const float purity[], const float purityC[],
     const float lowXj[]);
 
-// onlyIr >= 0: one radius only. method = "mean" or "shape" (gammajet mode only).
-void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr = -1, string method = "mean") {
+// onlyIr >= 0: one radius only. method = "mean" or "shape" (gammajet mode only). fixedPurity: hold the
+// purity at purity_<systag>.root instead of the self-consistent iteration. paStart > 0: start that
+// iteration there instead of at the ana.h table value.
+void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr = -1, string method = "mean",
+    bool fixedPurity = false, float paStart = -1) {
   if (mode != "gammajet" && mode != "combined") {
     cout << "ERROR: mode must be \"gammajet\" or \"combined\", got \"" << mode << "\"" << endl;
     return;
@@ -209,6 +216,13 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
   shapeMethod = (method == "shape");
   if (shapeMethod && combined) { cout << "ERROR: the shape method is gammajet-mode only" << endl; return; }
   const string tag = combined ? "combined_" + systag : (shapeMethod ? "shapechi2_" + systag : systag);
+  // systag "herwig" (generator systematic, not an ana::systags entry): the MC reference is Herwig;
+  // Data, purity and everything else are nominal.
+  const bool herwig = (systag == "herwig");
+  if (herwig && combined) { cout << "ERROR: herwig is gammajet-mode only" << endl; return; }
+  const string inSystag = herwig ? "nominal" : systag; // input trees, purity, starting pa
+  const char * mcSim = herwig ? "herwig" : "pythia";
+  map<int,double> & mcScale = herwig ? photon_scale_herwig : photon_scale;
   // Don't auto-register new histograms into whichever radius directory is current.
   TH1::AddDirectory(kFALSE);
 
@@ -223,7 +237,7 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
   for (int ir = 0; ir < ana::nJetR; ir++) {
   if (onlyIr >= 0 && ir != onlyIr) continue;
 
-  string dataFile = insitu_utility::insituFilename(insitu_input_dir, "Data", "", systag);
+  string dataFile = insitu_utility::insituFilename(insitu_input_dir, "Data", "", inSystag);
   vector<DataEvent> dataA = insitu_utility::cacheDataEvents(dataFile.c_str(), 0, ir);
   vector<DataEvent> dataC = insitu_utility::cacheDataEvents(dataFile.c_str(), 2, ir);
   cout << "Cached Data events: region A=" << dataA.size() << " region C=" << dataC.size() << endl;
@@ -234,9 +248,9 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
 
   float refMean[nPtBinsUsed], refMeanErr[nPtBinsUsed];
   vector<pair<string,double>> mcSamples = {
-    {insitu_utility::insituFilename(insitu_input_dir, "Photon5",  "pythia", systag), photon_scale[5]},
-    {insitu_utility::insituFilename(insitu_input_dir, "Photon10", "pythia", systag), photon_scale[10]},
-    {insitu_utility::insituFilename(insitu_input_dir, "Photon20", "pythia", systag), photon_scale[20]},
+    {insitu_utility::insituFilename(insitu_input_dir, "Photon5",  mcSim, inSystag), mcScale[5]},
+    {insitu_utility::insituFilename(insitu_input_dir, "Photon10", mcSim, inSystag), mcScale[10]},
+    {insitu_utility::insituFilename(insitu_input_dir, "Photon20", mcSim, inSystag), mcScale[20]},
   };
   insitu_utility::referenceMeans(mcSamples, 0, ir, refMean, refMeanErr, lowXj);
   vector<vector<double>> refFrac, refFracErr;
@@ -246,18 +260,50 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
          << "): " << refMean[ipt] << " +/- " << refMeanErr[ipt] << endl;
   }
 
-  // Purity per pT bin, fixed across the scan.
+  // Purity per pT bin, fixed within one scan. Self-consistent (gammajet mode unless fixedPurity): Data
+  // counts from the insitu tree at paPurity (purity_utility::dataCountsFromTree, the unfolder's pairing)
+  // and the MC leakage fractions, solved as puritymaker.C. threejet at R=0.2 uses the nominal tree and
+  // leakage, as ana::getPurity does (ana.cc).
   float purity[nPtBinsUsed], purityErrLow[nPtBinsUsed], purityErrHigh[nPtBinsUsed];
   float purityC[nPtBinsUsed], purityCErrLow[nPtBinsUsed], purityCErrHigh[nPtBinsUsed];
-  for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
-    purity[ipt]        = ana::getPurity(ana::ptBinsUsed[ipt], ana::ptBinsUsed[ipt+1], systag, ir);
-    purityErrLow[ipt]  = ana::getPurityErrorLow(ana::ptBinsUsed[ipt], ana::ptBinsUsed[ipt+1], systag, ir);
-    purityErrHigh[ipt] = ana::getPurityErrorHigh(ana::ptBinsUsed[ipt], ana::ptBinsUsed[ipt+1], systag, ir);
-    purityC[ipt]        = ana::getPurityC(ana::ptBinsUsed[ipt], ana::ptBinsUsed[ipt+1], systag, ir);
-    purityCErrLow[ipt]  = ana::getPurityCErrorLow(ana::ptBinsUsed[ipt], ana::ptBinsUsed[ipt+1], systag, ir);
-    purityCErrHigh[ipt] = ana::getPurityCErrorHigh(ana::ptBinsUsed[ipt], ana::ptBinsUsed[ipt+1], systag, ir);
-    cout << "Purity pt bin " << ipt << ": P_A=" << purity[ipt] << " P_C=" << purityC[ipt] << endl;
+  const bool selfConsistent = !combined && !fixedPurity;
+  const string puritySystag = (systag == "threejet" && ir == 0) ? "nominal" : inSystag;
+  const string purityDataFile = insitu_utility::insituFilename(insitu_input_dir, "Data", "", puritySystag);
+  TH1D * leak[4];
+  TH1D * counts[4];
+  if (selfConsistent) {
+    purity_utility::leakageFractions(puritySystag, ir, leak);
+    for (int j = 0; j < 4; j++) {
+      counts[j] = new TH1D(Form("purity_counts_%d", j), "", ana::nPtBins, ana::ptBins);
+      counts[j]->Sumw2();
+    }
   }
+  auto setPurity = [&](float paPur) {
+    if (!selfConsistent) {
+      for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
+        purity[ipt]        = ana::getPurity(ana::ptBinsUsed[ipt], ana::ptBinsUsed[ipt+1], inSystag, ir);
+        purityErrLow[ipt]  = ana::getPurityErrorLow(ana::ptBinsUsed[ipt], ana::ptBinsUsed[ipt+1], inSystag, ir);
+        purityErrHigh[ipt] = ana::getPurityErrorHigh(ana::ptBinsUsed[ipt], ana::ptBinsUsed[ipt+1], inSystag, ir);
+        purityC[ipt]        = ana::getPurityC(ana::ptBinsUsed[ipt], ana::ptBinsUsed[ipt+1], inSystag, ir);
+        purityCErrLow[ipt]  = ana::getPurityCErrorLow(ana::ptBinsUsed[ipt], ana::ptBinsUsed[ipt+1], inSystag, ir);
+        purityCErrHigh[ipt] = ana::getPurityCErrorHigh(ana::ptBinsUsed[ipt], ana::ptBinsUsed[ipt+1], inSystag, ir);
+        cout << "Purity pt bin " << ipt << ": P_A=" << purity[ipt] << " P_C=" << purityC[ipt] << endl;
+      }
+      return;
+    }
+    purity_utility::dataCountsFromTree(purityDataFile, ir, paPur, counts);
+    TGraphAsymmErrors * gC = nullptr;
+    TGraphAsymmErrors * gA = purity_utility::combine(counts, leak, &gC, false);
+    for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
+      int i = ana::findPtBin((ana::ptBinsUsed[ipt] + ana::ptBinsUsed[ipt+1])/2.0); // as ana::getPurity
+      purity[ipt]  = gA->GetPointY(i); purityErrLow[ipt]  = gA->GetErrorYlow(i); purityErrHigh[ipt]  = gA->GetErrorYhigh(i);
+      purityC[ipt] = gC->GetPointY(i); purityCErrLow[ipt] = gC->GetErrorYlow(i); purityCErrHigh[ipt] = gC->GetErrorYhigh(i);
+      cout << "Purity pt bin " << ipt << " at p_a=" << paPur << ": P_A=" << purity[ipt] << " P_C=" << purityC[ipt] << endl;
+    }
+    delete gA; delete gC;
+  };
+  float paPurity = (paStart > 0) ? paStart : ana::jesForSystag(inSystag, ir);
+  setPurity(paPurity);
 
   if (combined) {
     runCombined(c, pdfPathStr.c_str(), fout, ir, systag, dataA, dataC, refMean, refMeanErr, purity, purityC, lowXj);
@@ -270,16 +316,30 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
   const int na = insitu_utility::scanN;
   const float lowa = insitu_utility::scanLow, higha = insitu_utility::scanHigh;
 
-  TGraph * gchisqA    = new TGraph(na);
-  TGraph * gchisqCorr = new TGraph(na);
+  // Self-consistency loop: scan at fixed purity; if the purity-corrected result is not the grid point the
+  // purity was made at, remake the purity there and rescan. The counts are discrete, so purity(p_a) can
+  // make the result flip between neighbouring grid points: on a cycle (a result already scanned), the
+  // scan in the cycle with the lowest chi2 minimum is redone and its result reported.
+  const int maxSelfConsistentIter = 10;
+  vector<float> scannedPa, scannedChi2; // purity point of each scan and its purity-corrected chi2 minimum
+  bool cycleRescan = false;
+  TGraph * gchisqA = nullptr;
+  TGraph * gchisqCorr = nullptr;
+  float minchisqA, minpaA, minchisqCorr, minpaCorr;
+  int ibestA, ibestCorr;
+  for (int iterSC = 1; ; iterSC++) {
+  delete gchisqA;
+  delete gchisqCorr;
+  gchisqA    = new TGraph(na);
+  gchisqCorr = new TGraph(na);
   gchisqA->SetName("gchisq_regionA");
   gchisqA->SetTitle(shapeMethod ? ";p_{a} (jet_{pt,corrected} = jet_{pt}/p_{a});Shape #chi^{2}" : ";p_{a} (jet_{pt,corrected} = jet_{pt}/p_{a});#chi^{2}");
   gchisqCorr->SetName("gchisq_puritycorrected");
   gchisqCorr->SetTitle(shapeMethod ? ";p_{a} (jet_{pt,corrected} = jet_{pt}/p_{a});Shape #chi^{2}" : ";p_{a} (jet_{pt,corrected} = jet_{pt}/p_{a});#chi^{2}");
 
-  float minchisqA = FLT_MAX, minpaA = 1;
-  float minchisqCorr = FLT_MAX, minpaCorr = 1;
-  int ibestA = 0, ibestCorr = 0;
+  minchisqA = FLT_MAX; minpaA = 1;
+  minchisqCorr = FLT_MAX; minpaCorr = 1;
+  ibestA = 0; ibestCorr = 0;
 
   for (int ia = 0; ia < na; ia++) {
     float pa = lowa + ia*(higha-lowa)/na;
@@ -289,6 +349,7 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
       vector<vector<double>> countA(nPtBinsUsed, vector<double>(ana::nUnfoldXjBins, 0.));
       vector<vector<double>> countC(nPtBinsUsed, vector<double>(ana::nUnfoldXjBins, 0.));
       for (auto & ev : dataA) {
+        if (insitu_utility::vetoed(ev, pa)) continue;
         float x = (ev.jet_pt/pa)/ev.pho_pt;
         if (x < lowXj[ev.ptbin]) continue;
         int ixj = ana::findUnfoldXjBin(x);
@@ -296,6 +357,7 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
         countA[ev.ptbin][ixj] += 1;
       }
       for (auto & ev : dataC) {
+        if (insitu_utility::vetoed(ev, pa)) continue;
         float x = (ev.jet_pt/pa)/ev.pho_pt;
         if (x < lowXj[ev.ptbin]) continue;
         int ixj = ana::findUnfoldXjBin(x);
@@ -365,6 +427,7 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
       vector<double> sumA(nPtBinsUsed,0), sumA2(nPtBinsUsed,0);
       vector<int> countA(nPtBinsUsed,0);
       for (auto & ev : dataA) {
+        if (insitu_utility::vetoed(ev, pa)) continue;
         float x = (ev.jet_pt/pa)/ev.pho_pt;
         if (x < lowXj[ev.ptbin]) continue;
         sumA[ev.ptbin]  += x;
@@ -374,6 +437,7 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
       vector<double> sumC(nPtBinsUsed,0), sumC2(nPtBinsUsed,0);
       vector<int> countC(nPtBinsUsed,0);
       for (auto & ev : dataC) {
+        if (insitu_utility::vetoed(ev, pa)) continue;
         float x = (ev.jet_pt/pa)/ev.pho_pt;
         if (x < lowXj[ev.ptbin]) continue;
         sumC[ev.ptbin]  += x;
@@ -421,6 +485,35 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
 
     if (chisqA < minchisqA)       { minchisqA = chisqA;       minpaA = pa;       ibestA = ia; }
     if (chisqCorr < minchisqCorr) { minchisqCorr = chisqCorr; minpaCorr = pa; ibestCorr = ia; }
+  }
+
+  if (!selfConsistent) break;
+  cout << "Self-consistent purity, iteration " << iterSC << ": purity at p_a=" << paPurity
+       << " -> purity-corrected p_a=" << minpaCorr << endl;
+  if (cycleRescan) break;
+  const float halfStep = 0.5f*(higha-lowa)/na;
+  if (fabs(minpaCorr - paPurity) < halfStep) break;  // same grid point
+  scannedPa.push_back(paPurity);
+  scannedChi2.push_back(minchisqCorr);
+  int icycle = -1;
+  for (int i = 0; i < (int)scannedPa.size(); i++) if (fabs(scannedPa[i] - minpaCorr) < halfStep) icycle = i;
+  if (icycle >= 0) {
+    int ibest = icycle;
+    for (int i = icycle; i < (int)scannedPa.size(); i++) if (scannedChi2[i] < scannedChi2[ibest]) ibest = i;
+    cout << "Self-consistent purity: cycle over " << scannedPa.size() - icycle << " scans; using the scan with purity at p_a="
+         << scannedPa[ibest] << " (lowest chi2, " << scannedChi2[ibest] << ")" << endl;
+    paPurity = scannedPa[ibest];
+    setPurity(paPurity);
+    cycleRescan = true;
+    continue;
+  }
+  if (iterSC == maxSelfConsistentIter) {
+    cout << "WARNING: self-consistent purity not converged after " << maxSelfConsistentIter
+         << " iterations (last p_a " << paPurity << " -> " << minpaCorr << "); using the last scan." << endl;
+    break;
+  }
+  paPurity = minpaCorr;
+  setPurity(paPurity);
   }
 
   float errLowA, errHighA, errLowCorr, errHighCorr;
@@ -556,6 +649,7 @@ static void gammaSumsLinear(const vector<DataEvent> & ev, double pa, double pb, 
     vector<double> & sum, vector<double> & sum2, vector<int> & count) {
   sum.assign(nPtBinsUsed, 0); sum2.assign(nPtBinsUsed, 0); count.assign(nPtBinsUsed, 0);
   for (auto & e : ev) {
+    if (insitu_utility::vetoed(e, pa + pb*e.third_pt)) continue;
     double x = (e.jet_pt/(pa + pb*e.jet_pt))/e.pho_pt;
     if (x < lowXj[e.ptbin]) continue;
     sum[e.ptbin] += x; sum2[e.ptbin] += x*x; count[e.ptbin]++;

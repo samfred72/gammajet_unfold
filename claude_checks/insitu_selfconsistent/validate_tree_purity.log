@@ -1,0 +1,18 @@
+Processing validate_tree_purity.C...
+nominal       entries  118620  count mismatches   0  max |dP_A| 0.00e+00
+JERhigh       entries  118620  count mismatches   0  max |dP_A| 0.00e+00
+JERlow        entries  118620  count mismatches   0  max |dP_A| 0.00e+00
+emscale_high  entries  118620  count mismatches   0  max |dP_A| 0.00e+00
+emscale_low   entries  118620  count mismatches   0  max |dP_A| 0.00e+00
+jes_high      entries  118620  count mismatches   0  max |dP_A| 0.00e+00
+jes_low       entries  118620  count mismatches   0  max |dP_A| 0.00e+00
+threejet      entries   79644  count mismatches   0  max |dP_A| 0.00e+00
+narrowBDT     entries  139097  count mismatches   0  max |dP_A| 0.00e+00
+narrowISO     entries  109276  count mismatches   0  max |dP_A| 0.00e+00
+EMRhigh       entries  118620  count mismatches   0  max |dP_A| 0.00e+00
+EMRlow        entries  118620  count mismatches   0  max |dP_A| 0.00e+00
+narrowBDTbkg  entries  144858  count mismatches   0  max |dP_A| 0.00e+00
+narrowISObkg  entries  129102  count mismatches   0  max |dP_A| 0.00e+00
+wideISObkg    entries  110140  count mismatches   0  max |dP_A| 0.00e+00
+
+TOTAL: 0/2100 (systag, R, region, pT) count bins differ (max |diff| 0); max |dP_A| 0.00e+00, max |d err| 0.00e+00

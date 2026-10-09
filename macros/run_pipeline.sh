@@ -27,7 +27,7 @@ if [[ "$MODE" == "nominal" ]]; then
   SYSTAGS=(nominal)
 else
   # Keep in sync with ana::systags (src/ana.h).
-  SYSTAGS=(nominal JERhigh JERlow emscale_high emscale_low EMRhigh EMRlow jes_high jes_low threejet narrowBDT narrowISO narrowBDTbkg narrowISObkg wideISObkg)
+  SYSTAGS=(nominal JERhigh JERlow emscale_high emscale_low EMRhigh EMRlow jes_high jes_low threejet narrowBDT narrowISO narrowBDTbkg narrowISObkg wideISObkg timingwide)
 fi
 echo "Mode: $MODE (systags: ${SYSTAGS[*]})"
 

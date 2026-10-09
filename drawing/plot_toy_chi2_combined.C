@@ -2,8 +2,10 @@
 R__LOAD_LIBRARY(libgammajet_unfold.so);
 // Overlays toy_iterations.C's response-toy and Data-toy chi2/NDF, their sum with the observed
 // "iter n vs n-1" curve (chi2/NDF is already a variance, so quadrature is a plain sum; from iter 2),
-// and the observed curve itself. Missing inputs are skipped. Log y.
+// and the observed curve itself. Missing inputs are skipped. Linear y over [yAxisMin, yAxisMax].
 // Defaults are the nominal paths: root -b -l -q plot_toy_chi2_combined.C
+const double yAxisMin = 0, yAxisMax = 1; // iteration-1 points (vs the measured spectrum) run off the top
+
 void plot_toy_chi2_combined(
     const char * respFile = ana::path("pdfs/.toy_resp_chi2_data_nominal.root"),
     const char * dataFile = ana::path("pdfs/.toy_data_chi2_data_nominal.root"),
@@ -70,8 +72,8 @@ void plot_toy_chi2_combined(
     cv.g->SetLineWidth(2);
     cv.g->SetLineStyle(cv.style);
     if (i == 0) {
-      cv.g->SetMinimum(yMin*0.5);
-      cv.g->SetMaximum(6);
+      cv.g->SetMinimum(yAxisMin);
+      cv.g->SetMaximum(yAxisMax);
       cv.g->Draw("APL");
       cv.g->GetXaxis()->SetTitle("Bayesian unfolding iterations");
       cv.g->GetYaxis()->SetTitle("#chi^{2}/NDF");

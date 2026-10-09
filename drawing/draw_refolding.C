@@ -270,6 +270,7 @@ void draw_refolding(string systag = "nominal") {
   c->cd();
   gPad->SetTicks(1,1);
   gPad->SetLeftMargin(.15);
+  gChi2->SetTitle("");
   gChi2->SetMarkerStyle(20);
   gChi2->SetMarkerColor(kBlack);
   gChi2->SetLineColor(kBlack);

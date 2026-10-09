@@ -14,12 +14,13 @@ vector<DataEvent> insitu_utility::cacheDataEvents(const char * filename, int abc
     return events;
   }
   TTree * t = (TTree*)f->Get("insitutree");
-  Float_t pho_pt, jet_pt;
+  Float_t pho_pt, jet_pt, third_pt = -1;
   Int_t abcd, evIr;
   t->SetBranchAddress("pho_pt", &pho_pt);
   t->SetBranchAddress("jet_pt", &jet_pt);
   t->SetBranchAddress("abcd", &abcd);
   t->SetBranchAddress("ir", &evIr);
+  if (t->GetBranch("thirdjet_pt")) t->SetBranchAddress("thirdjet_pt", &third_pt);
   Long64_t nentries = t->GetEntries();
   for (Long64_t e = 0; e < nentries; e++) {
     t->GetEntry(e);
@@ -33,7 +34,7 @@ vector<DataEvent> insitu_utility::cacheDataEvents(const char * filename, int abc
     else {
       if (ipt < 0) continue;
     }
-    events.push_back({pho_pt, jet_pt, ipt});
+    events.push_back({pho_pt, jet_pt, ipt, third_pt});
   }
   f->Close();
   return events;
@@ -232,6 +233,7 @@ void insitu_utility::computeRegionAMeans(const vector<DataEvent> & dataA, float 
   vector<double> sum(ana::nPtBinsUsed,0), sum2(ana::nPtBinsUsed,0);
   vector<int> count(ana::nPtBinsUsed,0);
   for (auto & ev : dataA) {
+    if (vetoed(ev, pa)) continue;
     float x = (ev.jet_pt/pa)/ev.pho_pt;
     if (x < lowXj[ev.ptbin]) continue;
     sum[ev.ptbin]  += x;
@@ -254,11 +256,13 @@ void insitu_utility::computeCorrectedMeans(const vector<DataEvent> & dataA, cons
   vector<double> sumC(ana::nPtBinsUsed,0), sumC2(ana::nPtBinsUsed,0);
   vector<int> countC(ana::nPtBinsUsed,0);
   for (auto & ev : dataA) {
+    if (vetoed(ev, pa)) continue;
     float x = (ev.jet_pt/pa)/ev.pho_pt;
     if (x < lowXj[ev.ptbin]) continue;
     sumA[ev.ptbin] += x; sumA2[ev.ptbin] += x*x; countA[ev.ptbin]++;
   }
   for (auto & ev : dataC) {
+    if (vetoed(ev, pa)) continue;
     float x = (ev.jet_pt/pa)/ev.pho_pt;
     if (x < lowXj[ev.ptbin]) continue;
     sumC[ev.ptbin] += x; sumC2[ev.ptbin] += x*x; countC[ev.ptbin]++;
@@ -286,6 +290,7 @@ vector<TH1D*> insitu_utility::buildXjByPtBin(const vector<DataEvent> & data, flo
     h[ipt] = new TH1D(Form("%s_pt%d", prefix, ipt), ";x_{J#gamma};Counts", ana::nUnfoldXjBins, ana::unfoldXjBins);
   }
   for (auto & ev : data) {
+    if (vetoed(ev, pa)) continue;
     float x = (ev.jet_pt/pa)/ev.pho_pt;
     if (x < lowXj[ev.ptbin]) continue;
     h[ev.ptbin]->Fill(x);

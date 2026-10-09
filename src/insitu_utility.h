@@ -9,7 +9,8 @@
 #include "TH1D.h"
 
 // Helpers shared by the insitu/*.C JES scans.
-struct DataEvent { float pho_pt, jet_pt; int ptbin; };
+// third_pt: uncorrected third-jet pT when the insitu tree defers the threejet veto, else -1.
+struct DataEvent { float pho_pt, jet_pt; int ptbin; float third_pt = -1; };
 // Multijet balance event: leading pT, recoil jets' pT/phi, weight (1 for Data).
 struct MultijetEvent { float lead, sl, slphi, ssl, sslphi, w; };
 
@@ -29,6 +30,12 @@ class insitu_utility {
     // Low-x_J floor for radius ir and pT-bin lower edge ptLow: the x_J-bin upper edge above
     // jet_calib_pt_cut[ir]/ptLow, exactly as unfolder::check_pair. Every scan applies it at each trial pa.
     static double lowXjFloor(int ir, double ptLow);
+
+    // Deferred threejet veto at trial scale (third-jet pT / scale above ana::thirdJetPtCut). Every
+    // loop that scales Data events applies it; false for trees that apply the veto when filled.
+    static bool vetoed(const DataEvent & ev, double scale) {
+      return ev.third_pt >= 0 && ev.third_pt/scale > ana::thirdJetPtCut;
+    }
 
     // insitutree file name as written by unfolder.cc; sim = "" for Data.
     static string insituFilename(const char * insitu_dir, const char * trigger,

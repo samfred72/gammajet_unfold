@@ -10,7 +10,7 @@
 #
 # Keep SYSTAGS in sync with ana::systags (src/ana.h).
 # Prerequisite: unfold_allsys.C run for Data and Photon5/10/20.
-SYSTAGS=(nominal JERhigh JERlow emscale_high emscale_low EMRhigh EMRlow jes_high jes_low threejet narrowBDT narrowISO narrowBDTbkg narrowISObkg wideISObkg)
+SYSTAGS=(nominal JERhigh JERlow emscale_high emscale_low EMRhigh EMRlow jes_high jes_low threejet narrowBDT narrowISO narrowBDTbkg narrowISObkg wideISObkg timingwide)
 
 MODE=gammajet
 while [[ $# -gt 0 ]]; do

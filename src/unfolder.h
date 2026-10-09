@@ -28,7 +28,7 @@ class unfolder : public treeuser {
   public:
     // systags: variations of the same input tree, all filled in one pass (fill_matrix reads each entry
     // once and fills every systag's histogram set). MC only: JERhigh/low, emscale_high/low, EMRhigh/low.
-    // Data only: jes_high/low. Both: threejet and the five ABCD-boundary variations. sim selects a
+    // Data only: jes_high/low, timingwide. Both: threejet and the five ABCD-boundary variations. sim selects a
     // different input tree (pythia/herwig).
     // All systags share histogram names, so TH1::AddDirectory(kFALSE) is required.
     unfolder(string trigger, string sim, vector<string> systags) : treeuser(trigger, sim), systags(systags) {
@@ -115,6 +115,7 @@ class unfolder : public treeuser {
       insitu_abcd.resize(nsys);
       insitu_weight.resize(nsys);
       insitu_ir.resize(nsys);
+      insitu_third_pt.resize(nsys);
 
       for (int isys = 0; isys < nsys; isys++) {
         for (int i = 0; i < ana::nJetR; i++) {
@@ -185,6 +186,9 @@ class unfolder : public treeuser {
         insitu_tree[isys]->Branch("abcd", &insitu_abcd[isys]);
         insitu_tree[isys]->Branch("weight", &insitu_weight[isys]);
         insitu_tree[isys]->Branch("ir", &insitu_ir[isys]);
+        // thirdjet_pt: uncorrected third-jet pT where the threejet veto is left to the reader (Data,
+        // threejet systag: the veto depends on p_a); -1 elsewhere.
+        insitu_tree[isys]->Branch("thirdjet_pt", &insitu_third_pt[isys]);
 
         hpurity_num[isys]    = new TH2D("hpurity_num", ";p_{T};x_{j}", ana::nPtBinsUsed, ana::ptBinsUsed, ana::nUnfoldXjBins, ana::unfoldXjBins);
         hpurity_den[isys]    = new TH2D("hpurity_den", ";p_{T};x_{j}", ana::nPtBinsUsed, ana::ptBinsUsed, ana::nUnfoldXjBins, ana::unfoldXjBins);
@@ -320,6 +324,7 @@ class unfolder : public treeuser {
     vector<Int_t>   insitu_abcd;
     vector<Float_t> insitu_weight;
     vector<Int_t>   insitu_ir;
+    vector<Float_t> insitu_third_pt;
 
 };
 

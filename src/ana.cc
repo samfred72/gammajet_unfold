@@ -34,7 +34,8 @@ float ana::emResolutionSigma(float truthPt, int emrVariant) {
 const vector<string> ana::systags = {
   "nominal", "JERhigh", "JERlow", "emscale_high", "emscale_low",
   "jes_high", "jes_low", "threejet", "narrowBDT", "narrowISO",
-  "EMRhigh", "EMRlow", "narrowBDTbkg", "narrowISObkg", "wideISObkg"
+  "EMRhigh", "EMRlow", "narrowBDTbkg", "narrowISObkg", "wideISObkg",
+  "timingwide"
 };
 const vector<pair<string,string>> ana::asymmetricSystagPairs = {
   {"JERhigh", "JERlow"}, {"emscale_high", "emscale_low"}, {"jes_high", "jes_low"},

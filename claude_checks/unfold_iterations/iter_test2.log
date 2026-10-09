@@ -1,0 +1,43 @@
+Processing iter_test2.C...
+Error in <TFile::TFile>: file /projects/sali6653/PPG18_analysis/hists/Jet8_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /projects/sali6653/PPG18_analysis/hists/Jet20_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /projects/sali6653/PPG18_analysis/hists/Jet30_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /projects/sali6653/PPG18_analysis/hists/Jet50_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /projects/sali6653/PPG18_analysis/hists/Jet60_pythia_nominal_unfolding.root does not exist
+Error in <TFile::TFile>: file /projects/sali6653/PPG18_analysis/hists/Jet80_pythia_nominal_unfolding.root does not exist
+iter | refold chi2: asis  buffer-only-clamped  reported-only-clamped
+   1 |   0.5784   0.5924   0.5792
+   2 |   0.5708   0.5784   0.5726
+   3 |   0.5677   0.5728   0.5688
+   4 |   0.5660   0.5704   0.5665
+   5 |   0.5641   0.5681   0.5651
+   6 |   0.5630   0.5666   0.5641
+   7 |   1.4342   0.5649   1.4887
+   8 |   0.6497   0.5631   0.6571
+   9 |   0.5948   0.5610   0.6030
+  10 |   0.5419   0.5589   0.5439
+  11 |   0.5406   0.5568   0.5418
+  12 |   0.5395   0.5546   0.5404
+  13 |   0.5384   0.5525   0.5391
+  14 |   0.9990   0.5505   0.8417
+  15 |   0.7527   0.5486   0.6369
+
+niter=2, reported bins: (clamped - asis)/stat.err of asis, and relative shift
+  pt2 xj1.1-1.2: rel +0.0074  pull +0.052
+  pt2 xj1.2-1.3: rel +0.0141  pull +0.064
+  pt2 xj1.3-1.5: rel +0.0692  pull +0.235
+  pt2 xj1.5-1.7: rel +0.2150  pull +0.368
+  pt2 xj1.7-2.0: rel -0.9957  pull -0.497
+  pt3 xj0.3-0.4: rel -0.0130  pull -0.035
+  pt3 xj0.5-0.6: rel -0.0087  pull -0.042
+  pt3 xj0.6-0.7: rel -0.0229  pull -0.131
+  pt3 xj0.7-0.8: rel -0.0152  pull -0.096
+  pt3 xj0.8-0.9: rel -0.0102  pull -0.064
+  pt3 xj0.9-1.0: rel -0.0087  pull -0.046
+  pt3 xj1.0-1.1: rel +0.0137  pull +0.052
+  pt3 xj1.1-1.2: rel +0.0686  pull +0.183
+  pt3 xj1.2-1.3: rel +0.1897  pull +0.320
+  pt3 xj1.3-1.5: rel +0.9002  pull +0.798
+  pt3 xj1.5-1.7: rel +0.5112  pull +0.234
+  pt3 xj1.7-2.0: rel -0.8684  pull -0.584
+worst |rel| 0.9957, worst |pull| 0.798

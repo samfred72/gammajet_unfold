@@ -48,6 +48,7 @@ void unfolder::fill_matrix() {
   vector<bool> systagThreejetVetoArr(nsys);
   vector<float> systagEmscaleShiftArr(nsys);
   vector<int> systagEmrVariantArr(nsys);
+  vector<float> systagTimingWidenArr(nsys);
   vector<vector<float>> jesCorrectionArr(nsys, vector<float>(ana::nJetR));
   for (int isys = 0; isys < nsys; isys++) {
     const string & systag = systags[isys];
@@ -55,6 +56,8 @@ void unfolder::fill_matrix() {
                               (systag == "narrowBDTbkg") ? 3 : (systag == "narrowISObkg") ? 4 :
                               (systag == "wideISObkg") ? 5 : 0;
     systagThreejetVetoArr[isys] = (systag == "threejet");
+    // timingwide (Data only): both timing cuts widened by ana::timingSystWiden.
+    systagTimingWidenArr[isys] = (systag == "timingwide") ? ana::timingSystWiden : 0.0;
     // emscale_high/low (MC only): +-ana::emscaleShift on the photon and on the EM fraction of the jet.
     systagEmscaleShiftArr[isys] = (systag == "emscale_high") ?  ana::emscaleShift :
                                    (systag == "emscale_low")  ? -ana::emscaleShift : 0.0;
@@ -81,6 +84,10 @@ void unfolder::fill_matrix() {
   for (Long64_t e = 0; e < nentries; e++) {
     t->GetEntry(e);
     bool use_half = rand.Integer(2) % 2;
+    // One standard-normal draw per MC event for the photon EM-resolution smear, shared by every systag
+    // (each scales it by its own sigma), so the variations differ only by what they change, not by a
+    // new random realization of the smear.
+    float emSmearZ = isMC ? rand.Gaus(0, 1) : 0;
     if (showProgress && e % 1000 == 0)
       std::cout << "entry " << e << "/" << nentries
         << " (" << (float)e/nentries*100. << "%)\t\r" << std::flush;
@@ -111,8 +118,8 @@ void unfolder::fill_matrix() {
       // Leading photon & isolation
       // -----------------------
       float recoClusterPt = isMC ? cluster_pt * (1.0 + systagEmscaleShift) : cluster_pt;
-      // Additive smear N(0, sigma_extra(E_truth)*E_truth), PPG12 convention (ana.h).
-      recoClusterPt = isMC ? recoClusterPt + rand.Gaus(0, ana::emResolutionSigma(truth_cluster_pt, systagEmrVariant)*truth_cluster_pt) : cluster_pt;
+      // Additive smear N(0, sigma_extra(E_truth)*E_truth), PPG12 convention (ana.h), from the event's draw.
+      recoClusterPt = isMC ? recoClusterPt + emSmearZ*ana::emResolutionSigma(truth_cluster_pt, systagEmrVariant)*truth_cluster_pt : cluster_pt;
       pho_object maxpho = pho_object(
           recoClusterPt,
           cluster_e,
@@ -148,8 +155,8 @@ void unfolder::fill_matrix() {
         if (isMC && !keepMC[ir]) continue;
         // Data timing cut (ana::timing*); a failing event is dropped for this radius.
         if (!isMC) {
-          if (fabs(cluster_time - ana::timingClusterCenter) >= ana::timingClusterHalfWidth) continue;
-          if (jet_pt_calib[ir] > 0 && fabs(cluster_time - jet_time[ir]) >= ana::timingDeltaMax) continue;
+          if (fabs(cluster_time - ana::timingClusterCenter) >= ana::timingClusterHalfWidth + systagTimingWidenArr[isys]) continue;
+          if (jet_pt_calib[ir] > 0 && fabs(cluster_time - jet_time[ir]) >= ana::timingDeltaMax + systagTimingWidenArr[isys]) continue;
         }
 
         // JER/emscale variations are MC only; jes_high/low are Data only.
@@ -231,7 +238,8 @@ void unfolder::fill_matrix() {
           float thirdJetPt = isMC ? thirdjet_pt[ir] : thirdjet_pt[ir] / jesCorrectionArr[isys][ir];
           bool hasThirdJet = thirdJetPt > ana::thirdJetPtCut;
           ispaired[ir] = ispaired[ir] && !hasThirdJet;
-          ispairedInsitu[ir] = ispairedInsitu[ir] && !hasThirdJet;
+          // Data in-situ tree: the veto depends on p_a, so it is deferred to the reader (thirdjet_pt).
+          if (isMC) ispairedInsitu[ir] = ispairedInsitu[ir] && !hasThirdJet;
         }
         if (maxpho_truth.pt >= ana::ptBins[0] && maxpho_truth.pt < ana::ptBins[ana::nPtBins] && maxjet_truth[ir].pt > ana::jet_calib_pt_cut[ir]) {
           ispaired_truth[ir] = check_pair(maxjet_truth[ir], ir, maxpho_truth,1);
@@ -255,6 +263,7 @@ void unfolder::fill_matrix() {
           insitu_abcd[isys] = iabcd_reco;
           insitu_weight[isys] = mcWeight;
           insitu_ir[isys] = ir;
+          insitu_third_pt[isys] = (!isMC && systagThreejetVeto) ? thirdjet_pt[ir] : -1;
           insitu_tree[isys]->Fill();
         }
 
