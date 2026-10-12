@@ -81,7 +81,7 @@ void smearcheck() {
     intree[i]->SetBranchAddress(Form("jet_pt_calib_%d", radius), &jet_pt_calib);
     intree[i]->SetBranchAddress(Form("jet_eta_det_%d", radius), &jet_eta_det);
     intree[i]->SetBranchAddress(Form("jet_phi_%d", radius), &jet_phi);
-    intree[i]->SetBranchAddress(Form("jet_emcal_%d", radius), &jet_emfrac);
+    intree[i]->SetBranchAddress(Form("jet_emfrac_%d", radius), &jet_emfrac);
     intree[i]->SetBranchAddress(Form("jet_e_%d", radius), &jet_e);
     intree[i]->SetBranchAddress("gl1_scaled", &trigger);
     intree[i]->SetBranchAddress("mbd_vertex_z", &zvtx);
