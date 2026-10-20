@@ -15,9 +15,9 @@ calibration study (`insitu/`).
 - Asymmetric systematic uncertainties are combined with a **per-source, per-bin sign
   split**, not a symmetric envelope: each two-point (high/low) source contributes its
   own signed value to the "up" quadrature sum if positive, "down" if negative, in each
-  bin independently. See `asymmetricSystematics` and the total-uncertainty loop in
-  `drawing/draw_systematics.C:79-356`. Symmetric sources instead contribute their full
-  squared magnitude to both totals. Reuse this pattern for any new systematic source.
+  bin independently. See `asymmetricSystematics` (`src/systematics_config.h`) and the
+  total-uncertainty loop in `macros/compute_systematics.C:167-206`. Symmetric sources
+  instead contribute their full squared magnitude to both totals. Reuse this pattern for any new systematic source.
 - State which of the above assumptions you're relying on before writing new
   uncertainty-combination or bin-selection code — don't import dijet-style conventions
   by default.
@@ -26,8 +26,8 @@ calibration study (`insitu/`).
 
 - Never combine statistical and systematic uncertainty into one band. Statistical stays
   on the data points' own error bars; systematic is drawn as a separate shape (currently
-  a `TGraphAsymmErrors`-based box via `gSystBox`) — see `drawing/draw_final_result.C:73-83,
-  107-112`. Follow this split for any new final-result plot.
+  a `TGraphAsymmErrors`-based box via `gSystBox`) — built in `macros/compute_final_result.C:62-82`,
+  drawn in `drawing/draw_final_result.C:80-82`. Follow this split for any new final-result plot.
 - Output final results as PDF (written under `pdfs/`) — no HTML dashboards or
   interactive artifacts unless explicitly asked for.
 - Sanitize histograms for NaN/Inf bin content before drawing. NaN poisons ROOT's axis
@@ -35,7 +35,7 @@ calibration study (`insitu/`).
   closure plots.
 - Set pad margins explicitly rather than relying on ROOT defaults, e.g.
   `p1->SetLeftMargin(.15)` / `SetBottomMargin(...)` as done throughout
-  `drawing/draw_final_result.C:99-136`, so axis titles don't get clipped.
+  `drawing/draw_final_result.C:66-135`, so axis titles don't get clipped.
 - The sPHENIX label, data/MC sample name, cut list, and jet radius are drawn together
   via `drawer::drawAll(samples, features, ...)` (`src/drawer.cc:29-40`), never as ad hoc
   `TLatex` calls in the macro itself. `samples` is a one-element vector naming the
@@ -43,8 +43,17 @@ calibration study (`insitu/`).
   cuts/kinematics as separate strings, conventionally the pT bin range
   (`"%.0f GeV < p_{T}^{#gamma} < %.0f GeV"`) and jet radius (`"Jet R=%.1f"`, from
   `ana::JetRs[ir]`), optionally with the iteration count appended — see
-  `drawing/draw_final_result.C:130-131` for the canonical call. Reuse this helper and
+  `drawing/draw_final_result.C:100-101` for the canonical call. Reuse this helper and
   format for any new plot rather than hand-rolling label text.
+- Calculation and drawing are separate macros. Anything that produces a number another
+  step reads or a quoted result (unfolding, fits, purity, systematic combinations, the
+  `ana.h` JES table) lives in a calculation macro (`macros/`, `insitu/grid_insitu*.C`,
+  `insitu/compute_*.C`) that writes every plotted object to a ROOT file. `draw_*` macros only
+  read those files and draw; display-only transforms (shape normalization, density, picking
+  the reported bins) may stay in them. `macros/make_figures.sh` redraws everything from the
+  outputs, with note labels by default or publication labels with `--paper`
+  (`GJ_PAPER_LABELS`/`GJ_LABEL_STATUS`, read by `ana::sphenixLabel()`/`dataLabel()`/`mcLabel()`).
+  Use those label helpers rather than hard-coding "Internal" or "p+p Run24 Data".
 
 ## Debugging Protocol
 

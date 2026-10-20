@@ -3,8 +3,8 @@
 #
 # Usage: run_grid.sh [--systag TAG] [--mode gammajet|combined]
 #   --systag TAG  one systag only (quick check; ana.h is not updated).
-#   --mode MODE   gammajet (default): constant-JES scan, then draw_jes_summary.C (rewrites
-#                 src/ana.h) and draw_jes_variations.C.
+#   --mode MODE   gammajet (default): constant-JES scan, then compute_jes_summary.C (rewrites
+#                 src/ana.h), draw_jes_summary.C and draw_jes_variations.C.
 #                 combined: gamma+jet + multijet linear fit (cross-check; ana.h untouched).
 #                 Needs ../multijet/multijet_analysis_pythia.root.
 #
@@ -45,8 +45,10 @@ fi
 for systag in "${SYSTAGS[@]}"; do
   echo "=== systag=$systag ==="
   root -b -l -q "grid_insitu.C(\"$systag\")"
+  root -b -l -q "draw_grid_insitu.C(\"$systag\")"
   # Other methods (optional; Jet12 needs the Jet12_long insitu input):
   # root -b -l -q "grid_insitu.C(\"$systag\",\"gammajet\",-1,\"shape\")"
+  # root -b -l -q "draw_grid_insitu.C(\"shapechi2_$systag\")"
   # root -b -l -q "grid_insitu_unfolded.C(\"$systag\")"
   # root -b -l -q "grid_insitu_unfolded.C(\"$systag\",insitu_utility::scanN,\"shape\")"
   # root -b -l -q "grid_insitu_jet12.C(\"$systag\")"
@@ -54,8 +56,9 @@ for systag in "${SYSTAGS[@]}"; do
   # root -b -l -q "draw_grid_chi2.C(\"$systag\")"
 done
 
-# draw_jes_summary.C rewrites src/ana.h's JES constants only after a full sweep (prints
+# compute_jes_summary.C rewrites src/ana.h's JES constants only after a full sweep (prints
 # "Updated .../ana.h", which run_full_pipeline.sh checks). Rebuild afterwards.
+root -b -l -q "compute_jes_summary.C"
 root -b -l -q "draw_jes_summary.C"
 # p_a under every variation, per radius (no scan).
 root -b -l -q "draw_jes_variations.C"

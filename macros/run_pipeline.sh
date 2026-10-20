@@ -52,10 +52,11 @@ if [[ "$MODE" == "nominal" ]]; then
 else
   bash runall_puritymaker.sh
 fi
+(cd ../drawing && root -b -l -q 'draw_purity.C("nominal")')
 
 # ---- Stage 4: drawing ----
-# Order: draw_prior_sensitivity -> draw_systematics -> draw_final_result (each reads the
-# previous one's output); only these three run per radius. The other macros are R=0.4
+# Order: compute_prior_sensitivity -> compute_systematics -> compute_final_result (each reads the
+# previous one's output), then their draw_* macros; only these run per radius. The other macros are R=0.4
 # nominal diagnostics. The two toy_iterations runs read each other's output for the
 # combined plot.
 fi # end of stages 1-3 (skipped in draw mode)
@@ -68,6 +69,7 @@ root -b -l -q 'toy_iterations.C("nominal","resp")'
 root -b -l -q 'toy_iterations.C("nominal","data")'
 root -b -l -q 'draw_refolding.C("nominal")'
 root -b -l -q 'draw_nonclosure.C()'
+(cd ../macros && root -b -l -q 'compute_prior_sensitivity.C("nominal")')
 root -b -l -q 'draw_prior_sensitivity.C("nominal")'
 if [[ "$MODE" != "nominal" ]]; then
   # Keep in sync with ana::nJetR/ana::rnames (src/ana.h).
@@ -75,13 +77,15 @@ if [[ "$MODE" != "nominal" ]]; then
   for ir in 0 1 2 3 4 5 6; do
     echo "--- radius index $ir (${RNAMES[$ir]}) ---"
     if [[ $ir -ne 2 ]]; then
+      (cd ../macros && root -b -l -q "compute_prior_sensitivity.C(\"nominal\", $ir)")
       root -b -l -q "draw_prior_sensitivity.C(\"nominal\", $ir)"
     fi
+    (cd ../macros && root -b -l -q "compute_systematics.C($ir)" && root -b -l -q "compute_final_result.C($ir)")
     root -b -l -q "draw_systematics.C($ir)"
     root -b -l -q "draw_final_result.C($ir)"
   done
 else
-  echo "Skipping draw_systematics.C/draw_final_result.C in nominal-only mode (they need every systag's stage 2+3 output - rerun in full mode before trusting the final result)."
+  echo "Skipping compute_/draw_systematics.C and compute_/draw_final_result.C in nominal-only mode (they need every systag's stage 2+3 output - rerun in full mode before trusting the final result)."
 fi
 cd ../macros
 
