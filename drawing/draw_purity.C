@@ -55,7 +55,8 @@ void draw_purity(string systag = "nominal") {
     cu->Clear();
     gPad->SetTicks();
     gPad->SetLeftMargin(.15);
-    TH1F * frameu = cu->DrawFrame(ana::ptBinsUsed[0], 0, ana::ptBinsUsed[ana::nPtBinsUsed], 1.1);
+    // Headroom above P_A for the label (top left) and legend (top right).
+    TH1F * frameu = cu->DrawFrame(ana::ptBinsUsed[0], 0, ana::ptBinsUsed[ana::nPtBinsUsed], 1.35);
     frameu->GetXaxis()->SetTitle("p_{T}^{#gamma} [GeV]");
     frameu->GetYaxis()->SetTitle("Purity");
     odUsed->SetLineColor(kBlack);
@@ -70,13 +71,12 @@ void draw_purity(string systag = "nominal") {
     odCUsed->SetMarkerStyle(21);
     odCUsed->SetLineWidth(2);
     odCUsed->Draw("p same");
-    TLegend * lu = new TLegend(.2,.7,.5,.85);
+    TLegend * lu = new TLegend(.6,.74,.88,.88);
     lu->SetLineWidth(0);
     lu->AddEntry(odUsed,  "P_{A} (region A)");
     lu->AddEntry(odCUsed, "P_{C} (region C)");
     lu->Draw();
-    // Label in the empty band between P_C and P_A.
-    d.drawAll({ana::dataLabel()},{Form("systag: %s",systag.c_str()),Form("Jet R=%.1f",ana::JetRs[ir]),"paired clusters","leakage correction applied"},.55,.6,16,700);
+    d.drawAll({ana::dataLabel()},{Form("Jet R=%.1f",ana::JetRs[ir]),"leakage correction applied"},.19,.86,16,700);
     cu->SaveAs(purityPdfPath.c_str());
   }
 

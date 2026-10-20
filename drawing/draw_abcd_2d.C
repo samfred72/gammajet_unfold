@@ -78,7 +78,7 @@ void draw_abcd_2d() {
   drawer d;
   d.drawAll({ana::dataLabel()},
             {Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV", ptLow, ptHigh),
-             Form("|#eta^{#gamma}| < %.1f, leading cluster", ana::photonEtaCut)},
+             Form("|#eta^{#gamma}| < %.1f", ana::photonEtaCut)},
             .567, .574 - labelDropNDC, 18, 700);
   c->RedrawAxis();
 
