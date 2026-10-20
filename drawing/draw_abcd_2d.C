@@ -46,14 +46,14 @@ void draw_abcd_2d() {
   auto region = [](double x1, double y1, double x2, double y2, const char * name) {
     TBox * b = new TBox(x1, y1, x2, y2);
     b->SetFillStyle(0);
-    b->SetLineColor(kRed + 1);
+    b->SetLineColor(kBlack);
     b->SetLineWidth(4);
     b->Draw();
     TLatex * l = new TLatex(x1 + 0.35, y2 - 0.035, name);
     l->SetTextFont(62);
     l->SetTextSize(0.06);
     l->SetTextAlign(13);
-    l->SetTextColor(kRed + 1);
+    l->SetTextColor(kBlack);
     l->Draw();
   };
   region(isoMin, bdtA, isoA, bdtAhi, "A");
@@ -61,8 +61,11 @@ void draw_abcd_2d() {
   region(isoMin, bdtC, isoA, bdtChi, "C");
   region(isoB,   bdtC, isoMax, bdtChi, "D");
 
-  // white panel for the label block, inside region D (upper right of it)
-  TBox * panel = new TBox(7.15, bdtChi - 0.232, isoMax - 0.25, bdtChi - 0.015);
+  // White panel for the label block inside region D, labelDrop below its top edge in BDT score
+  // (the text moves by the same distance in NDC).
+  const double labelDrop = 0.1;
+  const double labelDropNDC = labelDrop * (1 - c->GetBottomMargin() - c->GetTopMargin());
+  TBox * panel = new TBox(7.15, bdtChi - 0.232 - labelDrop, isoMax - 0.25, bdtChi - 0.015 - labelDrop);
   panel->SetFillColor(kWhite);
   panel->SetFillStyle(1001);  // TBox defaults to hollow
   panel->SetLineWidth(0);
@@ -76,7 +79,7 @@ void draw_abcd_2d() {
   d.drawAll({ana::dataLabel()},
             {Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV", ptLow, ptHigh),
              Form("|#eta^{#gamma}| < %.1f, leading cluster", ana::photonEtaCut)},
-            .567, .574, 18, 700);
+            .567, .574 - labelDropNDC, 18, 700);
   c->RedrawAxis();
 
   const char * out = ana::path("pdfs/abcd_2d_data.pdf");
