@@ -12,6 +12,24 @@ const char * ana::dir() {
   return d.c_str();
 }
 
+bool ana::paperLabels() {
+  const char * e = getenv("GJ_PAPER_LABELS");
+  return e && string(e) == "1";
+}
+
+const char * ana::sphenixLabel() {
+  static string label;
+  const char * e = getenv("GJ_LABEL_STATUS");
+  string status = e ? string(e) : (paperLabels() ? "" : "Internal");
+  label = "#bf{#it{sPHENIX}}";
+  if (!status.empty()) label += " #kern[0.5]{" + status + "}";
+  return label.c_str();
+}
+
+const char * ana::dataLabel() { return paperLabels() ? "p+p #sqrt{s}=200 GeV" : "p+p Run24 Data"; }
+
+const char * ana::mcLabel() { return paperLabels() ? "Pythia8 #gamma+jet" : "Pythia8 #gamma+jet MC"; }
+
 const char * ana::path(const string & rel) {
   static deque<string> store; // push_back never moves existing elements, so returned pointers stay valid
   store.push_back(string(dir()) + "/" + rel);

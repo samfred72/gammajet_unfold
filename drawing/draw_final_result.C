@@ -31,6 +31,8 @@ void draw_final_result(int jetRadiusIndex = 2) {
                               : Form("%s/hists/final_result_%s.root", ana::dir(), ana::rnames[ir]);
   systRootPathStr = (ir == 2) ? ana::path("hists/systematics.root")
                               : Form("%s/hists/systematics_%s.root", ana::dir(), ana::rnames[ir]);
+  string combinedPdfPathStr = (ir == 2) ? ana::path("pdfs/final_result_combined.pdf")
+                                         : Form("%s/pdfs/final_result_combined_%s.pdf", ana::dir(), ana::rnames[ir]);
   pdfPath      = pdfPathStr.c_str();
   rootPath     = rootPathStr.c_str();
   systRootPath = systRootPathStr.c_str();
@@ -55,6 +57,28 @@ void draw_final_result(int jetRadiusIndex = 2) {
   TH1D * flatUnfolded  = unfold_utility::unfoldOnce(respRecoTemplate, respTruthTemplate, respMatrix2D, flatCorrected, niterate, "hUnfoldedFinal");
 
   cout << "pT bin, xJ bin: nominal, stat frac, syst frac, total frac" << endl;
+
+  const double ratioMin = 0.5, ratioMax = 1.5;
+  // Arrow at the ratio frame edge for each off-scale central value.
+  auto drawOffScaleArrows = [&](TH1D * hRatio, TH1D * hData, TH1D * hTruth) {
+    const double arrowLen = 0.12 * (ratioMax - ratioMin);
+    for (int b = 1; b <= hRatio->GetNbinsX(); b++) {
+      double r = hRatio->GetBinContent(b);
+      if (hData->GetBinContent(b) <= 0 || hTruth->GetBinContent(b) <= 0) continue;
+      if (r >= ratioMin && r <= ratioMax) continue;
+      double xc = hRatio->GetBinCenter(b);
+      double yEdge = (r > ratioMax) ? ratioMax : ratioMin;
+      double yTail = (r > ratioMax) ? ratioMax - arrowLen : ratioMin + arrowLen;
+      TArrow * arr = new TArrow(xc, yTail, xc, yEdge, 0.015, "|>");
+      arr->SetLineColor(kBlack);
+      arr->SetFillColor(kBlack);
+      arr->SetLineWidth(2);
+      arr->Draw();
+    }
+  };
+  // Kept for the combined three-panel page.
+  vector<TH1D*> vData, vTruth, vRatio;
+  vector<TGraphAsymmErrors*> vSystBox, vRatioSystBox;
 
   for (int ipt = ana::firstUsedPtBin; ipt < ana::firstUsedPtBin+nPtBinsUsed; ipt++) {
     TH1D * hUnfold     = unfold_utility::unflattenXj(flatUnfolded, ipt, Form("hFinal_pt%d", ipt));
@@ -123,11 +147,11 @@ void draw_final_result(int jetRadiusIndex = 2) {
     TLegend * l = new TLegend(.55,.62,.85,.85);
     l->SetLineWidth(0);
     l->SetTextSize(0.032);
-    l->AddEntry(hUnfoldDisp, "p+p Run24 Data", "lp");
+    l->AddEntry(hUnfoldDisp, ana::dataLabel(), "lp");
     l->AddEntry(gSystBox, "Systematic uncertainty", "f");
-    l->AddEntry(hTruthDisp, "Pythia8 #gamma+jet (truth)", "lp");
+    l->AddEntry(hTruthDisp, ana::paperLabels() ? ana::mcLabel() : "Pythia8 #gamma+jet (truth)", "lp");
     l->Draw();
-    d.drawAll({"p+p Run24 Data"},{Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV",ana::ptBins[ipt],ana::ptBins[ipt+1]),
+    d.drawAll({ana::dataLabel()},{Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV",ana::ptBins[ipt],ana::ptBins[ipt+1]),
         Form("Jet R=%.1f, p_{T}^{jet} > %.0f GeV", ana::JetRs[ir], ana::jet_calib_pt_cut[ir])}, .18, .85, 14, gPad->GetWh()*0.8);
 
     p2->cd();
@@ -160,7 +184,6 @@ void draw_final_result(int jetRadiusIndex = 2) {
     TH1D * hFrame2 = (TH1D*)hRatio->Clone(Form("hFinalFrame2_pt%d", ipt));
     hFrame2->Reset("ICES");
     hFrame2->SetLineColor(kWhite);
-    const double ratioMin = 0.5, ratioMax = 1.5;
     hFrame2->GetYaxis()->SetRangeUser(ratioMin, ratioMax);
     hFrame2->GetYaxis()->SetTitle("Data / Pythia Truth");
     hFrame2->GetYaxis()->SetTitleSize(0.09);
@@ -179,24 +202,16 @@ void draw_final_result(int jetRadiusIndex = 2) {
     hRatio->SetMarkerColor(kBlack);
     hRatio->SetMarkerStyle(20);
     hRatio->Draw("p e0 same");
-    const double arrowLen = 0.12 * (ratioMax - ratioMin);
-    for (int b = 1; b <= nb; b++) {
-      double r = hRatio->GetBinContent(b);
-      if (hUnfoldDisp->GetBinContent(b) <= 0 || hTruthDisp->GetBinContent(b) <= 0) continue;
-      if (r >= ratioMin && r <= ratioMax) continue;
-      double xc = hRatio->GetBinCenter(b);
-      double yEdge = (r > ratioMax) ? ratioMax : ratioMin;
-      double yTail = (r > ratioMax) ? ratioMax - arrowLen : ratioMin + arrowLen;
-      TArrow * arr = new TArrow(xc, yTail, xc, yEdge, 0.015, "|>");
-      arr->SetLineColor(kBlack);
-      arr->SetFillColor(kBlack);
-      arr->SetLineWidth(2);
-      arr->Draw();
-    }
+    drawOffScaleArrows(hRatio, hUnfoldDisp, hTruthDisp);
     TLine * line = new TLine(ana::unfoldXjBins[0],1,ana::unfoldXjBins[ana::nUnfoldXjBins],1);
     line->SetLineStyle(9);
     line->Draw("same");
     c->SaveAs(pdfPath);
+    vData.push_back(hUnfoldDisp);
+    vTruth.push_back(hTruthDisp);
+    vRatio.push_back(hRatio);
+    vSystBox.push_back(gSystBox);
+    vRatioSystBox.push_back(gRatioSystBox);
 
     fout->cd();
     hUnfoldDisp->Write();
@@ -205,6 +220,108 @@ void draw_final_result(int jetRadiusIndex = 2) {
   }
 
   c->SaveAs(Form("%s]", pdfPath));
+
+  // Combined page: the pT bins side by side, sPHENIX label in the first, legend in the second.
+  // Pixel-size (font 43) text throughout, so it does not scale with the pad heights.
+  TCanvas * cc = new TCanvas("ccombined","",1500,900);
+  const double ySplit = .32;
+  double ymaxAll = 0;
+  for (int i = 0; i < nPtBinsUsed; i++)
+    for (int b = 1; b <= vData[i]->GetNbinsX(); b++)
+      ymaxAll = std::max({ymaxAll, vData[i]->GetBinContent(b) + vData[i]->GetBinError(b),
+                          vTruth[i]->GetBinContent(b) + vTruth[i]->GetBinError(b)});
+  auto pixelAxes = [](TH1D * h) {
+    for (TAxis * a : {h->GetXaxis(), h->GetYaxis()}) {
+      a->SetTitleFont(43);
+      a->SetTitleSize(28);
+      a->SetLabelFont(43);
+      a->SetLabelSize(25);
+      a->SetLabelOffset(a == h->GetXaxis() ? 0.03 : 0.012);
+    }
+  };
+  for (int i = 0; i < nPtBinsUsed; i++) {
+    int ipt = ana::firstUsedPtBin + i;
+    double x1 = (double)i/nPtBinsUsed, x2 = (double)(i+1)/nPtBinsUsed;
+    cc->cd();
+    TPad * q1 = new TPad(Form("q1_%d",i),"",x1,ySplit,x2,1);
+    TPad * q2 = new TPad(Form("q2_%d",i),"",x1,0,x2,ySplit);
+    q1->Draw();
+    q2->Draw();
+
+    q1->cd();
+    q1->SetBottomMargin(0.02);
+    q1->SetTopMargin(0.03);
+    q1->SetLeftMargin(.2);
+    q1->SetRightMargin(.03);
+    gPad->SetTicks(1,1);
+    TH1D * hFrame1 = (TH1D*)vData[i]->Clone(Form("hCombFrame1_%d", i));
+    hFrame1->Reset("ICES");
+    hFrame1->SetLineColor(kWhite);
+    pixelAxes(hFrame1);
+    hFrame1->GetXaxis()->SetLabelSize(0);
+    hFrame1->GetXaxis()->SetTitle("");
+    // Range only clears the tallest error bar; the taller pad leaves room for the text above the data.
+    hFrame1->GetYaxis()->SetRangeUser(0, ymaxAll*1.08);
+    hFrame1->GetYaxis()->SetTitleOffset(1.75);
+    hFrame1->Draw("p");
+    vSystBox[i]->Draw("2 same");
+    vData[i]->Draw("p e same");
+    vTruth[i]->Draw("p e same");
+    if (i == 0)
+      d.drawAll({ana::dataLabel()}, {Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV", ana::ptBins[ipt], ana::ptBins[ipt+1]),
+                                     Form("Jet R=%.1f", ana::JetRs[ir]),
+                                     Form("p_{T}^{jet} > %.0f GeV", ana::jet_calib_pt_cut[ir])},
+                .25, .9, 22, gPad->GetWh()*(1-ySplit));  // spacing scales with the pad, not the canvas
+    if (i == 1) {
+      // Two columns keep it short enough to clear the peak.
+      TLegend * l = new TLegend(.23,.79,.99,.895);
+      l->SetLineWidth(0);
+      l->SetFillStyle(0);
+      l->SetNColumns(2);
+      l->SetMargin(0.14);
+      l->SetTextFont(43);
+      l->SetTextSize(20);
+      l->AddEntry(vData[i], ana::dataLabel(), "lp");
+      l->AddEntry(vSystBox[i], "Syst. uncertainty", "f");
+      l->AddEntry(vTruth[i], ana::paperLabels() ? ana::mcLabel() : "Pythia8 #gamma+jet (truth)", "lp");
+      l->Draw();
+    }
+    // pT range: in the label block for the first panel, top left for the others
+    if (i > 0) {
+      TLatex * t = new TLatex(.25, .94, Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV", ana::ptBins[ipt], ana::ptBins[ipt+1]));
+      t->SetNDC();
+      t->SetTextFont(43);
+      t->SetTextSize(21);
+      t->SetTextAlign(13);
+      t->Draw();
+    }
+
+    q2->cd();
+    q2->SetTopMargin(0.02);
+    q2->SetBottomMargin(0.4);
+    q2->SetLeftMargin(.2);
+    q2->SetRightMargin(.03);
+    gPad->SetTicks(1,1);
+    TH1D * hFrame2 = (TH1D*)vRatio[i]->Clone(Form("hCombFrame2_%d", i));
+    hFrame2->Reset("ICES");
+    hFrame2->SetLineColor(kWhite);
+    pixelAxes(hFrame2);
+    hFrame2->GetYaxis()->SetRangeUser(ratioMin, ratioMax);
+    hFrame2->GetYaxis()->SetTitle("Data / Pythia Truth");
+    hFrame2->GetYaxis()->SetTitleOffset(1.75);
+    hFrame2->GetYaxis()->SetNdivisions(505);
+    hFrame2->GetXaxis()->SetTitle("x_{J#gamma}");
+    hFrame2->GetXaxis()->SetTitleOffset(1.9);
+    hFrame2->Draw("p");
+    vRatioSystBox[i]->Draw("2 0 same");
+    vRatio[i]->Draw("p e0 same");
+    drawOffScaleArrows(vRatio[i], vData[i], vTruth[i]);
+    TLine * line = new TLine(ana::unfoldXjBins[0],1,ana::unfoldXjBins[ana::nUnfoldXjBins],1);
+    line->SetLineStyle(9);
+    line->Draw("same");
+  }
+  cc->SaveAs(combinedPdfPathStr.c_str());
+
   fout->Close();
   cout << "Done. Wrote " << pdfPath << " and " << rootPath << endl;
 }

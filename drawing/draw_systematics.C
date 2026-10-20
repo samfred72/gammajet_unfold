@@ -244,7 +244,7 @@ void draw_systematics(int jetRadiusIndex = 2) {
       l->AddEntry(nominalDisp[ipt], "Nominal");
       l->AddEntry(hVarDisp, systag.c_str());
       l->Draw();
-      dLabel.drawAll({"p+p Run24 Data"},{Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV",ana::ptBins[ipt],ana::ptBins[ipt+1]),
+      dLabel.drawAll({ana::dataLabel()},{Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV",ana::ptBins[ipt],ana::ptBins[ipt+1]),
           },
           .5, .85, 16, gPad->GetWh()*0.8);
 
@@ -415,11 +415,12 @@ void draw_systematics(int jetRadiusIndex = 2) {
     zero->SetLineStyle(9);
     zero->Draw("same");
 
-    TLegend * ls = standalone ? new TLegend(.17,.72,.62,.93) : new TLegend(.4,.65,.68,.93);
+    // Stacked page: sPHENIX label in the first panel, legend only in the second.
+    TLegend * ls = standalone ? new TLegend(.17,.72,.62,.93) : new TLegend(.17,.60,.62,.93);
     ls->SetLineWidth(0);
     ls->SetFillStyle(0);
     ls->SetTextSize(standalone ? 0.035 : 0.05);
-    if (standalone) ls->SetNColumns(2);
+    ls->SetNColumns(2);
     for (const DisplayGroup & g : displayGroups) {
       bool firstMember = true;
       for (const string & systag : g.members) {
@@ -480,16 +481,19 @@ void draw_systematics(int jetRadiusIndex = 2) {
 
     hTotalDownDisp->Draw("hist same");
     hTotalUpDisp->Draw("hist same");
-    ls->AddEntry(hTotalUpDisp, "Total (asym. quad. sum)", "l");
-    ls->Draw();
+    ls->AddEntry(hTotalUpDisp, "Total", "l");
+    if (standalone || idisplay == 1) ls->Draw();
 
     if (standalone) {
-      dLabel.drawAll({"p+p Run24 Data"},
+      dLabel.drawAll({ana::dataLabel()},
                      {Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV",ana::ptBins[ipt],ana::ptBins[ipt+1]),
                       Form("Jet R=%.1f",ana::JetRs[ir])}, .19, .33, 18, 600);
       return;
     }
-    TLatex * t = new TLatex(.18,.85,Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV",ana::ptBins[ipt],ana::ptBins[ipt+1]));
+    if (idisplay == 0)
+      dLabel.drawAll({ana::dataLabel()}, {Form("Jet R=%.1f",ana::JetRs[ir])}, .18, .86, 16, 300);
+    // pT range at the bottom left of every panel
+    TLatex * t = new TLatex(.18,gPad->GetBottomMargin()+.06,Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV",ana::ptBins[ipt],ana::ptBins[ipt+1]));
     t->SetNDC();
     t->SetTextFont(43);
     t->SetTextSize(16);

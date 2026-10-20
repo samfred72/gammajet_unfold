@@ -23,6 +23,13 @@ class ana {
     static const char * dir();
     // dir() + "/" + rel, valid for the whole program (usable wherever a string literal was).
     static const char * path(const std::string & rel);
+    // Plot labels. GJ_PAPER_LABELS=1 selects publication sample names and a bare "sPHENIX";
+    // GJ_LABEL_STATUS overrides the word after "sPHENIX" ("Internal", "Preliminary", or "" for none).
+    // Unset, both give the internal labels.
+    static bool paperLabels();
+    static const char * sphenixLabel();  // "#bf{#it{sPHENIX}}" plus the status
+    static const char * dataLabel();     // "p+p Run24 Data" / "p+p #sqrt{s}=200 GeV"
+    static const char * mcLabel();       // "Pythia8 #gamma+jet MC" / "Pythia8 #gamma+jet"
 
     ana();
     ~ana() = default;

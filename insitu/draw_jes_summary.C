@@ -295,7 +295,7 @@ void draw_jes_summary() {
   leg->AddEntry(boxes[0], "Systematic uncertainty", "f");
   leg->Draw();
 
-  insitu_utility::drawSPhenixLabel({"p+p Run24 Data"}, {"Pythia8 #gamma+jet MC", "Purity-corrected"}, .18, .85, 16, c->GetWh());
+  insitu_utility::drawSPhenixLabel({ana::dataLabel()}, {ana::mcLabel(), "Purity-corrected"}, .18, .85, 16, c->GetWh());
 
   c->RedrawAxis();
   const char * pdfPath = Form("%s/draw_jes_summary.pdf", insitu_pdf_dir);

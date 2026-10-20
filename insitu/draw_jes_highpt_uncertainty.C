@@ -144,7 +144,7 @@ void draw_jes_highpt_uncertainty() {
   leg->AddEntry(window, "In-situ anchor window", "f");
   leg->Draw();
 
-  insitu_utility::drawSPhenixLabel({"p+p Run24 Data"},
+  insitu_utility::drawSPhenixLabel({ana::dataLabel()},
       {Form("Jet R=%.1f, |#eta^{jet}| < 0.7", ana::JetRs[ir]), "B, C: JES leakage note Fig. 23"},
       .17, .87, 16, c->GetWh());
 

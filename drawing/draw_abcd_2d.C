@@ -92,7 +92,7 @@ void draw_abcd_2d(double ptLow = ana::ptBinsUsed[0], double ptHigh = ana::ptBins
   frame->SetLineWidth(2);
   frame->Draw();
   drawer d;
-  d.drawAll({"p+p Run24 Data"},
+  d.drawAll({ana::dataLabel()},
             {Form("%.0f GeV < p_{T}^{#gamma} < %.0f GeV", ptLow, ptHigh),
              Form("|#eta^{#gamma}| < %.1f, leading cluster", ana::photonEtaCut)},
             .567, .574, 18, 700);

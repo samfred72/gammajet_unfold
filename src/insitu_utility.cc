@@ -109,7 +109,7 @@ void insitu_utility::drawSPhenixLabel(vector<string> samples, vector<string> fea
     tex->SetNDC();
     tex->Draw();
   };
-  drawOne("#bf{#it{sPHENIX}} #kern[0.5]{Internal}", drawx, drawy, (int)(fontsize*titlescale));
+  drawOne(ana::sphenixLabel(), drawx, drawy, (int)(fontsize*titlescale));
   for (unsigned i = 0; i < samples.size(); i++) {
     drawOne(samples[i].c_str(), drawx, drawy-ydiff*subtitlescale*(i+1), (int)(fontsize*subtitlescale));
   }

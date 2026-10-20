@@ -58,7 +58,7 @@ void puritymaker(string systag = "nominal") {
   }
   lf->SetLineWidth(0);
   lf->Draw();
-  d.drawAll({"Pythia8 #gamma+jet MC"},{Form("systag: %s",systag.c_str()),Form("Jet R=%.1f",ana::JetRs[ir]),"truth-matched leakage fractions"},.5,.55,16,700);
+  d.drawAll({ana::mcLabel()},{Form("systag: %s",systag.c_str()),Form("Jet R=%.1f",ana::JetRs[ir]),"truth-matched leakage fractions"},.5,.55,16,700);
   cf->SaveAs(leakagePdfPath.c_str());
 
   TGraphAsymmErrors * odC = nullptr;
@@ -135,7 +135,7 @@ void puritymaker(string systag = "nominal") {
   lu->AddEntry(odCUsed, "P_{C} (region C)");
   lu->Draw();
   // Label in the empty band between P_C and P_A.
-  d.drawAll({"p+p Run24 Data"},{Form("systag: %s",systag.c_str()),Form("Jet R=%.1f",ana::JetRs[ir]),"paired clusters","leakage correction applied"},.55,.6,16,700);
+  d.drawAll({ana::dataLabel()},{Form("systag: %s",systag.c_str()),Form("Jet R=%.1f",ana::JetRs[ir]),"paired clusters","leakage correction applied"},.55,.6,16,700);
   cu->SaveAs(purityPdfPath.c_str());
 
   c->cd();
