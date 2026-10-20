@@ -109,7 +109,7 @@ void insitu_utility::drawSPhenixLabel(vector<string> samples, vector<string> fea
     tex->SetNDC();
     tex->Draw();
   };
-  drawOne("#bf{#it{sPHENIX}} #kern[0.5]{Internal}", drawx, drawy, (int)(fontsize*titlescale));
+  drawOne(ana::sphenixLabel(), drawx, drawy, (int)(fontsize*titlescale));
   for (unsigned i = 0; i < samples.size(); i++) {
     drawOne(samples[i].c_str(), drawx, drawy-ydiff*subtitlescale*(i+1), (int)(fontsize*subtitlescale));
   }
@@ -136,7 +136,7 @@ vector<double> insitu_utility::coarsenQuadrature(const vector<double> & fineErr,
 }
 
 void insitu_utility::referenceMeans(const vector<pair<string,double>> & samples, int abcdSelect, int ir,
-    float refMean[], float refMeanErr[], const float lowXj[]) {
+    float refMean[], float refMeanErr[], const float lowXj[], const vector<pair<double,double>> * truthWeights) {
   vector<double> sumw(ana::nPtBinsUsed,0), sumw2(ana::nPtBinsUsed,0), sumwx(ana::nPtBinsUsed,0), sumwx2(ana::nPtBinsUsed,0);
   for (auto & s : samples) {
     TFile * f = TFile::Open(s.first.c_str(), "READ");
@@ -152,6 +152,11 @@ void insitu_utility::referenceMeans(const vector<pair<string,double>> & samples,
     t->SetBranchAddress("abcd", &abcd);
     t->SetBranchAddress("weight", &mcWeight);
     t->SetBranchAddress("ir", &evIr);
+    Int_t truthMatched = -1;
+    if (truthWeights) {
+      if (!t->GetBranch("pho_truthmatched")) { cout << "ERROR: " << s.first << " has no pho_truthmatched branch (re-unfold)" << endl; f->Close(); continue; }
+      t->SetBranchAddress("pho_truthmatched", &truthMatched);
+    }
     Long64_t nentries = t->GetEntries();
     for (Long64_t e = 0; e < nentries; e++) {
       t->GetEntry(e);
@@ -163,6 +168,7 @@ void insitu_utility::referenceMeans(const vector<pair<string,double>> & samples,
       double x = jet_pt/pho_pt;
       if (x < lowXj[ipt]) continue;
       double w = s.second*mcWeight;
+      if (truthWeights) w *= (truthMatched == 1) ? (*truthWeights)[ipt].second : (*truthWeights)[ipt].first;
       sumw[ipt]   += w;
       sumw2[ipt]  += w*w;
       sumwx[ipt]  += w*x;
@@ -180,8 +186,41 @@ void insitu_utility::referenceMeans(const vector<pair<string,double>> & samples,
   }
 }
 
+void insitu_utility::truthMatchedFraction(const vector<pair<string,double>> & samples, int abcdSelect, int ir,
+    const float lowXj[], double frac[]) {
+  vector<double> all(ana::nPtBinsUsed, 0), matched(ana::nPtBinsUsed, 0);
+  for (auto & s : samples) {
+    TFile * f = TFile::Open(s.first.c_str(), "READ");
+    if (!f || f->IsZombie()) { cout << "WARNING: could not open " << s.first << endl; continue; }
+    TTree * t = (TTree*)f->Get("insitutree");
+    if (!t->GetBranch("pho_truthmatched")) { cout << "ERROR: " << s.first << " has no pho_truthmatched branch (re-unfold)" << endl; f->Close(); continue; }
+    Float_t pho_pt, jet_pt, mcWeight;
+    Int_t abcd, evIr, truthMatched;
+    t->SetBranchAddress("pho_pt", &pho_pt);
+    t->SetBranchAddress("jet_pt", &jet_pt);
+    t->SetBranchAddress("abcd", &abcd);
+    t->SetBranchAddress("weight", &mcWeight);
+    t->SetBranchAddress("ir", &evIr);
+    t->SetBranchAddress("pho_truthmatched", &truthMatched);
+    for (Long64_t e = 0; e < t->GetEntries(); e++) {
+      t->GetEntry(e);
+      if (abcd != abcdSelect || evIr != ir) continue;
+      int ipt = ana::findPtBin(pho_pt);
+      if (ipt < ana::firstUsedPtBin || ipt >= ana::firstUsedPtBin + ana::nPtBinsUsed) continue;
+      ipt -= ana::firstUsedPtBin;
+      if (jet_pt/pho_pt < lowXj[ipt]) continue;
+      double w = s.second*mcWeight;
+      all[ipt] += w;
+      if (truthMatched == 1) matched[ipt] += w;
+    }
+    f->Close();
+  }
+  for (int ipt = 0; ipt < ana::nPtBinsUsed; ipt++) frac[ipt] = all[ipt] > 0 ? matched[ipt]/all[ipt] : 0;
+}
+
 void insitu_utility::referenceShape(const vector<pair<string,double>> & samples, int abcdSelect, int ir,
-    vector<vector<double>> & refFrac, vector<vector<double>> & refFracErr, const float lowXj[]) {
+    vector<vector<double>> & refFrac, vector<vector<double>> & refFracErr, const float lowXj[],
+    const vector<pair<double,double>> * truthWeights) {
   vector<vector<double>> sumw(ana::nPtBinsUsed, vector<double>(ana::nUnfoldXjBins, 0.));
   vector<vector<double>> sumw2(ana::nPtBinsUsed, vector<double>(ana::nUnfoldXjBins, 0.));
   for (auto & s : samples) {
@@ -198,6 +237,11 @@ void insitu_utility::referenceShape(const vector<pair<string,double>> & samples,
     t->SetBranchAddress("abcd", &abcd);
     t->SetBranchAddress("weight", &mcWeight);
     t->SetBranchAddress("ir", &evIr);
+    Int_t truthMatched = -1;
+    if (truthWeights) {
+      if (!t->GetBranch("pho_truthmatched")) { cout << "ERROR: " << s.first << " has no pho_truthmatched branch (re-unfold)" << endl; f->Close(); continue; }
+      t->SetBranchAddress("pho_truthmatched", &truthMatched);
+    }
     Long64_t nentries = t->GetEntries();
     for (Long64_t e = 0; e < nentries; e++) {
       t->GetEntry(e);
@@ -211,6 +255,7 @@ void insitu_utility::referenceShape(const vector<pair<string,double>> & samples,
       int ixj = ana::findUnfoldXjBin(x);
       if (ixj < 0 || ixj >= ana::nUnfoldXjBins) continue;
       double w = s.second*mcWeight;
+      if (truthWeights) w *= (truthMatched == 1) ? (*truthWeights)[ipt].second : (*truthWeights)[ipt].first;
       sumw[ipt][ixj]  += w;
       sumw2[ipt][ixj] += w*w;
     }
@@ -299,7 +344,7 @@ vector<TH1D*> insitu_utility::buildXjByPtBin(const vector<DataEvent> & data, flo
 }
 
 vector<TH1D*> insitu_utility::buildMCXjByPtBin(const vector<pair<string,double>> & samples, int abcdSelect, int ir,
-    const char * prefix, const float lowXj[]) {
+    const char * prefix, const float lowXj[], const vector<pair<double,double>> * truthWeights) {
   vector<TH1D*> h(ana::nPtBinsUsed);
   for (int ipt = 0; ipt < ana::nPtBinsUsed; ipt++) {
     h[ipt] = new TH1D(Form("%s_pt%d", prefix, ipt), ";x_{J#gamma};Counts", ana::nUnfoldXjBins, ana::unfoldXjBins);
@@ -314,6 +359,11 @@ vector<TH1D*> insitu_utility::buildMCXjByPtBin(const vector<pair<string,double>>
     t->SetBranchAddress("abcd", &abcd);
     t->SetBranchAddress("weight", &mcWeight);
     t->SetBranchAddress("ir", &evIr);
+    Int_t truthMatched = -1;
+    if (truthWeights) {
+      if (!t->GetBranch("pho_truthmatched")) { cout << "ERROR: " << s.first << " has no pho_truthmatched branch (re-unfold)" << endl; f->Close(); continue; }
+      t->SetBranchAddress("pho_truthmatched", &truthMatched);
+    }
     Long64_t nentries = t->GetEntries();
     for (Long64_t e = 0; e < nentries; e++) {
       t->GetEntry(e);
@@ -324,7 +374,9 @@ vector<TH1D*> insitu_utility::buildMCXjByPtBin(const vector<pair<string,double>>
       ipt -= ana::firstUsedPtBin;
       float x = jet_pt/pho_pt;
       if (x < lowXj[ipt]) continue;
-      h[ipt]->Fill(x, s.second*mcWeight);
+      double w = s.second*mcWeight;
+      if (truthWeights) w *= (truthMatched == 1) ? (*truthWeights)[ipt].second : (*truthWeights)[ipt].first;
+      h[ipt]->Fill(x, w);
     }
     f->Close();
   }

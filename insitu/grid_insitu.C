@@ -91,8 +91,8 @@ void drawJESPage(TCanvas * c, const char * pdfPath, const char * label, int ir,
   gDataRaw->Draw("p same");
   TLegend * l1 = new TLegend(.55,.1,.85,.3);
   l1->SetLineWidth(0);
-  l1->AddEntry(gMC, "Pythia8 #gamma+jet (reco)");
-  l1->AddEntry(gDataRaw, "Data (reco)");
+  l1->AddEntry(gMC, ana::paperLabels() ? ana::mcLabel() : "Pythia8 #gamma+jet (reco)");
+  l1->AddEntry(gDataRaw, ana::paperLabels() ? ana::dataLabel() : "Data (reco)");
   l1->Draw();
   insitu_utility::drawSPhenixLabel({label}, {
       Form("Jet R=%.1f", ana::JetRs[ir]),
@@ -182,7 +182,7 @@ void drawXjPage(TCanvas * c, const char * pdfPath, const char * label, int ir, f
 
   TLegend * l = new TLegend(.55,.5,.85,.7);
   l->SetLineWidth(0);
-  l->AddEntry(hMCdisp,   "Pythia8 #gamma+jet (reco)");
+  l->AddEntry(hMCdisp,   ana::paperLabels() ? ana::mcLabel() : "Pythia8 #gamma+jet (reco)");
   l->AddEntry(hRawdisp,  dataRawLabel);
   l->AddEntry(hCorrdisp, dataCorrLabel);
   l->Draw();

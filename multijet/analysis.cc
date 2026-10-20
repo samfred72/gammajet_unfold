@@ -165,8 +165,10 @@ int main(int argc, char* argv[]) {
   const float SLDPHI = 3*M_PI/4.0;
   const float jesFloor = 0.9;
 
-  // MC samples (index i-1; i = 0 is Data). Cross sections (pb) from the MDC2 table; herwig also
-  // corrects for the generated event counts. Weights are normalized to Jet30.
+  // MC samples (index i-1; i = 0 is Data). Cross sections (pb) from the MDC2 table, corrected for
+  // the generated event counts (neventCorr = 10M / N_generated). Weights are normalized to Jet30.
+  // pythia Jet12 is Jet12_long (PPG18_production v1): 90000 DSTs x 1000 events = 90M, vs 10M for
+  // Jet20/Jet30 (10000 DSTs each).
   const int nsimtrees = 5;
   const int ntrees = nsimtrees + 1;
   const char * treenames[ntrees] = {"data", "Jet5", "Jet8", "Jet12", "Jet20", "Jet30"};
@@ -175,7 +177,7 @@ int main(int argc, char* argv[]) {
     {1.8437e+08, 0, 1.132355e+06, 5.2613e+04, 2.0694e+03},        // herwig (no Jet8 sample)
   };
   const double neventCorr[2][nsimtrees] = {
-    {1, 1, 1, 1, 1},
+    {1, 1, 10000000.0/90000000.0, 1, 1},
     {1, 1, 10000000.0/10001000.0, 10000000.0/10913000.0, 10000000.0/9999000.0},
   };
   // Highest leading reco jet pT (GeV) accepted from each sample (index = tree index, 0 = Data): keeps the

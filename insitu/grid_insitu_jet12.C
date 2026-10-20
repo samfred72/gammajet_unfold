@@ -175,11 +175,16 @@ void drawXjPage(TCanvas * c, const char * pdfPath, const char * label, int ir, f
   c->SaveAs(pdfPath);
 }
 
-// method = "mean" or "shape".
-void grid_insitu_jet12(string systag = "nominal", string method = "mean") {
+// method = "mean" or "shape". purityWeighted: weight the Jet12 region-A reference to the Data purity
+// per pT bin - real photons (pho_truthmatched) by P/f, fake photons by (1-P)/(1-f), with P the Data
+// region-A purity (ana::getPurity) and f the Jet12 real-photon fraction in the same selection - so the
+// raw Data region A is compared to an MC region A of the same composition. Outputs get the tag
+// jet12_purityweighted.
+void grid_insitu_jet12(string systag = "nominal", string method = "mean", bool purityWeighted = false) {
   if (method != "mean" && method != "shape") { cout << "method must be \"mean\" or \"shape\"" << endl; return; }
   shapeMethod = (method == "shape");
-  const char * tag = shapeMethod ? "jet12_shapechi2" : "jet12";
+  const char * tag = purityWeighted ? (shapeMethod ? "jet12_purityweighted_shapechi2" : "jet12_purityweighted")
+                                    : (shapeMethod ? "jet12_shapechi2" : "jet12");
   // Don't auto-register into the current radius directory.
   TH1::AddDirectory(kFALSE);
 
@@ -205,10 +210,24 @@ void grid_insitu_jet12(string systag = "nominal", string method = "mean") {
     {Form("%s/%s_pythia_%s_insitu.root", insitu_input_dir, mcTrigger.c_str(), systag.c_str()), jet_scale[12]},
   };
 
+  // Per pT bin {fake-photon weight, real-photon weight} (purityWeighted only).
+  vector<pair<double,double>> truthWeights(nPtBinsUsed, {1., 1.});
+  if (purityWeighted) {
+    double fJet12[nPtBinsUsed];
+    insitu_utility::truthMatchedFraction(mcSamples, 0, ir, lowXj, fJet12);
+    for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
+      double P = ana::getPurity(ana::ptBinsUsed[ipt], ana::ptBinsUsed[ipt+1], systag, ir);
+      truthWeights[ipt] = {(1-P)/(1-fJet12[ipt]), P/fJet12[ipt]};
+      cout << "Purity weighting pt bin " << ipt << ": Data P_A=" << P << ", Jet12 real-photon fraction=" << fJet12[ipt]
+           << " -> weights real " << truthWeights[ipt].second << ", fake " << truthWeights[ipt].first << endl;
+    }
+  }
+  const vector<pair<double,double>> * tw = purityWeighted ? &truthWeights : nullptr;
+
   float refMean[nPtBinsUsed], refMeanErr[nPtBinsUsed];
-  insitu_utility::referenceMeans(mcSamples, 0, ir, refMean, refMeanErr, lowXj);
+  insitu_utility::referenceMeans(mcSamples, 0, ir, refMean, refMeanErr, lowXj, tw);
   vector<vector<double>> refFrac, refFracErr;
-  if (shapeMethod) insitu_utility::referenceShape(mcSamples, 0, ir, refFrac, refFracErr, lowXj);
+  if (shapeMethod) insitu_utility::referenceShape(mcSamples, 0, ir, refFrac, refFracErr, lowXj, tw);
   for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
     cout << "Jet12 MC reference <x_J> pt bin " << ipt << " [" << ana::ptBinsUsed[ipt] << "," << ana::ptBinsUsed[ipt+1]
          << "): " << refMean[ipt] << " +/- " << refMeanErr[ipt] << endl;
@@ -298,14 +317,14 @@ void grid_insitu_jet12(string systag = "nominal", string method = "mean") {
   insitu_utility::findError(gchisq, ibest, minchisq, errLow, errHigh);
 
   cout << "\nFINAL RESULT (jet R=" << ana::JetRs[ir] << ", systag=" << systag << (shapeMethod ? ", shape chi2" : "") << ", non-purity-corrected, "
-       << mcTrigger << " reference)\n";
+       << mcTrigger << (purityWeighted ? " reference weighted to the Data purity" : " reference") << ")\n";
   cout << "Region A (Data) vs. Region A (" << mcTrigger << " MC):  p_a = " << minpa
        << " +" << errHigh << "/-" << errLow << " (chi2=" << minchisq << ")" << endl;
 
   // -----------------------------
   // xJ histograms per pT bin: Jet12 reference, raw Data, Data at the best-fit pa
   // -----------------------------
-  vector<TH1D*> hxjMC_pt    = insitu_utility::buildMCXjByPtBin(mcSamples, 0, ir, "hxjA_jet12", lowXj);
+  vector<TH1D*> hxjMC_pt    = insitu_utility::buildMCXjByPtBin(mcSamples, 0, ir, "hxjA_jet12", lowXj, tw);
   vector<TH1D*> hxjA_raw_pt  = insitu_utility::buildXjByPtBin(dataA, 1.0,   nPtBinsUsed, "hxjA_data_raw", lowXj);
   vector<TH1D*> hxjA_corr_pt = insitu_utility::buildXjByPtBin(dataA, minpa, nPtBinsUsed, "hxjA_data_corr", lowXj);
 
@@ -334,9 +353,9 @@ void grid_insitu_jet12(string systag = "nominal", string method = "mean") {
   TGraphErrors * gRatioCorr   = insitu_utility::ratioGraph(corrMeanA, corrErrA, refMean, refMeanErr, "gRatio_regionA_corrected");
 
   const char * pdfPath = pdfPathStr.c_str();
-  drawJESPage(c, pdfPath, Form("Region A, non-purity-corrected (%s ref.)", mcTrigger.c_str()), ir, gMC, gDataRaw, gRatioRaw, gRatioCorr, minpa, errLow, errHigh);
+  drawJESPage(c, pdfPath, Form("Region A, %s (%s ref.)", purityWeighted ? "Jet12 weighted to Data purity" : "non-purity-corrected", mcTrigger.c_str()), ir, gMC, gDataRaw, gRatioRaw, gRatioCorr, minpa, errLow, errHigh);
   for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
-    drawXjPage(c, pdfPath, Form("Region A, non-purity-corrected (%s ref.)", mcTrigger.c_str()), ir, ana::ptBinsUsed[ipt], ana::ptBinsUsed[ipt+1],
+    drawXjPage(c, pdfPath, Form("Region A, %s (%s ref.)", purityWeighted ? "Jet12 weighted to Data purity" : "non-purity-corrected", mcTrigger.c_str()), ir, ana::ptBinsUsed[ipt], ana::ptBinsUsed[ipt+1],
         hxjMC_pt[ipt], hxjA_raw_pt[ipt], hxjA_corr_pt[ipt]);
   }
 

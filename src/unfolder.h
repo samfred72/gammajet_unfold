@@ -116,6 +116,7 @@ class unfolder : public treeuser {
       insitu_weight.resize(nsys);
       insitu_ir.resize(nsys);
       insitu_third_pt.resize(nsys);
+      insitu_pho_truthmatched.resize(nsys);
 
       for (int isys = 0; isys < nsys; isys++) {
         for (int i = 0; i < ana::nJetR; i++) {
@@ -189,6 +190,10 @@ class unfolder : public treeuser {
         // thirdjet_pt: uncorrected third-jet pT where the threejet veto is left to the reader (Data,
         // threejet systag: the veto depends on p_a); -1 elsewhere.
         insitu_tree[isys]->Branch("thirdjet_pt", &insitu_third_pt[isys]);
+        // pho_truthmatched: MC reco photon matched to the generator-level photon (check_match, as
+        // hclusterpt_abcd_truthmatched) = 1, else 0; -1 for Data. Lets a reader reweight an impure
+        // sample's real/fake photon mix (grid_insitu_jet12.C).
+        insitu_tree[isys]->Branch("pho_truthmatched", &insitu_pho_truthmatched[isys]);
 
         hpurity_num[isys]    = new TH2D("hpurity_num", ";p_{T};x_{j}", ana::nPtBinsUsed, ana::ptBinsUsed, ana::nUnfoldXjBins, ana::unfoldXjBins);
         hpurity_den[isys]    = new TH2D("hpurity_den", ";p_{T};x_{j}", ana::nPtBinsUsed, ana::ptBinsUsed, ana::nUnfoldXjBins, ana::unfoldXjBins);
@@ -325,6 +330,7 @@ class unfolder : public treeuser {
     vector<Float_t> insitu_weight;
     vector<Int_t>   insitu_ir;
     vector<Float_t> insitu_third_pt;
+    vector<Int_t>   insitu_pho_truthmatched;
 
 };
 

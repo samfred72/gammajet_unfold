@@ -63,12 +63,20 @@ class insitu_utility {
 
     // Weighted mean x_J and error per used pT bin over (file, weight) MC samples - the reference the
     // Data scan is compared to. Same filters as cacheDataEvents.
+    // truthWeights (optional, MC with the pho_truthmatched branch): per used pT bin, {weight of fake
+    // photons, weight of real photons}, multiplying the MC weight - e.g. to give an impure sample the
+    // Data purity (grid_insitu_jet12.C). The same option exists on referenceShape/buildMCXjByPtBin.
     static void referenceMeans(const vector<pair<string,double>> & samples, int abcdSelect, int ir,
-        float refMean[], float refMeanErr[], const float lowXj[]);
+        float refMean[], float refMeanErr[], const float lowXj[], const vector<pair<double,double>> * truthWeights = nullptr);
+
+    // Weighted fraction of real (truth-matched) photons per used pT bin, same filters as referenceMeans.
+    static void truthMatchedFraction(const vector<pair<string,double>> & samples, int abcdSelect, int ir,
+        const float lowXj[], double frac[]);
 
     // Reference x_J shape (bin fractions) and per-bin errors per used pT bin.
     static void referenceShape(const vector<pair<string,double>> & samples, int abcdSelect, int ir,
-        vector<vector<double>> & refFrac, vector<vector<double>> & refFracErr, const float lowXj[]);
+        vector<vector<double>> & refFrac, vector<vector<double>> & refFracErr, const float lowXj[],
+        const vector<pair<double,double>> * truthWeights = nullptr);
 
     // Region-A mean x_J at trial scale pa (display where the fit uses another criterion).
     static void computeRegionAMeans(const vector<DataEvent> & dataA, float pa, float mean[], float err[], const float lowXj[]);
@@ -84,7 +92,7 @@ class insitu_utility {
 
     // MC reference x_J histogram per used pT bin (weights as referenceMeans).
     static vector<TH1D*> buildMCXjByPtBin(const vector<pair<string,double>> & samples, int abcdSelect, int ir,
-        const char * prefix, const float lowXj[]);
+        const char * prefix, const float lowXj[], const vector<pair<double,double>> * truthWeights = nullptr);
 
     // Two-purity correction per pT bin (unfold_utility::purityCorrect). The unfolded scans pass
     // zero purity errors.

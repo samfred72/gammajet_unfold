@@ -264,6 +264,7 @@ void unfolder::fill_matrix() {
           insitu_weight[isys] = mcWeight;
           insitu_ir[isys] = ir;
           insitu_third_pt[isys] = (!isMC && systagThreejetVeto) ? thirdjet_pt[ir] : -1;
+          insitu_pho_truthmatched[isys] = isMC ? (check_match(maxpho, maxpho_truth) ? 1 : 0) : -1;
           insitu_tree[isys]->Fill();
         }
 

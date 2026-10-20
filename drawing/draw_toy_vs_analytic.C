@@ -55,6 +55,20 @@ TH1D * toyMeasuredFixedCoeffs(TH1D * toyFlatA, TH1D * toyFlatC, const vector<flo
   return flatCorrected;
 }
 
+// Same as buildFullyCorrected: negative buffer-pT-bin contents set to 0 (unfold_utility::clampBufferNegatives),
+// so each toy goes through the nominal input treatment. Without it, toys with a negative buffer bin make the
+// unfolding unstable and inflate the toy RMS (25-35 GeV, up to 11x the analytic error).
+void clampBufferToy(TH1D * flat) {
+  if (!unfold_utility::clampBufferNegatives) return;
+  for (int ipt = 0; ipt < ana::nPtBins; ipt++) {
+    if (ipt >= ana::firstUsedPtBin && ipt < ana::firstUsedPtBin + ana::nPtBinsUsed) continue;
+    for (int ixj = 0; ixj < ana::nUnfoldXjBins; ixj++) {
+      int flatbin = ipt*(ana::nUnfoldXjBins+2) + ixj + 1 + 1;
+      if (flat->GetBinContent(flatbin) < 0) flat->SetBinContent(flatbin, 0);
+    }
+  }
+}
+
 const int ir = 2; // nominal R=0.4
 const int nPtBinsUsed = ana::nPtBinsUsed;
 const int nToys = 10000; // toy count per side (Data, response)
@@ -159,6 +173,7 @@ void draw_toy_vs_analytic(string systag = "nominal") {
       if (purityErrSqByFlatBin[b] <= 0) continue;
       toyData->SetBinContent(b, toyData->GetBinContent(b) + gRandom->Gaus(0, sqrt(purityErrSqByFlatBin[b])));
     }
+    clampBufferToy(toyData);
     // includeSystematics=false: only the content is read.
     TH1D * hToy = unfold_utility::unfoldOnce(respRecoTemplate, respTruthTemplate, respMatrix2D, toyData, niterate, Form("hUnfoldToyD_%d", itoy), false);
     for (int b = 0; b <= nFlatBins+1; b++) { double v = hToy->GetBinContent(b); sumD[b] += v; sumsqD[b] += v*v; toyValD[b][itoy] = v; }
@@ -344,7 +359,7 @@ void draw_toy_vs_analytic(string systag = "nominal") {
     hAnaDisp->SetFillColorAlpha(kAzure+2, 0.30);
     hAnaDisp->SetMarkerStyle(0);
     hAnaDisp->GetXaxis()->SetTitle("x_{J#gamma}");
-    hAnaDisp->GetYaxis()->SetTitle("Shape-normalized counts / bin width");
+    hAnaDisp->GetYaxis()->SetTitle("Unfolded counts / bin width");
     hAnaDisp->GetYaxis()->SetRangeUser(0, hAnaDisp->GetMaximum()*1.5);
     hAnaDisp->Draw("e2");
 
@@ -366,7 +381,7 @@ void draw_toy_vs_analytic(string systag = "nominal") {
     gPercPts->SetMarkerColor(kGreen+3);
     gPercPts->Draw("p same");
 
-    TLegend * le = new TLegend(.5,.65,.85,.85);
+    TLegend * le = new TLegend(.38,.68,.88,.88);
     le->SetLineWidth(0);
     le->SetTextSize(0.03);
     le->AddEntry(hAnaDisp, "Nominal #pm RooUnfold analytic error", "lf");

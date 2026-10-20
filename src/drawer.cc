@@ -30,7 +30,7 @@ void drawer::drawAll(vector<string> samples, vector<string> features, float draw
   float titlescale = 1.25;// * 700.0/csize;
   float subtitlescale = 1.25;// * 700.0/csize;
   float ydiff = fontsize * 0.0017 * 700.0/csize;
-  drawText("#bf{#it{sPHENIX}} #kern[0.5]{Internal}",drawx,drawy,1,(int)fontsize*titlescale);
+  drawText(ana::sphenixLabel(),drawx,drawy,1,(int)fontsize*titlescale);
   for (unsigned i = 0; i < samples.size(); i++) {
     drawText(samples.at(i).c_str(),drawx,drawy-ydiff*subtitlescale*(i+1),1,(int)fontsize*subtitlescale);
   }
