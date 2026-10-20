@@ -7,13 +7,13 @@ There are two modes. Both run through `grid_insitu.C` and `run_grid.sh`.
 
 | Mode | Fits | Uses | Output | Feeds `ana.h`? |
 |---|---|---|---|---|
-| `gammajet` (default) | constant scale `pa` | γ+jet only | `output/grid_insitu_<systag>.root`, `pdfs/grid_insitu_<systag>.pdf` | **yes**, via `draw_jes_summary.C` |
+| `gammajet` (default) | constant scale `pa` | γ+jet only | `output/grid_insitu_<systag>.root`, `pdfs/grid_insitu_<systag>.pdf` | **yes**, via `compute_jes_summary.C` |
 | `combined` | linear `f(pT) = pa + pb·pT` | γ+jet + multijet balance | `output/grid_insitu_combined_<systag>.root`, `pdfs/grid_insitu_combined_<systag>.pdf` | **no**, cross-check only |
 
 ## Running
 
 ```bash
-./run_grid.sh                                        # gammajet, all systags, then draw_jes_summary.C (rewrites src/ana.h)
+./run_grid.sh                                        # gammajet, all systags, then compute_jes_summary.C (rewrites src/ana.h)
 ./run_grid.sh --systag nominal                       # gammajet, one systag
 ./run_grid.sh --mode combined                        # gamma+jet + multijet, all systags; ana.h untouched
 ./run_grid.sh --mode combined --systag nominal
@@ -75,7 +75,10 @@ These are constant-scale and gammajet only.
 | `grid_insitu_unfolded.C(systag, na, "mean"\|"shape")` | compare after unfolding |
 | `grid_insitu_jet12.C(systag, "mean"\|"shape")` | Jet12_long dijet-MC reference |
 | `draw_grid_chi2.C` | χ² comparison across methods |
-| `draw_jes_summary.C` | collects the gammajet-mode `pa` for all systags and rewrites `src/ana.h` (`jesNominal`, `jesBySystag`) |
+| `compute_jes_summary.C` | collects the gammajet-mode `pa` for all systags, rewrites `src/ana.h` (`jesNominal`, `jesBySystag`) and writes `output/jes_summary.root` |
+| `draw_jes_summary.C` | draws `pa` vs jet radius from `output/jes_summary.root` |
+| `draw_grid_insitu.C` | draws the gammajet-mode scan pages from `output/grid_insitu_<tag>.root` |
+| `compute_jes_highpt_uncertainty.C`, `draw_jes_highpt_uncertainty.C` | pT-dependent JES uncertainty (R=0.4): `output/jes_highpt_uncertainty.root`, then its plot |
 | `draw_jes_variations.C` | `pa` under each variation |
 | `draw_insitu_*.C` | xJ comparison plots |
 | `debug_shapechi2_*.C` | diagnostics |

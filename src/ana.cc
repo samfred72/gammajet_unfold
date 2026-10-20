@@ -66,7 +66,7 @@ double ana::jesForSystag(const string & systag, int ir) {
     if (systag == jesSystagNames[i]) return jesBySystag[i][ir];
   }
   cout << "WARNING: ana::jesForSystag - no in-situ p_a for systag \"" << systag
-       << "\" in ana.h's jesBySystag (rerun insitu/draw_jes_summary.C); using jesNominal." << endl;
+       << "\" in ana.h's jesBySystag (rerun insitu/compute_jes_summary.C); using jesNominal." << endl;
   return jesNominal[ir];
 }
 

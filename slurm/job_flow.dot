@@ -34,7 +34,7 @@ digraph jobflow {
          label=<<B>puritymaker(systag)</B> &nbsp;array ×15<BR/><FONT POINT-SIZE="8">needs Data + Photon5/10/20 for that systag<BR/>all 7 radii inside one task (seconds)</FONT>>];
     grid [shape=box3d, style=filled, fillcolor="#fbe0bd",
           label=<<B>grid_insitu(systag)</B> &nbsp;array ×15<BR/><FONT POINT-SIZE="8">needs that systag's purity + Data/Photon insitu trees<BR/>(×7 radii = 105 tasks needs a small change:<BR/>per-radius output files, today one file per systag)</FONT>>];
-    jes [label=<<B>draw_jes_summary + draw_jes_variations</B><BR/><FONT POINT-SIZE="8">needs ALL 15 × 7 scan results; rewrites src/ana.h</FONT>>, fillcolor="#fbe0bd"];
+    jes [label=<<B>compute_jes_summary + draw_jes_variations</B><BR/><FONT POINT-SIZE="8">needs ALL 15 × 7 scan results; rewrites src/ana.h</FONT>>, fillcolor="#fbe0bd"];
     recomp [label=<<B>compile</B>>, fillcolor="#e8e8e8"];
     conv [shape=diamond, style=filled, fillcolor="#ffffff", label=<<B>converged?</B><BR/>max |&Delta;p<SUB>a</SUB>| &lt; tol>];
     unfdata -> pur -> grid -> jes -> recomp -> conv;
@@ -52,9 +52,9 @@ digraph jobflow {
     subgraph cluster_radius {
       label=<<B>Per-radius chains</B> &nbsp;array ×7 (R = 0.2 ... 0.8), radii fully independent>;
       style="rounded,filled"; fillcolor="#dcefdc"; color="#79b07d"; fontsize=9;
-      prior [label=<<B>draw_prior_sensitivity("nominal", ir)</B>>, fillcolor="#c4e4c6"];
-      syst  [label=<<B>draw_systematics(ir)</B><BR/><FONT POINT-SIZE="8">reads every systag's unfold + purity, herwig</FONT>>, fillcolor="#c4e4c6"];
-      final [label=<<B>draw_final_result(ir)</B>>, fillcolor="#c4e4c6"];
+      prior [label=<<B>compute_prior_sensitivity("nominal", ir)</B>>, fillcolor="#c4e4c6"];
+      syst  [label=<<B>compute_systematics(ir)</B><BR/><FONT POINT-SIZE="8">reads every systag's unfold + purity, herwig</FONT>>, fillcolor="#c4e4c6"];
+      final [label=<<B>compute_final_result(ir)</B><BR/><FONT POINT-SIZE="8">then the draw_* figures</FONT>>, fillcolor="#c4e4c6"];
       prior -> syst -> final;
     }
 

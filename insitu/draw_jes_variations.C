@@ -52,14 +52,14 @@ namespace {
     return r;
   }
   bool atEdge(float pa) { return fabs(pa - insitu_utility::scanLow) < edgeTol; }
-  // Total (stat (+) syst, sign-split as draw_jes_summary.C) per radius, from draw_jes_summary.root.
+  // Total (stat (+) syst, sign-split as compute_jes_summary.C) per radius, from jes_summary.root.
   struct Total { bool ok = false; float lo = 0, hi = 0; };
   vector<Total> readTotals() {
     vector<Total> tot(ana::nJetR);
-    string fname = string(insitu_output_dir) + "/draw_jes_summary.root";
+    string fname = string(insitu_output_dir) + "/jes_summary.root";
     TFile * f = TFile::Open(fname.c_str(), "READ");
     TTree * t = (f && !f->IsZombie()) ? (TTree*)f->Get("jes_summary") : nullptr;
-    if (!t) { cout << "WARNING: no total uncertainty (run draw_jes_summary.C first): " << fname << endl; if (f) f->Close(); return tot; }
+    if (!t) { cout << "WARNING: no total uncertainty (run compute_jes_summary.C first): " << fname << endl; if (f) f->Close(); return tot; }
     int ir; float lo, hi;
     t->SetBranchAddress("ir", &ir); t->SetBranchAddress("totalLow", &lo); t->SetBranchAddress("totalHigh", &hi);
     for (Long64_t e = 0; e < t->GetEntries(); e++) { t->GetEntry(e); if (ir >= 0 && ir < ana::nJetR) tot[ir] = {true, lo, hi}; }

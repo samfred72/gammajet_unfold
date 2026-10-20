@@ -91,7 +91,7 @@ loop, not a strict A-then-B order:
    root -b -l -q 'grid_insitu.C("nominal")'` for just the nominal systag) - writes the
    purity-corrected best-fit p_a per radius to `insitu/output/` and `insitu/pdfs/`.
 3. **Copy the new `jesNominal`/`jesTotalErrLow`/`jesTotalErrHigh` values into
-   `src/ana.h`** (`cd insitu && root -b -l -q 'draw_jes_summary.C()'` plots/prints the
+   `src/ana.h`** (`cd insitu && root -b -l -q 'compute_jes_summary.C()'` prints the
    per-radius summary across systags first, if you want a sanity check).
 4. **Rerun the full pipeline (stages 1-4) again.** This is not optional and not just
    stage 2 - changing `ana::jesNominal` is an `ana.h` change, which per

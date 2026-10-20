@@ -7,11 +7,14 @@
 #   5 re-unfold the MC (PS_UNFOLD_MC) with the new reweight
 #   6 in-situ scan per systag: grid_insitu.C recomputes the Data purity from the in-situ trees at each
 #     trial p_a until the two agree, so no unfold -> purity -> scan loop is needed
-#   7 ps_jes_update: draw_jes_summary.C rewrites src/ana.h, draw_jes_variations.C, recompile
+#   7 ps_jes_update: compute_jes_summary.C rewrites src/ana.h, draw_jes_variations.C, recompile
 #   8 re-unfold Data (PS_UNFOLD_DATA) with the new p_a       9 puritymaker per systag
 #  10 in-situ figures, R=0.4 diagnostics, per-radius prior sensitivity -> systematics -> final result
 # Only Data depends on the in-situ p_a (unfolder.cc applies it to Data jets), only the MC on the
 # reweight. Each step function runs in its own directory and fails on error.
+# Calculation macros (macros/, insitu/compute_*, grid_insitu*) write ROOT files; draw_* macros only
+# read them. Steps run the calculation, then its drawing; ps_figures redraws everything without
+# recomputing (macros/make_figures.sh: note or paper labels).
 : "${GAMMAJET_UNFOLD:?set GAMMAJET_UNFOLD to the gammajet_unfold checkout (see README.md)}"
 export GAMMAJET_NO_PROGRESS=1
 source "$GAMMAJET_UNFOLD/macros/jes_table.sh"
@@ -61,19 +64,25 @@ ps_unfold() {   # trigger:sim:mode
   if [[ $mode == allsys ]]; then root -b -l -q "unfold_allsys.C(\"$trigger\",\"$sim\")"
   else root -b -l -q "unfold.C(\"$trigger\",\"$sim\",\"nominal\")"; fi
 }
-ps_purity()   { cd "$GAMMAJET_UNFOLD/macros" && root -b -l -q "puritymaker.C(\"$1\")"; }
+ps_purity()   {
+  cd "$GAMMAJET_UNFOLD/macros" && root -b -l -q "puritymaker.C(\"$1\")"
+  cd "$GAMMAJET_UNFOLD/drawing" && root -b -l -q "draw_purity.C(\"$1\")"
+}
 ps_reweight() { cd "$GAMMAJET_UNFOLD/reweight" && root -b -l -q 'make_vz_pt_reweight.C(true)'; }
-ps_insitu()   { cd "$GAMMAJET_UNFOLD/insitu" && root -b -l -q "grid_insitu.C(\"$1\")"; }
+ps_insitu()   {
+  cd "$GAMMAJET_UNFOLD/insitu" && root -b -l -q "grid_insitu.C(\"$1\")" && root -b -l -q "draw_grid_insitu.C(\"$1\")"
+}
 
 # ps_jes_update LOGDIR: combine the scans into src/ana.h, report the change from LOGDIR/jes_start.txt
 # (the table stage 2 used), recompile.
 ps_jes_update() {
   local logdir=$1 ana="$GAMMAJET_UNFOLD/src/ana.h"
   cd "$GAMMAJET_UNFOLD/insitu"
-  root -b -l -q "draw_jes_summary.C" | tee "$logdir/jes_summary.log"
+  root -b -l -q "compute_jes_summary.C" | tee "$logdir/jes_summary.log"
   if ! grep -q "Updated .*ana.h" "$logdir/jes_summary.log"; then
-    echo "draw_jes_summary.C did not update ana.h (missing systag scan output?)"; return 1
+    echo "compute_jes_summary.C did not update ana.h (missing systag scan output?)"; return 1
   fi
+  root -b -l -q "draw_jes_summary.C"
   root -b -l -q "draw_jes_variations.C"
   jes_snapshot "$ana" "$logdir/jes_final.txt"
   echo "max |delta p_a| vs the starting table: $(jes_maxdiff "$logdir/jes_start.txt" "$logdir/jes_final.txt")"
@@ -84,18 +93,24 @@ ps_jes_update() {
 ps_insitu_plots() {
   cd "$GAMMAJET_UNFOLD/insitu"
   root -b -l -q 'grid_insitu.C("nominal")'
+  root -b -l -q 'draw_grid_insitu.C("nominal")'
   root -b -l -q 'grid_insitu_unfolded.C("nominal", 1000)'
   root -b -l -q 'grid_insitu_unfolded.C("nominal", 1000, "shape")'
   root -b -l -q 'grid_insitu_jet12.C("nominal")'
   root -b -l -q 'draw_insitu_xj.C'
   root -b -l -q 'draw_insitu_xj_allR.C("nominal")'
   root -b -l -q 'draw_insitu_xj_jet12.C'
+  root -b -l -q 'compute_jes_summary.C'
   root -b -l -q 'draw_jes_summary.C'
   root -b -l -q 'draw_jes_variations.C'
+  root -b -l -q 'compute_jes_highpt_uncertainty.C'
+  root -b -l -q 'draw_jes_highpt_uncertainty.C'
 }
 # R=0.4 nominal unfolding diagnostics. The two toy_iterations runs read each other's output.
 ps_diagnostics() {
+  cd "$GAMMAJET_UNFOLD/macros" && root -b -l -q 'compute_abcd_2d.C'
   cd "$GAMMAJET_UNFOLD/drawing"
+  root -b -l -q 'draw_abcd_2d.C'
   root -b -l -q 'draw_purity_corrected.C("nominal")'
   root -b -l -q 'draw_iteration_halfclosure.C("nominal")'
   root -b -l -q 'toy_iterations.C("nominal","resp")'
@@ -103,10 +118,31 @@ ps_diagnostics() {
   root -b -l -q 'draw_refolding.C("nominal")'
   root -b -l -q 'draw_nonclosure.C()'
 }
-# Per radius: each reads the previous one's output; outputs are per radius.
+# Per radius: prior sensitivity -> systematics -> final result (each reads the previous one's
+# output; outputs are per radius), then their figures.
 ps_draw() {
+  cd "$GAMMAJET_UNFOLD/macros"
+  root -b -l -q "compute_prior_sensitivity.C(\"nominal\", $1)"
+  root -b -l -q "compute_systematics.C($1)"
+  root -b -l -q "compute_final_result.C($1)"
+  ps_figures_radius "$1"
+}
+ps_figures_radius() {
   cd "$GAMMAJET_UNFOLD/drawing"
   root -b -l -q "draw_prior_sensitivity.C(\"nominal\", $1)"
   root -b -l -q "draw_systematics.C($1)"
   root -b -l -q "draw_final_result.C($1)"
+}
+# Redraw every figure from the existing outputs (no calculation). Labels follow GJ_PAPER_LABELS /
+# GJ_LABEL_STATUS (ana.h); macros/make_figures.sh sets them.
+ps_figures() {
+  local ir
+  cd "$GAMMAJET_UNFOLD/drawing"
+  root -b -l -q 'draw_purity.C("nominal")'
+  root -b -l -q 'draw_abcd_2d.C'
+  cd "$GAMMAJET_UNFOLD/insitu"
+  root -b -l -q 'draw_grid_insitu.C("nominal")'
+  root -b -l -q 'draw_jes_summary.C'
+  root -b -l -q 'draw_jes_highpt_uncertainty.C'
+  for ir in $PS_RADII; do ps_figures_radius "$ir"; done
 }
