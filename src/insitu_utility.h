@@ -13,6 +13,8 @@
 struct DataEvent { float pho_pt, jet_pt; int ptbin; float third_pt = -1; };
 // Multijet balance event: leading pT, recoil jets' pT/phi, weight (1 for Data).
 struct MultijetEvent { float lead, sl, slphi, ssl, sslphi, w; };
+// MC x_J of one used pT bin, sorted, with weight sums over [i, end): the folded scan cuts it at any point.
+struct McXjBin { vector<double> x, sw, sw2, swx, swx2; };
 
 class insitu_utility {
   public:
@@ -68,6 +70,12 @@ class insitu_utility {
     // Data purity (grid_insitu_jet12.C). The same option exists on referenceShape/buildMCXjByPtBin.
     static void referenceMeans(const vector<pair<string,double>> & samples, int abcdSelect, int ir,
         float refMean[], float refMeanErr[], const float lowXj[], const vector<pair<double,double>> * truthWeights = nullptr);
+
+    // MC x_J per used pT bin for the folded scan (grid_insitu.C), same filters as referenceMeans but no floor.
+    static vector<McXjBin> cacheMcXj(const vector<pair<string,double>> & samples, int abcdSelect, int ir);
+
+    // Weighted mean and error of pa*x over MC events with pa*x >= xFloor. False if no events pass.
+    static bool foldedMean(const McXjBin & mc, double pa, double xFloor, double & mean, double & err);
 
     // Weighted fraction of real (truth-matched) photons per used pT bin, same filters as referenceMeans.
     static void truthMatchedFraction(const vector<pair<string,double>> & samples, int abcdSelect, int ir,

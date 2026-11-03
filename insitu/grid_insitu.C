@@ -36,6 +36,12 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 // cut, x_J floor), so in gammajet mode it is recomputed from the Data insitu tree at the scan result and
 // the scan repeated until the two agree (self-consistent; no re-unfolding needed). fixedPurity, and
 // combined mode, use purity_<systag>.root, made at the pa of the last unfolding.
+//
+// Mean method: pa is folded into the MC, so the Data events do not cross the x_J floor during a scan
+// (that crossing is what made the chi2 curve jagged). Each scan fixes the Data events and purity by
+// correcting once with p0, x_raw >= floor*p0, then compares them to pa*x_MC with pa*x_MC >= floor*p0. At
+// pa = p0 this is the Data-scaled comparison, with the floor at the bin edge on the corrected axis on both
+// sides. p0 then follows the minimum until they agree. Shape method: Data scaled at every pa.
 
 // insitu/: inputs/ (insitu trees), output/ (.root), pdfs/.
 const char * insitu_input_dir  = ana::path("insitu/inputs");
@@ -124,6 +130,8 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
   insitu_utility::referenceMeans(mcSamples, 0, ir, refMean, refMeanErr, lowXj);
   vector<vector<double>> refFrac, refFracErr;
   if (shapeMethod) insitu_utility::referenceShape(mcSamples, 0, ir, refFrac, refFracErr, lowXj);
+  vector<McXjBin> mcXj;
+  if (!shapeMethod && !combined) mcXj = insitu_utility::cacheMcXj(mcSamples, 0, ir);
   for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
     cout << "MC reference <x_J> pt bin " << ipt << " [" << ana::ptBinsUsed[ipt] << "," << ana::ptBinsUsed[ipt+1]
          << "): " << refMean[ipt] << " +/- " << refMeanErr[ipt] << endl;
@@ -185,12 +193,14 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
   const int na = insitu_utility::scanN;
   const float lowa = insitu_utility::scanLow, higha = insitu_utility::scanHigh;
 
-  // Self-consistency loop: scan at fixed purity; if the purity-corrected result is not the grid point the
-  // purity was made at, remake the purity there and rescan. The counts are discrete, so purity(p_a) can
-  // make the result flip between neighbouring grid points: on a cycle (a result already scanned), the
-  // scan in the cycle with the lowest chi2 minimum is redone and its result reported.
+  // Self-consistency loop: scan at fixed p0 (paPurity: purity and, for the mean method, the Data events);
+  // if the purity-corrected result is not that grid point, move p0 there and rescan. The events are
+  // discrete, so the result can wander. Mean method: on a cycle or after maxSelfConsistentIter, the scan
+  // whose minimum is closest to its own p0 is redone and reported (lowest chi2 on a tie), so its events
+  // are nearest the unfolding's cut at the reported p_a. Lowest chi2 alone would favor the first scan when
+  // it starts low. Shape method: on a cycle the lowest chi2 scan, else the last scan.
   const int maxSelfConsistentIter = 10;
-  vector<float> scannedPa, scannedChi2; // purity point of each scan and its purity-corrected chi2 minimum
+  vector<float> scannedPa, scannedChi2, scannedMin; // p0 of each scan, its purity-corrected chi2 minimum and result
   bool cycleRescan = false;
   TGraph * gchisqA = nullptr;
   TGraph * gchisqCorr = nullptr;
@@ -209,6 +219,42 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
   minchisqA = FLT_MAX; minpaA = 1;
   minchisqCorr = FLT_MAX; minpaCorr = 1;
   ibestA = 0; ibestCorr = 0;
+
+  // Mean method: Data at this p0, fixed for the whole scan. Region A's curve uses the same p0, set by the
+  // purity-corrected result.
+  vector<double> dataMeanA(nPtBinsUsed,0), dataErrA(nPtBinsUsed,0), dataMeanCorr(nPtBinsUsed,0), dataErrCorr(nPtBinsUsed,0);
+  if (!shapeMethod) {
+    vector<double> sumA(nPtBinsUsed,0), sumA2(nPtBinsUsed,0), sumC(nPtBinsUsed,0), sumC2(nPtBinsUsed,0);
+    vector<int> countA(nPtBinsUsed,0), countC(nPtBinsUsed,0);
+    for (auto & ev : dataA) {
+      if (insitu_utility::vetoed(ev, paPurity)) continue;
+      double x = ev.jet_pt/ev.pho_pt;
+      if (x < lowXj[ev.ptbin]*paPurity) continue;
+      sumA[ev.ptbin] += x; sumA2[ev.ptbin] += x*x; countA[ev.ptbin]++;
+    }
+    for (auto & ev : dataC) {
+      if (insitu_utility::vetoed(ev, paPurity)) continue;
+      double x = ev.jet_pt/ev.pho_pt;
+      if (x < lowXj[ev.ptbin]*paPurity) continue;
+      sumC[ev.ptbin] += x; sumC2[ev.ptbin] += x*x; countC[ev.ptbin]++;
+    }
+    for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
+      if (countA[ipt] > 0) {
+        dataMeanA[ipt] = sumA[ipt]/countA[ipt];
+        dataErrA[ipt] = sqrt(std::max(sumA2[ipt]/countA[ipt] - dataMeanA[ipt]*dataMeanA[ipt],0.)/countA[ipt]);
+      }
+      if (countA[ipt] > 0 && countC[ipt] > 0) {
+        double NA = countA[ipt], NC = countC[ipt];
+        float coeffA, coeffC;
+        unfold_utility::purityCorrectCoeffs(purity[ipt], purityC[ipt], NA, NC, coeffA, coeffC);
+        double Ncorr = coeffA*NA - coeffC*NC;
+        if (Ncorr > 0) {
+          dataMeanCorr[ipt] = (coeffA*sumA[ipt] - coeffC*sumC[ipt])/Ncorr;
+          dataErrCorr[ipt] = sqrt(std::max((coeffA*sumA2[ipt] - coeffC*sumC2[ipt])/Ncorr - dataMeanCorr[ipt]*dataMeanCorr[ipt],0.)/Ncorr);
+        }
+      }
+    }
+  }
 
   for (int ia = 0; ia < na; ia++) {
     float pa = lowa + ia*(higha-lowa)/na;
@@ -293,59 +339,16 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
         }
       }
     } else {
-      vector<double> sumA(nPtBinsUsed,0), sumA2(nPtBinsUsed,0);
-      vector<int> countA(nPtBinsUsed,0);
-      for (auto & ev : dataA) {
-        if (insitu_utility::vetoed(ev, pa)) continue;
-        float x = (ev.jet_pt/pa)/ev.pho_pt;
-        if (x < lowXj[ev.ptbin]) continue;
-        sumA[ev.ptbin]  += x;
-        sumA2[ev.ptbin] += x*x;
-        countA[ev.ptbin]++;
-      }
-      vector<double> sumC(nPtBinsUsed,0), sumC2(nPtBinsUsed,0);
-      vector<int> countC(nPtBinsUsed,0);
-      for (auto & ev : dataC) {
-        if (insitu_utility::vetoed(ev, pa)) continue;
-        float x = (ev.jet_pt/pa)/ev.pho_pt;
-        if (x < lowXj[ev.ptbin]) continue;
-        sumC[ev.ptbin]  += x;
-        sumC2[ev.ptbin] += x*x;
-        countC[ev.ptbin]++;
-      }
-
       for (int ipt = 0; ipt < nPtBinsUsed; ipt++) {
-        if (refMean[ipt] <= 0) continue;
-
-        // Region A only.
-        if (countA[ipt] > 0) {
-          double mean = sumA[ipt]/countA[ipt];
-          double var  = sumA2[ipt]/countA[ipt] - mean*mean;
-          double err  = sqrt(std::max(var,0.)/countA[ipt]);
-          double diff = 1 - mean/refMean[ipt];
-          double errt = sqrt((err*err)/(refMean[ipt]*refMean[ipt])
-              + mean*mean*refMeanErr[ipt]*refMeanErr[ipt]/pow(refMean[ipt],4));
-          if (errt > 0) chisqA += diff*diff/(errt*errt);
-        }
-
-        // Purity-corrected.
-        if (countA[ipt] > 0 && countC[ipt] > 0) {
-          double NA = countA[ipt], NC = countC[ipt];
-          float coeffA, coeffC;
-          unfold_utility::purityCorrectCoeffs(purity[ipt], purityC[ipt], NA, NC, coeffA, coeffC);
-          double sumXcorr  = coeffA*sumA[ipt]  - coeffC*sumC[ipt];
-          double sumX2corr = coeffA*sumA2[ipt] - coeffC*sumC2[ipt];
-          double Ncorr = coeffA*NA - coeffC*NC;
-          if (Ncorr > 0) {
-            double mean = sumXcorr/Ncorr;
-            double var  = sumX2corr/Ncorr - mean*mean;
-            double err  = sqrt(std::max(var,0.)/Ncorr);
-            double diff = 1 - mean/refMean[ipt];
-            double errt = sqrt((err*err)/(refMean[ipt]*refMean[ipt])
-                + mean*mean*refMeanErr[ipt]*refMeanErr[ipt]/pow(refMean[ipt],4));
-            if (errt > 0) chisqCorr += diff*diff/(errt*errt);
-          }
-        }
+        double ref, refErr;
+        if (!insitu_utility::foldedMean(mcXj[ipt], pa, lowXj[ipt]*paPurity, ref, refErr)) continue;
+        auto pull2 = [&](double mean, double err) {
+          double diff = 1 - mean/ref;
+          double errt = sqrt(err*err/(ref*ref) + mean*mean*refErr*refErr/pow(ref,4));
+          return errt > 0 ? diff*diff/(errt*errt) : 0.;
+        };
+        if (dataMeanA[ipt] > 0)    chisqA    += pull2(dataMeanA[ipt], dataErrA[ipt]);
+        if (dataMeanCorr[ipt] > 0) chisqCorr += pull2(dataMeanCorr[ipt], dataErrCorr[ipt]);
       }
     }
 
@@ -364,13 +367,19 @@ void grid_insitu(string systag = "nominal", string mode = "gammajet", int onlyIr
   if (fabs(minpaCorr - paPurity) < halfStep) break;  // same grid point
   scannedPa.push_back(paPurity);
   scannedChi2.push_back(minchisqCorr);
+  scannedMin.push_back(minpaCorr);
   int icycle = -1;
   for (int i = 0; i < (int)scannedPa.size(); i++) if (fabs(scannedPa[i] - minpaCorr) < halfStep) icycle = i;
-  if (icycle >= 0) {
-    int ibest = icycle;
-    for (int i = icycle; i < (int)scannedPa.size(); i++) if (scannedChi2[i] < scannedChi2[ibest]) ibest = i;
-    cout << "Self-consistent purity: cycle over " << scannedPa.size() - icycle << " scans; using the scan with purity at p_a="
-         << scannedPa[ibest] << " (lowest chi2, " << scannedChi2[ibest] << ")" << endl;
+  if (icycle >= 0 || (!shapeMethod && iterSC == maxSelfConsistentIter)) {
+    int first = std::max(icycle, 0);
+    int ibest = first;
+    for (int i = first; i < (int)scannedPa.size(); i++) {
+      if (shapeMethod) { if (scannedChi2[i] < scannedChi2[ibest]) ibest = i; continue; }
+      double d = fabs(scannedMin[i] - scannedPa[i]), dBest = fabs(scannedMin[ibest] - scannedPa[ibest]);
+      if (d < dBest - halfStep || (fabs(d - dBest) <= halfStep && scannedChi2[i] < scannedChi2[ibest])) ibest = i;
+    }
+    cout << "Self-consistent scan: " << (icycle >= 0 ? "cycle" : "not converged") << " over " << scannedPa.size() - first
+         << " scans; using the scan at p0=" << scannedPa[ibest] << " (result " << scannedMin[ibest] << ", chi2 " << scannedChi2[ibest] << ")" << endl;
     paPurity = scannedPa[ibest];
     setPurity(paPurity);
     cycleRescan = true;

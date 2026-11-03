@@ -135,6 +135,62 @@ vector<double> insitu_utility::coarsenQuadrature(const vector<double> & fineErr,
   return coarse;
 }
 
+vector<McXjBin> insitu_utility::cacheMcXj(const vector<pair<string,double>> & samples, int abcdSelect, int ir) {
+  vector<vector<pair<double,double>>> ev(ana::nPtBinsUsed);
+  for (auto & s : samples) {
+    TFile * f = TFile::Open(s.first.c_str(), "READ");
+    if (!f || f->IsZombie()) {
+      cout << "WARNING: could not open " << s.first << endl;
+      continue;
+    }
+    TTree * t = (TTree*)f->Get("insitutree");
+    Float_t pho_pt, jet_pt, mcWeight;
+    Int_t abcd, evIr;
+    t->SetBranchAddress("pho_pt", &pho_pt);
+    t->SetBranchAddress("jet_pt", &jet_pt);
+    t->SetBranchAddress("abcd", &abcd);
+    t->SetBranchAddress("weight", &mcWeight);
+    t->SetBranchAddress("ir", &evIr);
+    Long64_t nentries = t->GetEntries();
+    for (Long64_t e = 0; e < nentries; e++) {
+      t->GetEntry(e);
+      if (abcd != abcdSelect || evIr != ir) continue;
+      int ipt = ana::findPtBin(pho_pt);
+      if (ipt < ana::firstUsedPtBin || ipt >= ana::firstUsedPtBin + ana::nPtBinsUsed) continue;
+      ev[ipt - ana::firstUsedPtBin].push_back({jet_pt/pho_pt, s.second*mcWeight});
+    }
+    f->Close();
+  }
+  vector<McXjBin> mc(ana::nPtBinsUsed);
+  for (int ipt = 0; ipt < ana::nPtBinsUsed; ipt++) {
+    sort(ev[ipt].begin(), ev[ipt].end());
+    int n = ev[ipt].size();
+    McXjBin & m = mc[ipt];
+    m.x.resize(n);
+    m.sw.assign(n+1, 0); m.sw2.assign(n+1, 0); m.swx.assign(n+1, 0); m.swx2.assign(n+1, 0);
+    for (int i = n-1; i >= 0; i--) {
+      double x = ev[ipt][i].first, w = ev[ipt][i].second;
+      m.x[i] = x;
+      m.sw[i] = m.sw[i+1] + w;
+      m.sw2[i] = m.sw2[i+1] + w*w;
+      m.swx[i] = m.swx[i+1] + w*x;
+      m.swx2[i] = m.swx2[i+1] + w*x*x;
+    }
+  }
+  return mc;
+}
+
+bool insitu_utility::foldedMean(const McXjBin & mc, double pa, double xFloor, double & mean, double & err) {
+  int j = lower_bound(mc.x.begin(), mc.x.end(), xFloor/pa) - mc.x.begin();
+  double W = mc.sw[j];
+  if (W <= 0) return false;
+  double m = mc.swx[j]/W;
+  double var = mc.swx2[j]/W - m*m;
+  mean = pa*m;
+  err = pa*sqrt(max(var, 0.)*mc.sw2[j])/W;
+  return true;
+}
+
 void insitu_utility::referenceMeans(const vector<pair<string,double>> & samples, int abcdSelect, int ir,
     float refMean[], float refMeanErr[], const float lowXj[], const vector<pair<double,double>> * truthWeights) {
   vector<double> sumw(ana::nPtBinsUsed,0), sumw2(ana::nPtBinsUsed,0), sumwx(ana::nPtBinsUsed,0), sumwx2(ana::nPtBinsUsed,0);
