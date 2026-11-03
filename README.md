@@ -18,6 +18,15 @@ export GAMMAJET_UNFOLD=/path/to/gammajet_unfold
 export LD_LIBRARY_PATH=$GAMMAJET_UNFOLD/src${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 ```
 
+Optional switches, all unset for the official analysis:
+
+| Variable | Effect |
+|---|---|
+| `GAMMAJET_JER` | MC jet pT: `tree` (default, the tree's JER-smeared branches), `none` (`jet_pt_calib`), or a JER template file to re-smear from (`ana::mcJerMode`, needs the v1jerz trees) |
+| `GAMMAJET_JER_HIST` | TH1 name in that file; `{R}` becomes the radius |
+| `GAMMAJET_JES_TABLE` | Text file of in-situ p_a per systag that replaces `ana.h`'s table (`ana::jesForSystag`) |
+| `GAMMAJET_NO_PROGRESS` | Turns off the per-event progress line |
+
 Then build with `src/make.sh`. ROOT and RooUnfold (with the local patches described in
 `CLAUDE.md`) must be installed.
 
@@ -33,6 +42,7 @@ Then build with `src/make.sh`. ROOT and RooUnfold (with the local patches descri
 | `insitu/` | The in-situ jet-energy-scale (JES) calibration study - reads the `insitu_tree` ntuples `unfolder.cc` writes to `insitu/inputs/`, fits the Data-to-MC JES correction per jet radius, writes results to `insitu/output/` and `insitu/pdfs/`. **Its output feeds back into `src/ana.h` - see below.** |
 | `insitu_closure/` | A closure test *of the in-situ fitting method itself* (not part of the physics result) - see its own section below. |
 | `reweight/` | The Data/MC vz + cluster-pT reweighting used throughout `unfolder.cc`. |
+| `JER_iter/` | The JES <-> JER iteration study with the jet group (own README). It runs this code unchanged, pointed at its own work dirs through the environment variables below. |
 | `latex/` | Note/paper source (gitignored). |
 
 Raw input trees (`towerntup`, one file per trigger/sim, produced upstream by the
@@ -90,6 +100,10 @@ loop, not a strict A-then-B order:
    to each other by bare filename): `cd insitu && bash run_grid.sh` (or `cd insitu &&
    root -b -l -q 'grid_insitu.C("nominal")'` for just the nominal systag) - writes the
    purity-corrected best-fit p_a per radius to `insitu/output/` and `insitu/pdfs/`.
+   The mean method is MC-folded: Data is fixed at the scan's p0 (x_raw >= floor*p0)
+   and the MC x_J is scaled by p_a, so no Data event crosses the low-x_J floor during a
+   scan. p0 then moves to the minimum; when that doesn't settle, the scan whose minimum
+   is closest to its own p0 is reported.
 3. **Copy the new `jesNominal`/`jesTotalErrLow`/`jesTotalErrHigh` values into
    `src/ana.h`** (`cd insitu && root -b -l -q 'compute_jes_summary.C()'` prints the
    per-radius summary across systags first, if you want a sanity check).

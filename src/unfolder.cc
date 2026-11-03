@@ -70,11 +70,15 @@ void unfolder::fill_matrix() {
     // Not applied to the in-situ tree's jet pT (rawJetPt).
     for (int ir = 0; ir < ana::nJetR; ir++) {
       jesCorrectionArr[isys][ir] =
-          (systag == "jes_high") ? ana::jesNominal[ir] - ana::jesStatErrLow[ir] :
-          (systag == "jes_low")  ? ana::jesNominal[ir] + ana::jesStatErrHigh[ir] :
+          (systag == "jes_high") ? ana::jesForSystag("nominal", ir) - ana::jesStatErrLow[ir] :
+          (systag == "jes_low")  ? ana::jesForSystag("nominal", ir) + ana::jesStatErrHigh[ir] :
           ana::jesForSystag(systag, ir);
     }
   }
+
+  if (isMC) cout << "MC jet pT: " << (ana::mcJerMode() == ana::jerNone ? "jet_pt_calib, no JER smearing (GAMMAJET_JER=none)" :
+                                      ana::mcJerMode() == ana::jerFile ? "re-smeared from the GAMMAJET_JER templates" :
+                                      "JER-smeared tree branches") << endl;
 
   TCanvas * c = new TCanvas("c","",500,1000);
   gStyle->SetOptStat(0);
@@ -162,14 +166,17 @@ void unfolder::fill_matrix() {
         // JER/emscale variations are MC only; jes_high/low are Data only.
         float recoJetPt;
         if (isMC) {
-          recoJetPt = (systag == "JERhigh") ? jet_pt_smear_high_truth[ir] :
-                      (systag == "JERlow")  ? jet_pt_smear_low_truth[ir]  :
+          // ana::mcJerMode: outside the tree mode every MC systag uses one jet pT (no JER variation).
+          bool treeJer = (ana::mcJerMode() == ana::jerTree);
+          float nomJetPt = ana::mcJetPt(ir, jet_pt_calib[ir], jet_pt_smear_truth[ir], jet_smear_z[ir], jet_truthmatch_pt[ir]);
+          recoJetPt = (systag == "JERhigh") ? (treeJer ? jet_pt_smear_high_truth[ir] : nomJetPt) :
+                      (systag == "JERlow")  ? (treeJer ? jet_pt_smear_low_truth[ir] : nomJetPt)  :
                       // Scale only the EM fraction of the jet.
                       (systagEmscaleShift != 0.0) ?
-                          jet_pt_smear_truth[ir]*jet_emfrac[ir]
-                            + jet_pt_smear_truth[ir]*jet_emfrac[ir]*systagEmscaleShift
-                            + jet_pt_smear_truth[ir]*(1-jet_emfrac[ir]) :
-                      jet_pt_smear_truth[ir];
+                          nomJetPt*jet_emfrac[ir]
+                            + nomJetPt*jet_emfrac[ir]*systagEmscaleShift
+                            + nomJetPt*(1-jet_emfrac[ir]) :
+                      nomJetPt;
         } else {
           recoJetPt = jet_pt_calib[ir] / jesCorrectionArr[isys][ir];
         }
@@ -235,7 +242,8 @@ void unfolder::fill_matrix() {
         // threejet: veto if the third jet's pT (recoil-jet definition: Data in-situ corrected, MC nominal
         // smear) exceeds ana::thirdJetPtCut. Reco only: a truth veto would change the observable.
         if (systagThreejetVeto) {
-          float thirdJetPt = isMC ? thirdjet_pt[ir] : thirdjet_pt[ir] / jesCorrectionArr[isys][ir];
+          float thirdJetPt = isMC ? ana::mcJetPt(ir, thirdjet_pt_calib[ir], thirdjet_pt[ir], thirdjet_smear_z[ir], thirdjet_truthmatch_pt[ir]) :
+                                    thirdjet_pt[ir] / jesCorrectionArr[isys][ir];
           bool hasThirdJet = thirdJetPt > ana::thirdJetPtCut;
           ispaired[ir] = ispaired[ir] && !hasThirdJet;
           // Data in-situ tree: the veto depends on p_a, so it is deferred to the reader (thirdjet_pt).

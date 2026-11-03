@@ -30,6 +30,19 @@ class ana {
     static const char * sphenixLabel();  // "#bf{#it{sPHENIX}}" plus the status
     static const char * dataLabel();     // "p+p Run24 Data" / "p+p #sqrt{s}=200 GeV"
     static const char * mcLabel();       // "Pythia8 #gamma+jet MC" / "Pythia8 #gamma+jet"
+    // MC jet energy resolution (env GAMMAJET_JER):
+    //   unset or "tree": the treemaker's JER-smeared branches (jet_pt_smear_*_truth, thirdjet_pt);
+    //   "none": the calibrated pT without extra JER smearing (jet_pt_calib, thirdjet_pt_calib);
+    //   anything else: a ROOT file of JER templates. Each MC jet is re-smeared as the skimmer does,
+    //   calib + z*ref*sigma(ref) with ref = matched truth pT if > 0 else calib, from the per-jet
+    //   jet_smear_z / jet_truthmatch_pt branches (v1jerz trees). sigma is the TH1 named by env
+    //   GAMMAJET_JER_HIST (default h_jer_smear_r04_pileup_EMfracJES_nominal). "{R}" in the name
+    //   becomes the radius ("03" for R=0.3); a radius with no TH1 in the file uses the nearest one.
+    // In the "none" and file modes every MC systag uses that one jet pT, so JERhigh/low equal nominal.
+    enum JerMode { jerTree, jerNone, jerFile };
+    static JerMode mcJerMode();
+    // MC jet pT under mcJerMode(): treeSmeared (tree), calib (none) or the re-smear (file).
+    static float mcJetPt(int ir, float calib, float treeSmeared, float z, float truthmatch);
 
     ana();
     ~ana() = default;
@@ -188,7 +201,9 @@ class ana {
       {0.8553, 0.8720, 0.8991, 0.8947, 0.9016, 0.8991, 0.9126}, // timingwide
     };
     // END jesBySystag
-    // p_a for a systag and radius; nominal (with a warning) if the systag has no entry.
+    // p_a for a systag and radius; nominal (with a warning) if the systag has no entry. Env
+    // GAMMAJET_JES_TABLE (a text file, see ana.cc) replaces the table above, e.g. for JER_iter/;
+    // jesStatErrLow/High (jes_high/low) stay the compiled ones.
     static double   jesForSystag(const string & systag, int ir);
 
   private:

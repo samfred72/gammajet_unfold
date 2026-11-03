@@ -147,6 +147,12 @@ class treeuser {
     // Leading in-time jet outside the photon cone other than the recoil jet (jet_pt_calib for Data,
     // nominal jet_pt_smear_truth for MC). Feeds the threejet veto.
     Float_t         thirdjet_pt[nJetR];
+    Float_t         thirdjet_pt_calib[nJetR]; // MC: the third jet before JER smearing (ana::mcJerMode)
+    // MC JER smearing inputs (v1jerz trees; read in ana::mcJerMode() == jerFile)
+    Float_t         jet_smear_z[nJetR];
+    Float_t         jet_truthmatch_pt[nJetR];
+    Float_t         thirdjet_smear_z[nJetR];
+    Float_t         thirdjet_truthmatch_pt[nJetR];
 
     Float_t         hadron_p[nJetR];
 
@@ -193,6 +199,11 @@ class treeuser {
     TBranch        *b_jet_time;   //!
     
     TBranch        *b_thirdjet_pt;   //!
+    TBranch        *b_thirdjet_pt_calib;   //!
+    TBranch        *b_jet_smear_z;   //!
+    TBranch        *b_jet_truthmatch_pt;   //!
+    TBranch        *b_thirdjet_smear_z;   //!
+    TBranch        *b_thirdjet_truthmatch_pt;   //!
 
     TBranch        *b_hadron_p;   //!
 

@@ -1,6 +1,11 @@
 #include "ana.h"
 #include <cstdlib>
+#include <TFile.h>
+#include <TH1.h>
 #include <deque>
+#include <fstream>
+#include <map>
+#include <sstream>
 using namespace std;
 
 const char * ana::dir() {
@@ -24,6 +29,48 @@ const char * ana::sphenixLabel() {
   label = "#bf{#it{sPHENIX}}";
   if (!status.empty()) label += " #kern[0.5]{" + status + "}";
   return label.c_str();
+}
+
+ana::JerMode ana::mcJerMode() {
+  static const JerMode mode = [] {
+    const char * e = getenv("GAMMAJET_JER");
+    string m = (e && *e) ? string(e) : "tree";
+    return m == "tree" ? jerTree : m == "none" ? jerNone : jerFile;
+  }();
+  return mode;
+}
+
+float ana::mcJetPt(int ir, float calib, float treeSmeared, float z, float truthmatch) {
+  if (mcJerMode() == jerTree) return treeSmeared;
+  if (mcJerMode() == jerNone) return calib;
+  static const vector<TH1*> sigma = [] {
+    const char * e = getenv("GAMMAJET_JER_HIST");
+    string pattern = (e && *e) ? string(e) : "h_jer_smear_r04_pileup_EMfracJES_nominal";
+    TFile f(getenv("GAMMAJET_JER"));
+    if (f.IsZombie()) { cerr << "GAMMAJET_JER=" << getenv("GAMMAJET_JER") << ": cannot open" << endl; exit(1); }
+    vector<TH1*> h(nJetR, nullptr);
+    vector<string> names(nJetR);
+    for (int jr = 0; jr < nJetR; jr++) {
+      names[jr] = pattern;
+      size_t pos = names[jr].find("{R}");
+      if (pos != string::npos) names[jr].replace(pos, 3, Form("%02d", (int)lround(10*JetRs[jr])));
+      h[jr] = (TH1*)f.Get(names[jr].c_str());
+      if (h[jr]) { h[jr] = (TH1*)h[jr]->Clone(); h[jr]->SetDirectory(nullptr); }
+    }
+    vector<TH1*> out(nJetR, nullptr);
+    for (int jr = 0; jr < nJetR; jr++) {
+      int use = -1;
+      for (int kr = 0; kr < nJetR; kr++)
+        if (h[kr] && (use < 0 || fabs(JetRs[kr] - JetRs[jr]) < fabs(JetRs[use] - JetRs[jr]))) use = kr;
+      if (use < 0) { cerr << "GAMMAJET_JER=" << getenv("GAMMAJET_JER") << ": no TH1 " << pattern << endl; exit(1); }
+      out[jr] = h[use];
+      cout << "MC JER templates R=" << JetRs[jr] << ": " << getenv("GAMMAJET_JER") << " : " << names[use]
+           << (use != jr ? "  (WARNING: no " + names[jr] + ", using the nearest radius)" : "") << endl;
+    }
+    return out;
+  }();
+  const float ref = truthmatch > 0 ? truthmatch : calib;
+  return calib + z * ref * sigma[ir]->Interpolate(ref);
 }
 
 const char * ana::dataLabel() { return paperLabels() ? "p+p #sqrt{s}=200 GeV" : "p+p Run24 Data"; }
@@ -61,7 +108,42 @@ const vector<pair<string,string>> ana::asymmetricSystagPairs = {
 };
 // narrowISObkg/wideISObkg are symmetrized independently, not sign-split (see draw_systematics.C).
 
+// GAMMAJET_JES_TABLE: optional text file replacing the compiled p_a table, one line per systag,
+// "<systag> <p_a R=0.2> ... <p_a R=0.8>" ('#' starts a comment). Read once.
+static const map<string, vector<double>> & jesTableOverride() {
+  static const map<string, vector<double>> table = [] {
+    map<string, vector<double>> t;
+    const char * e = getenv("GAMMAJET_JES_TABLE");
+    if (!e || !*e) return t;
+    ifstream f(e);
+    if (!f) { cerr << "GAMMAJET_JES_TABLE=" << e << ": cannot open" << endl; exit(1); }
+    string line;
+    while (getline(f, line)) {
+      line = line.substr(0, line.find('#'));
+      istringstream iss(line);
+      string tag;
+      if (!(iss >> tag)) continue;
+      vector<double> v(ana::nJetR);
+      for (auto & x : v) if (!(iss >> x)) { cerr << "GAMMAJET_JES_TABLE=" << e << ": short row " << tag << endl; exit(1); }
+      t[tag] = v;
+    }
+    if (!t.count("nominal")) { cerr << "GAMMAJET_JES_TABLE=" << e << ": no nominal row" << endl; exit(1); }
+    cout << "ana: in-situ p_a from GAMMAJET_JES_TABLE=" << e << " (" << t.size() << " systags), not ana.h" << endl;
+    return t;
+  }();
+  return table;
+}
+
 double ana::jesForSystag(const string & systag, int ir) {
+  const auto & ov = jesTableOverride();
+  if (!ov.empty()) {
+    auto it = ov.find(systag);
+    if (it != ov.end()) return it->second[ir];
+    static bool warned = false;
+    if (!warned) cout << "WARNING: ana::jesForSystag - systag \"" << systag << "\" not in GAMMAJET_JES_TABLE; using its nominal row." << endl;
+    warned = true;
+    return ov.at("nominal")[ir];
+  }
   for (int i = 0; i < nJesSystags; i++) {
     if (systag == jesSystagNames[i]) return jesBySystag[i][ir];
   }

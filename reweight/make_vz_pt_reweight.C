@@ -69,7 +69,7 @@ void fillInputs() {
           pho_object::get_showershape(tu.cluster_showershape, tu.cluster_pt));
       int iabcd = ana::findabcdBin(pho.iso4, pho.bdt, 0);
       if (iabcd != 0 && iabcd != 2) continue;
-      jet_object jet(tu.jet_pt_calib[ir]/ana::jesNominal[ir], tu.jet_e[ir], tu.jet_eta[ir], tu.jet_phi[ir], tu.jet_emfrac[ir], 0, 0, 0);
+      jet_object jet(tu.jet_pt_calib[ir]/ana::jesForSystag("nominal", ir), tu.jet_e[ir], tu.jet_eta[ir], tu.jet_phi[ir], tu.jet_emfrac[ir], 0, 0, 0);
       if (!pairedR04(pho, jet, ana::findPtBin(pho.pt))) continue;
       (iabcd == 0 ? hPtA : hPtC)->Fill(tu.cluster_pt);
     }
@@ -100,7 +100,9 @@ void fillInputs() {
       pho_object tru(tu.truth_cluster_pt, tu.truth_cluster_e, tu.truth_cluster_eta, tu.truth_cluster_phi,
           tu.truth_cluster_iso3, tu.truth_cluster_iso4, 0, 0.99, 2);
       if (pho.deltaR(tru) >= 0.1) continue; // truth-matched signal (unfolder::check_match)
-      jet_object jet(tu.jet_pt_smear_truth[ir], tu.jet_e[ir], tu.jet_eta[ir], tu.jet_phi[ir], tu.jet_emfrac[ir], 0, 0, 0);
+      // Same MC jet pT as unfolder.cc (ana::mcJerMode).
+      jet_object jet(ana::mcJetPt(ir, tu.jet_pt_calib[ir], tu.jet_pt_smear_truth[ir], tu.jet_smear_z[ir], tu.jet_truthmatch_pt[ir]),
+          tu.jet_e[ir], tu.jet_eta[ir], tu.jet_phi[ir], tu.jet_emfrac[ir], 0, 0, 0);
       if (!pairedR04(pho, jet, ana::findPtBin(pho.pt))) continue;
       hVzPtMC->Fill(tu.vz, tu.cluster_pt, scale);
     }

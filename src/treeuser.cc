@@ -53,6 +53,13 @@ void treeuser::treesetup() {
     t->SetBranchAddress("truth_jet_phi", truth_jet_phi, &b_truth_jet_phi);
     
     t->SetBranchAddress("hadron_p", hadron_p, &b_hadron_p);
+    if (ana::mcJerMode() != ana::jerTree) t->SetBranchAddress("thirdjet_pt_calib", thirdjet_pt_calib, &b_thirdjet_pt_calib);
+    if (ana::mcJerMode() == ana::jerFile) {
+      t->SetBranchAddress("jet_smear_z", jet_smear_z, &b_jet_smear_z);
+      t->SetBranchAddress("jet_truthmatch_pt", jet_truthmatch_pt, &b_jet_truthmatch_pt);
+      t->SetBranchAddress("thirdjet_smear_z", thirdjet_smear_z, &b_thirdjet_smear_z);
+      t->SetBranchAddress("thirdjet_truthmatch_pt", thirdjet_truthmatch_pt, &b_thirdjet_truthmatch_pt);
+    }
   }
 }
 
