@@ -5,7 +5,7 @@ R__LOAD_LIBRARY(libgammajet_unfold.so);
 
 // BDT score vs isolation of the leading Data photon cluster, for drawing/draw_abcd_2d.C (which adds
 // the nominal ABCD regions). Calculation only.
-// Selection: unfolder's maxpho, |vz| < ana::vzcut, |eta| < ana::photonEtaCut, ptLow <= pT < ptHigh
+// Selection: unfolder's maxpho, photon trigger (ana::isPhotonTriggered), |vz| < ana::vzcut, |eta| < ana::photonEtaCut, ptLow <= pT < ptHigh
 // (default 15-20 GeV); no jet pairing. Clusters without topo iso (<= -999) are skipped.
 // Output: hists/abcd_2d_data.root (TH2D habcd, plus the pT range as TVectorD ptRange)
 void compute_abcd_2d(double ptLow = ana::ptBinsUsed[0], double ptHigh = ana::ptBinsUsed[1],
@@ -14,10 +14,12 @@ void compute_abcd_2d(double ptLow = ana::ptBinsUsed[0], double ptHigh = ana::ptB
   TFile * f = TFile::Open(ana::path("trees/gammajet_Data.root"), "read");
   TTree * t = (TTree*)f->Get("towerntup");
   Float_t vz, cluster_pt, cluster_eta, cluster_bdt_scores[11], cluster_showershape[12];
+  Bool_t scaledTriggerBit[64];
   t->SetBranchStatus("*", 0);
-  for (const char * b : {"vz", "cluster_pt", "cluster_eta", "cluster_bdt_scores", "cluster_showershape"})
+  for (const char * b : {"vz", "cluster_pt", "cluster_eta", "cluster_bdt_scores", "cluster_showershape", "ScaledTriggerBit"})
     t->SetBranchStatus(b, 1);
   t->SetBranchAddress("vz", &vz);
+  t->SetBranchAddress("ScaledTriggerBit", scaledTriggerBit);
   t->SetBranchAddress("cluster_pt", &cluster_pt);
   t->SetBranchAddress("cluster_eta", &cluster_eta);
   t->SetBranchAddress("cluster_bdt_scores", cluster_bdt_scores);
@@ -31,6 +33,7 @@ void compute_abcd_2d(double ptLow = ana::ptBinsUsed[0], double ptHigh = ana::ptB
     t->GetEntry(e);
     if (showProgress && e % 100000 == 0) cout << "entry " << e << "/" << n << "\r" << flush;
     if (fabs(vz) > ana::vzcut) continue;
+    if (!ana::isPhotonTriggered(scaledTriggerBit)) continue;  // as in unfolder.cc
     if (fabs(cluster_eta) >= ana::photonEtaCut) continue;
     if (cluster_pt < ptLow || cluster_pt >= ptHigh) continue;
     float iso = cluster_showershape[11], bdt = cluster_bdt_scores[9];

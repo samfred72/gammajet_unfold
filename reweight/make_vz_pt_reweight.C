@@ -61,6 +61,7 @@ void fillInputs() {
     Long64_t nentries = tu.t->GetEntriesFast();
     for (Long64_t e = 0; e < nentries; e++) {
       tu.t->GetEntry(e);
+      if (!ana::isPhotonTriggered(tu.ScaledTriggerBit)) continue;  // as in unfolder.cc
       hVzData->Fill(tu.vz);
       if (fabs(tu.vz) > vzcut) continue;
       if (tu.cluster_pt < ptLo || tu.cluster_pt >= ptHi) continue;

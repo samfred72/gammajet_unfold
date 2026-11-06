@@ -75,7 +75,6 @@ void treeuser::disableBranchesUnusedByUnfolder() {
   for (const char *b : {"hasthirdjet", "thirdjet_eta", "thirdjet_phi", "thirdjet_dr"})
     if (t->GetBranch(b)) t->SetBranchStatus(b, 0);
   if (!isMC) {
-    t->SetBranchStatus("ScaledTriggerBit", 0);
     t->SetBranchStatus("LiveTriggerBit", 0);
     t->SetBranchStatus("Scaledowns", 0);
   }

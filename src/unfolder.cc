@@ -97,6 +97,7 @@ void unfolder::fill_matrix() {
         << " (" << (float)e/nentries*100. << "%)\t\r" << std::flush;
 
     if (fabs(vz) > ana::vzcut) continue;
+    if (!isMC && !ana::isPhotonTriggered(ScaledTriggerBit)) continue;
 
     // -----------------------
     // Event selection (systag-independent)

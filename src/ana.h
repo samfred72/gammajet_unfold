@@ -113,6 +113,15 @@ class ana {
     // Photons: |eta^gamma| < 0.7 for reco and truth (also the fiducial definition), as in PPG12;
     // beyond it the isolation cone leaves the EMCal.
     static constexpr double photonEtaCut = 0.7;
+    // Data trigger requirement: a scaled Level-1 photon trigger bit (EMCal energy in a tower window above
+    // threshold, with or without the MBD coincidence). Events recorded only by the calorimeter jet
+    // triggers are excluded: their unfolded x_J at 15-20 GeV is biased high (up to +0.10 at R=0.7), as the
+    // jet triggers are not fully efficient there (Nov 6 2026, claude_checks/trigger_shape).
+    // Run-24 pp GL1 map (daq gl1_triggernames): photon bits 24-27 (+MBD), 28-31 (no MBD), and from run
+    // 51038 on 36-38 (MBD |v_z| < 10 cm). The same bits are photon triggers over all of Run 24 pp
+    // (thresholds differ before run 46038). Jet triggers are 16-23 and 32-35.
+    static constexpr int photonTriggerBits[] = {24,25,26,27,28,29,30,31,36,37,38};
+    static bool isPhotonTriggered(const Bool_t scaledTriggerBit[64]);
     static constexpr double etamin = -etacut;
     static constexpr double etamax = etacut;
     static constexpr double cluster_pt_cut = 10;

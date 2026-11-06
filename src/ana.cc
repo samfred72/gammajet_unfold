@@ -295,6 +295,11 @@ static TFile * cachedPurityFile(const string & systag, int ir) {
 
 // low/high are one ana::ptBins bin's edges, so the center gives the bin index. Each radius's curves
 // live in the ana::rnames[ir] subdirectory.
+bool ana::isPhotonTriggered(const Bool_t scaledTriggerBit[64]) {
+  for (int b : photonTriggerBits) if (scaledTriggerBit[b]) return true;
+  return false;
+}
+
 float ana::getPurity(float low, float high, string systag, int ir) {
   TFile * f = cachedPurityFile(systag, ir);
   TGraphAsymmErrors * oh = (TGraphAsymmErrors*)f->Get(Form("%s/combined", rnames[ir]));
