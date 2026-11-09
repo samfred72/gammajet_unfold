@@ -52,12 +52,12 @@ void compute_final_result(int jetRadiusIndex = 2) {
   for (int ipt = ana::firstUsedPtBin; ipt < ana::firstUsedPtBin+nPtBinsUsed; ipt++) {
     TH1D * hUnfold     = unfold_utility::unflattenXj(flatUnfolded, ipt, Form("hFinal_pt%d", ipt));
     TH1D * hUnfoldDisp = unfold_utility::densityForDisplay(hUnfold, Form("hFinalDisp_pt%d", ipt));
-    hUnfoldDisp->Scale(1./hUnfoldDisp->Integral());
-    hUnfoldDisp->GetYaxis()->SetTitle("(1/N) dN/dx_{J#gamma}");
+    hUnfoldDisp->Scale(1./hUnfoldDisp->Integral("width"));  // unit area: a true density
+    hUnfoldDisp->GetYaxis()->SetTitle("(1/N_{pair}) dN_{pair}/dx_{J#gamma}");
 
     TH1D * hTruth     = unfold_utility::unflattenXj(respTruthTemplate, ipt, Form("hFinalTruth_pt%d", ipt));
     TH1D * hTruthDisp = unfold_utility::densityForDisplay(hTruth, Form("hFinalTruthDisp_pt%d", ipt));
-    hTruthDisp->Scale(1./hTruthDisp->Integral());
+    hTruthDisp->Scale(1./hTruthDisp->Integral("width"));
 
     // Systematic box, separate from the statistical error bars; fractional, asymmetric.
     TH1D * hquadUp   = (TH1D*)fsyst->Get(Form("hquadsum_up_pt%d", ipt));
